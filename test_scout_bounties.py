@@ -4,7 +4,6 @@ import ast
 import io
 import json
 import os
-import tempfile
 import urllib.request
 from pathlib import Path
 import unittest
