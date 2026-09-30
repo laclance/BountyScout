@@ -687,8 +687,9 @@ class CandidateTests(unittest.TestCase):
                 title="containerboot watcher backlog",
                 body=(
                     "Cause (from source): watcher queue blocks.\n"
+                    "Steps to reproduce\n1. trigger a netmap burst\n"
                     "cmd/containerboot/main.go kube/services/services.go\n"
-                    "Suggested fixes\n- move refresh\n- resubscribe\n- skip no-op"
+                    "Suggested fix\n- move refresh\n- resubscribe\n- skip no-op"
                 ),
                 comments=0,
             ),
