@@ -5,7 +5,7 @@ on:
     branches-ignore:
       - main
     paths:
-      - "*.py"
+      - "**/*.py"
       - "ruff.toml"
       - ".github/workflows/ruff-format.yml"
 
@@ -38,6 +38,6 @@ jobs:
           fi
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add -- '*.py'
+          git add -- '*.py' '**/*.py'
           git commit -m "style: auto-format with Ruff [skip ci]"
           git push
