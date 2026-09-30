@@ -1,71 +1,103 @@
-# 🎯 Bounty Scout: Hourly Notification System
+# OSS Opportunity Scout
 
-A lightweight, state-tracking GitHub bounty scanner that runs **hourly**, searches for new open bounties, filters out competitive/crypto spam, and alerts you instantly.
+A lightweight GitHub scanner for finding open-source work worth doing, across two lanes:
 
-Since it tracks seen bounty URLs, **it will only notify you once per bounty** (no spam).
+- **Cash now:** explicit paid bounties and sponsored issues.
+- **Career value:** bounded, mergeable issues in respected infrastructure/backend repositories.
 
----
+The scout runs hourly, ranks new opportunities, creates a GitHub issue report, and only marks reported items as seen after at least one notification channel succeeds.
 
-## 🚀 How It Works
+## Architecture
 
-1. **GitHub Action Scheduled Trigger:** Runs automatically at minute `0` of every hour.
-2. **Scouts GitHub:** Queries active bounty search keywords using the GitHub Search API.
-3. **Triages Candidates:** Skips pull requests, already-assigned issues, overcrowded threads (>25 comments), and crypto-related spam.
-4. **State Machine Comparison:** Composed against `seen_bounties.json` to extract strictly **new** opportunities.
-5. **Instant Notifications:** Dispatches updates through your preferred channel (GitHub Issues, Telegram, or Discord).
-6. **Persists State:** Saves the updated seen list back to the repository so you don't receive duplicate alerts on the next run.
+The fork-specific change is intentionally small:
 
----
+- `scout_bounties.py` — upstream-compatible paid bounty discovery and strict payment/competition filters.
+- `opportunity_scout.py` — dual-lane discovery, scoring, effort estimation, target-repo bonuses, verification, and ranked reporting.
+- `seen_bounties.json` — shared notification state.
+- `.github/workflows/bounty-scout.yml` — hourly runner.
 
-## 🛠️ Step-by-Step Setup
+Keeping the original paid scanner intact makes future upstream merges much less conflict-prone.
 
-### 1. Repository File Structure
+## Paid lane
+
+Paid candidates reuse the existing BountyScout rules, including rejection of:
+
+- pull requests, assigned issues, and overcrowded threads
+- recursive BountyScout alerts and obvious spam
+- unfunded bounty proposals
+- meta/bug-bounty monitoring alerts
+- issues without a real payment signal
+- issues with an open implementation PR
+- obvious active claim comments
+
+Cash score considers payment confidence, stated reward, rough expected hourly value, competition, and repository legitimacy/activity.
+
+## Strategic OSS lane
+
+Strategic discovery starts with a small target list covering AWS/Kubernetes, networking, observability, Go tooling, Terraform, and GitOps, plus a few narrow global searches.
+
+Candidates are provisionally ranked first. Only the best few get the expensive verification pass, which refreshes the source issue and checks:
+
+- issue is still open and unassigned
+- no obvious active claim
+- no open implementation PR
+- repository is available and not archived
+- contribution guide at common repository locations
+
+Career score considers repository reputation/activity, target-repo bonus, language/domain fit, technical depth, tests/contributor signals, scope, effort, and competition.
+
+## Ranked output
+
+Each reported candidate includes:
+
+- repository, issue number, title, and URL
+- paid/unpaid and reward
+- payment confidence
+- cash score /100
+- career score /100
+- effort: `<1h`, `1–3h`, `3–6h`, or `1d+`
+- competition: `none`, `low`, `medium`, or `high`
+- stars, recent activity, language, and labels
+- scoring reasons
+- contribution-guide link when found
+
+The GitHub issue report also includes examples rejected during final verification.
+
+## Workflow
+
+The intended human loop is:
+
 ```text
-BountyScout/
-├── .github/
-│   └── workflows/
-│       └── bounty-scout.yml      # GitHub Actions workflow (hourly schedule)
-├── scout_bounties.py              # Core scout + notification script
-├── seen_bounties.json             # Auto-created on first run (state persistence)
-└── README.md
+Scout finds candidates
+       ↓
+rank top candidates
+       ↓
+manually verify top 3–5
+       ↓
+choose 1–2
+       ↓
+inspect issue + CONTRIBUTING + PR competition
+       ↓
+implement → test/review → PR
+       ↓
+return to queue
 ```
 
-### 2. Choose Your Notification Method
+Keep no more than two issues actively being implemented at once.
 
-#### 📬 Option A: Native GitHub Issues (Zero Setup - Recommended)
-The script will automatically open a structured issue labeled `bounty-alert` in your own repository containing links to the new opportunities.
-- **Why it's great:** Zero setup! You will get an email and/or mobile push notification directly from the GitHub app if you are watching your repository.
-- **Setup:** None required. The built-in `GITHUB_TOKEN` handles everything.
+## Running
 
----
+The GitHub Action runs hourly and can also be triggered manually from **Actions → OSS Opportunity Scout Hourly**.
 
-#### 💬 Option B: Telegram Channel/Chat Alerts
-The scout will send markdown alerts directly to your Telegram chat or channel.
+Locally:
 
-1. **Create a Bot:** Message `@BotFather` on Telegram, send `/newbot`, and copy the **API Token**.
-2. **Get your Chat ID:** Send a message to your new bot, then open `https://api.telegram.org/botYOUR_BOT_TOKEN/getUpdates` in your browser. Look for `"chat":{"id":123456789}`. Copy that numeric ID.
-3. **Add Secrets to GitHub:**
-   - Go to your repository **Settings** > **Secrets and variables** > **Actions**.
-   - Create a repository secret named `TELEGRAM_BOT_TOKEN` with your bot's token.
-   - Create a repository secret named `TELEGRAM_CHAT_ID` with your numeric chat ID.
+```bash
+python -m py_compile scout_bounties.py opportunity_scout.py
+GITHUB_TOKEN=... GITHUB_REPOSITORY=laclance/BountyScout python opportunity_scout.py
+```
 
----
+Optional notification secrets remain supported:
 
-#### 🎮 Option C: Discord Channel Alerts
-The scout will push formatted alerts directly to a channel in your Discord server.
-
-1. **Create Webhook:** Go to your Discord server, click channel settings (gear icon) > **Integrations** > **Webhooks** > **Create Webhook**. Copy the Webhook URL.
-2. **Add Secrets to GitHub:**
-   - Go to your repository **Settings** > **Secrets and variables** > **Actions**.
-   - Create a repository secret named `DISCORD_WEBHOOK_URL` with your webhook URL.
-
----
-
-## 🧪 Triggering Manually
-You can test the setup immediately without waiting for the next hour:
-1. Go to your repository on GitHub.
-2. Click on the **Actions** tab.
-3. Select **Scout Active Bounties Hourly** from the sidebar.
-4. Click the **Run workflow** dropdown and select **Run workflow**.
-
-Happy bounty hunting! 🚀
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- `DISCORD_WEBHOOK_URL`
