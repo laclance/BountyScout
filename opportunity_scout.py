@@ -114,8 +114,14 @@ def competition(item):
 def payment_confidence(signal):
     if not signal:
         return 0
+    if signal.startswith("confirmed bounty platform"):
+        return 100
     if signal.startswith("explicit bounty command"):
         return 100
+    if signal.startswith("explicit /reward comment"):
+        return 98
+    if signal.startswith("explicit /bounty comment"):
+        return 98
     if signal.startswith("bounty labels"):
         return 95
     if signal.startswith("named bounty platform"):
@@ -126,7 +132,7 @@ def payment_confidence(signal):
 def reward_text(signal):
     if not signal:
         return None
-    match = re.search(bounty.AMOUNT_RE, signal, re.IGNORECASE)
+    match = re.search(EXTENDED_AMOUNT_RE, signal, re.IGNORECASE)
     return match.group(0).strip() if match else None
 
 
