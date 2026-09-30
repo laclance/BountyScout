@@ -143,10 +143,10 @@ def payment_signal(item: Mapping[str, Any]) -> str | None:
         return f"amount + payment term: {amount_near_term.group(1).strip()}"
 
     # Some bounty systems put the amount in a label and "bounty" in another.
-    if re.search(AMOUNT_RE, labels_text, re.IGNORECASE) and re.search(
+    amount = re.search(AMOUNT_RE, labels_text, re.IGNORECASE)
+    if amount and re.search(
         r"\b(?:bounty|reward|payout)\b", labels_text, re.IGNORECASE
     ):
-        amount = re.search(AMOUNT_RE, labels_text, re.IGNORECASE)
         return f"bounty labels: {amount.group(0).strip()}"
 
     # Platform-backed language can be explicit even when the exact amount is
@@ -545,10 +545,10 @@ def main() -> None:
     discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
 
     seen_urls = load_seen_bounties()
-    new_bounties = []
-    new_bounty_urls = set()
-    rejected = {}
-    repo_metadata_cache = {}
+    new_bounties: list[dict[str, Any]] = []
+    new_bounty_urls: set[str] = set()
+    rejected: dict[str, int] = {}
+    repo_metadata_cache: dict[str, dict[str, Any]] = {}
 
     print("Scouting GitHub for active bounties...")
     for query in SEARCH_QUERIES:
@@ -567,6 +567,8 @@ def main() -> None:
                 continue
 
             repo, _ = issue_repo_and_number(item)
+            assert repo is not None
+            assert signal is not None
             if repo not in repo_metadata_cache:
                 repo_metadata_cache[repo] = fetch_repo_metadata(repo, github_token)
             repo_meta = repo_metadata_cache[repo]
