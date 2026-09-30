@@ -792,9 +792,24 @@ class DiscoveryTests(unittest.TestCase):
 
 class FormattingAndMainTests(unittest.TestCase):
     def test_markdown_and_notification_formatting(self):
-        md = scout.markdown_candidate(candidate(), 1)
+        self.assertEqual(
+            scout.github_report_ref(
+                "https://github.com/acme/widget/issues/42 and "
+                "https://github.com/acme/widget/pull/9 plus #77"
+            ),
+            "acme/widget — issue 42 and acme/widget — PR 9 plus issue 77",
+        )
+        self.assertEqual(scout.github_report_ref(None), "")
+
+        md = scout.markdown_candidate(
+            candidate(title="Fix regression after #850"),
+            1,
+        )
         self.assertIn("Cash score", md)
         self.assertIn("contribution guide", md)
+        self.assertNotIn("https://github.com/example/project/issues/42", md)
+        self.assertIn("example/project — issue 42", md)
+        self.assertIn("issue 850", md)
 
         no_guide = scout.markdown_candidate(
             candidate(expected_hourly=None, contribution_guide=None, paid=False, reward=None),
@@ -835,9 +850,17 @@ class FormattingAndMainTests(unittest.TestCase):
             "TELEGRAM_CHAT_ID": "chat",
             "DISCORD_WEBHOOK_URL": "hook",
         }
+        reject = {
+            "title": "Related to #123",
+            "url": "https://github.com/acme/upstream/issues/123",
+            "reason": (
+                "existing open implementation PR: "
+                "https://github.com/acme/upstream/pull/456"
+            ),
+        }
         with patch.dict(os.environ, env, clear=True), \
              patch.object(scout.bounty, "load_seen_bounties", return_value={"old"}), \
-             patch.object(scout, "discover_paid", return_value=([low, high], {"r1": 1}, [{"title": "x", "url": "u", "reason": "r"}])), \
+             patch.object(scout, "discover_paid", return_value=([low, high], {"r1": 1}, [reject])), \
              patch.object(scout, "discover_strategic", return_value=([strategic], {"r2": 2}, [])), \
              patch.object(scout.bounty, "send_telegram_notification", return_value=True) as tg, \
              patch.object(scout.bounty, "send_discord_notification", return_value=False) as dc, \
@@ -847,6 +870,16 @@ class FormattingAndMainTests(unittest.TestCase):
         tg.assert_called_once()
         dc.assert_called_once()
         gh.assert_called_once()
+        github_body = gh.call_args.args[3]
+        self.assertNotIn("https://github.com/example/project/issues/", github_body)
+        self.assertNotIn("https://github.com/acme/upstream/issues/", github_body)
+        self.assertNotIn("https://github.com/acme/upstream/pull/", github_body)
+        self.assertIn("acme/upstream — issue 123", github_body)
+        self.assertIn("acme/upstream — PR 456", github_body)
+
+        telegram_message = tg.call_args.args[2]
+        self.assertIn(high["url"], telegram_message)
+
         saved = save.call_args.args[0]
         self.assertIn("old", saved)
         self.assertIn(high["url"], saved)
