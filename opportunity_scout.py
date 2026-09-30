@@ -38,12 +38,13 @@ PAID_DISCOVERY_QUERIES = list(dict.fromkeys(
     bounty.SEARCH_QUERIES + [
         'is:issue is:open "/reward" in:comments sort:updated-desc',
         'is:issue is:open "/bounty" in:comments sort:updated-desc',
-        'is:issue is:open "bountyhub.dev" in:title,body,comments sort:updated-desc',
+        'is:issue is:open (opire.dev OR bountyhub.dev OR algora.io) in:comments sort:updated-desc',
         'is:issue is:open (reward OR compensation OR payout OR "cash prize") "$" in:title,body sort:updated-desc',
     ]
 ))
 EXTENDED_AMOUNT_RE = (
-    r"(?:[$€£¥₹R]\s*\d[\d,]*(?:\.\d+)?|"
+    r"(?:[$€£¥₹]\s*\d[\d,]*(?:\.\d+)?|"
+    r"(?<![A-Za-z])R\s*\d[\d,]*(?:\.\d+)?|"
     r"\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|cad|aud|nzd|jpy|chf|"
     r"inr|zar|dai|xmr|sol|eth|btc)\b)"
 )
@@ -247,6 +248,13 @@ def comment_payment_signal(item, token):
         ):
             return f"confirmed bounty platform comment (Opire): {amount.group(0).strip()}"
 
+        if (
+            amount
+            and ("bountyhub" in login or "bountyhub.dev" in body.lower())
+            and re.search(r"\bbounty\b.*\bcreated\b|\bcreated\b.*\bbounty\b", body, re.IGNORECASE | re.DOTALL)
+        ):
+            return f"confirmed bounty platform comment (BountyHub): {amount.group(0).strip()}"
+
     # Commands alone are accepted only from a repo owner/member/collaborator.
     for comment in comments:
         body = str(comment.get("body", ""))
@@ -360,10 +368,54 @@ def opire_platform_refs():
     return refs
 
 
+def bountyhub_platform_refs():
+    """Read public BountyHub listings when the site exposes them in HTML."""
+    refs = {}
+    listing = fetch_text("https://www.bountyhub.dev/en/bounties")
+    if not listing:
+        return refs
+
+    normalized = listing.replace("\\/", "/")
+    direct = re.findall(
+        r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+        normalized,
+    )
+    for source_url in direct[:PLATFORM_FETCH_LIMIT]:
+        refs[source_url] = "confirmed bounty platform feed (BountyHub)"
+
+    detail_paths = list(dict.fromkeys(re.findall(
+        r'href=["\'](/en/bounty/view/[A-Za-z0-9_-]+)["\']',
+        normalized,
+    )))[:PLATFORM_FETCH_LIMIT]
+
+    for path in detail_paths:
+        detail = fetch_text("https://www.bountyhub.dev" + path)
+        if not detail:
+            continue
+        detail = detail.replace("\\/", "/")
+        source = re.search(
+            r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+            detail,
+        )
+        if not source:
+            continue
+        amount = re.search(EXTENDED_AMOUNT_RE, detail, re.IGNORECASE)
+        signal = "confirmed bounty platform feed (BountyHub)"
+        if amount:
+            signal += f": {amount.group(0).strip()}"
+        refs[source.group(0)] = signal
+
+    return refs
+
+
 def platform_paid_refs():
     """Collect official-platform discoveries, deduped by source GitHub issue URL."""
     refs = {}
-    for source in (issuehunt_platform_refs(), opire_platform_refs()):
+    for source in (
+        issuehunt_platform_refs(),
+        opire_platform_refs(),
+        bountyhub_platform_refs(),
+    ):
         refs.update(source)
     return refs
 
