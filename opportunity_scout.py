@@ -6,7 +6,7 @@ import re
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 
 import scout_bounties as bounty
 
@@ -186,7 +186,7 @@ def fetch_text(url: str, timeout: int = 12) -> str:
     try:
         request = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.read().decode("utf-8", errors="replace")
+            return cast(bytes, response.read()).decode("utf-8", errors="replace")
     except Exception as exc:
         print(f"Platform fetch failed for {url}: {exc}")
         return ""
@@ -318,11 +318,11 @@ def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
     if amount_near:
         return f"explicit paid-work wording: {amount_near.group(1).strip()}"
 
+    amount = re.search(EXTENDED_AMOUNT_RE, text, re.IGNORECASE)
     if (
         ("bountyhub.dev" in text.lower() or "bountyhub.dev" in labels)
-        and re.search(EXTENDED_AMOUNT_RE, text, re.IGNORECASE)
+        and amount
     ):
-        amount = re.search(EXTENDED_AMOUNT_RE, text, re.IGNORECASE)
         return f"named bounty platform + amount (BountyHub): {amount.group(0).strip()}"
 
     return None
@@ -403,7 +403,7 @@ def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
 
 def issuehunt_platform_refs() -> dict[str, str]:
     """Read the official IssueHunt funded-issues pages."""
-    refs = {}
+    refs: dict[str, str] = {}
     for page in range(1, ISSUEHUNT_PAGES + 1):
         url = "https://oss.issuehunt.io/issues"
         if page > 1:
@@ -430,7 +430,7 @@ def issuehunt_platform_refs() -> dict[str, str]:
 
 def opire_platform_refs() -> dict[str, str]:
     """Read visible Opire bounty cards and map them back to GitHub issues."""
-    refs = {}
+    refs: dict[str, str] = {}
     home = fetch_text("https://app.opire.dev/home")
     if not home:
         return refs
@@ -474,7 +474,7 @@ def opire_platform_refs() -> dict[str, str]:
 
 def bountyhub_platform_refs() -> dict[str, str]:
     """Read public BountyHub listings when the site exposes them in HTML."""
-    refs = {}
+    refs: dict[str, str] = {}
     listing = fetch_text("https://www.bountyhub.dev/en/bounties")
     if not listing:
         return refs
@@ -514,7 +514,7 @@ def bountyhub_platform_refs() -> dict[str, str]:
 
 def platform_paid_refs() -> dict[str, str]:
     """Collect official-platform discoveries, deduped by source GitHub issue URL."""
-    refs = {}
+    refs: dict[str, str] = {}
     for source in (
         issuehunt_platform_refs(),
         opire_platform_refs(),
@@ -531,7 +531,7 @@ def contribution_guide(repo: str, token: str | None) -> str | None:
             token,
         )
         if isinstance(data, dict) and data.get("html_url"):
-            return data["html_url"]
+            return str(data["html_url"])
     return None
 
 
@@ -727,6 +727,8 @@ def verify(
     fresh, reason = refresh_issue(item, token)
     if reason:
         return None, reason
+    if fresh is None:
+        return None, "could not refresh source issue"
     if not bounty.is_clean_candidate(fresh):
         return None, "failed basic eligibility filter after source refresh"
 
@@ -766,6 +768,8 @@ def verify(
         lane = "strategic"
 
     repo, _ = bounty.issue_repo_and_number(fresh)
+    if repo is None:
+        return None, "could not identify repository/issue number"
     if repo not in repo_cache:
         repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
     repo_meta = repo_cache[repo]
@@ -790,7 +794,10 @@ def discover_paid(
     repo_cache: dict[str, dict[str, Any]],
     guide_cache: dict[str, str | None],
 ) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
-    found, touched, rejected, examples = [], set(), {}, []
+    found: list[dict[str, Any]] = []
+    touched: set[str] = set()
+    rejected: dict[str, int] = {}
+    examples: list[dict[str, Any]] = []
 
     for query in PAID_DISCOVERY_QUERIES:
         for item in bounty.search_github(query, token).get("items", []):
@@ -811,6 +818,7 @@ def discover_paid(
                 add_reject(rejected, examples, item, reason)
                 print(f"Skipping paid candidate {url}: {reason}")
             else:
+                assert candidate is not None
                 found.append(candidate)
 
     # Official platform feeds can expose funded issues that contain no bounty
@@ -837,6 +845,7 @@ def discover_paid(
             add_reject(rejected, examples, item, reason)
             print(f"Skipping platform candidate {source_url}: {reason}")
         else:
+            assert candidate is not None
             found.append(candidate)
 
     return found, rejected, examples
@@ -849,7 +858,10 @@ def discover_strategic(
     repo_cache: dict[str, dict[str, Any]],
     guide_cache: dict[str, str | None],
 ) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
-    provisional, touched, rejected, examples = [], set(), {}, []
+    provisional: list[tuple[int, int, int, dict[str, Any]]] = []
+    touched: set[str] = set()
+    rejected: dict[str, int] = {}
+    examples: list[dict[str, Any]] = []
     for query in target_repo_queries() + STRATEGIC_GLOBAL_QUERIES:
         for item in bounty.search_github(query, token, per_page=12).get("items", []):
             url = item.get("html_url")
@@ -879,6 +891,7 @@ def discover_strategic(
             add_reject(rejected, examples, item, reason)
             print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
         else:
+            assert candidate is not None
             found.append(candidate)
     return found, rejected, examples
 
@@ -940,14 +953,15 @@ def main() -> None:
     token = os.environ.get("GITHUB_TOKEN")
     repo_fullname = os.environ.get("GITHUB_REPOSITORY")
     seen = bounty.load_seen_bounties()
-    repo_cache, guide_cache = {}, {}
+    repo_cache: dict[str, dict[str, Any]] = {}
+    guide_cache: dict[str, str | None] = {}
 
     paid, paid_rejects, paid_examples = discover_paid(token, seen, repo_cache, guide_cache)
     strategic, strategic_rejects, strategic_examples = discover_strategic(
         token, seen, {x["url"] for x in paid}, repo_cache, guide_cache
     )
 
-    by_url = {}
+    by_url: dict[str, dict[str, Any]] = {}
     for candidate in paid + strategic:
         old = by_url.get(candidate["url"])
         if not old or candidate["priority_score"] > old["priority_score"]:
