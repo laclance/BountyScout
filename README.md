@@ -92,9 +92,17 @@ The GitHub Action runs hourly and can also be triggered manually from **Actions 
 Locally:
 
 ```bash
+python -m pip install ruff==0.16.9 mypy coverage
+ruff format .
+ruff check .
 python -m py_compile scout_bounties.py opportunity_scout.py
+mypy
+coverage run --branch -m unittest -v
+coverage report
 GITHUB_TOKEN=... GITHUB_REPOSITORY=laclance/BountyScout python opportunity_scout.py
 ```
+
+Ruff is the canonical Python formatter. Branch pushes in this repository are auto-formatted by GitHub Actions; pull requests also verify that committed Python is already Ruff-formatted.
 
 Optional notification secrets remain supported:
 
