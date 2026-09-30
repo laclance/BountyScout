@@ -650,11 +650,27 @@ class VerificationTests(unittest.TestCase):
     def test_verify_refresh_and_clean_failures(self) -> None:
         with patch.object(scout, "refresh_issue", return_value=(None, "closed")):
             self.assertEqual(scout.verify(issue(), "t", {}, {})[1], "closed")
+        with patch.object(scout, "refresh_issue", return_value=(None, None)):
+            self.assertEqual(
+                scout.verify(issue(), "t", {}, {})[1],
+                "could not refresh source issue",
+            )
         with patch.object(scout, "refresh_issue", return_value=(issue(), None)), \
              patch.object(bounty, "is_clean_candidate", return_value=False):
             self.assertEqual(
                 scout.verify(issue(), "t", {}, {})[1],
                 "failed basic eligibility filter after source refresh",
+            )
+
+        bad_repo = issue(html_url="not-github", comments=0)
+        with patch.object(scout, "refresh_issue", return_value=(bad_repo, None)), \
+             patch.object(bounty, "is_clean_candidate", return_value=True), \
+             patch.object(bounty, "payment_signal", return_value=None), \
+             patch.object(scout, "supplemental_payment_signal", return_value=None), \
+             patch.object(scout, "strategic_rejection", return_value=None):
+            self.assertEqual(
+                scout.verify(bad_repo, "t", {}, {})[1],
+                "could not identify repository/issue number",
             )
 
     def test_verify_paid_issue_signal_success_and_repo_failures(self) -> None:
