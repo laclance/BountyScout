@@ -34,6 +34,24 @@ TARGET_REPO_QUERY_CHUNK = 3
 STRATEGIC_VERIFY_LIMIT = 12
 REPORT_LIMIT = 8
 
+PAID_DISCOVERY_QUERIES = list(dict.fromkeys(
+    bounty.SEARCH_QUERIES + [
+        'is:issue is:open "/reward" in:comments sort:updated-desc',
+        'is:issue is:open "/bounty" in:comments sort:updated-desc',
+        'is:issue is:open (opire.dev OR bountyhub.dev OR algora.io) in:comments sort:updated-desc',
+        'is:issue is:open (reward OR compensation OR payout OR "cash prize") "$" in:title,body sort:updated-desc',
+    ]
+))
+EXTENDED_AMOUNT_RE = (
+    r"(?:[$€£¥₹]\s*\d[\d,]*(?:\.\d+)?|"
+    r"(?<![A-Za-z])R\s*\d[\d,]*(?:\.\d+)?|"
+    r"\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|cad|aud|nzd|jpy|chf|"
+    r"inr|zar|dai|xmr|sol|eth|btc)\b)"
+)
+PLATFORM_FETCH_LIMIT = 20
+ISSUEHUNT_PAGES = 2
+TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+
 
 def target_repo_queries():
     queries = []
@@ -97,8 +115,14 @@ def competition(item):
 def payment_confidence(signal):
     if not signal:
         return 0
+    if signal.startswith("confirmed bounty platform"):
+        return 100
     if signal.startswith("explicit bounty command"):
         return 100
+    if signal.startswith("explicit /reward comment"):
+        return 98
+    if signal.startswith("explicit /bounty comment"):
+        return 98
     if signal.startswith("bounty labels"):
         return 95
     if signal.startswith("named bounty platform"):
@@ -109,7 +133,7 @@ def payment_confidence(signal):
 def reward_text(signal):
     if not signal:
         return None
-    match = re.search(bounty.AMOUNT_RE, signal, re.IGNORECASE)
+    match = re.search(EXTENDED_AMOUNT_RE, signal, re.IGNORECASE)
     return match.group(0).strip() if match else None
 
 
@@ -143,6 +167,257 @@ def github_get_optional(url, token):
             return json.loads(response.read().decode("utf-8"))
     except Exception:
         return None
+
+
+def fetch_text(url, timeout=12):
+    """Fetch public HTML for official bounty-platform discovery pages."""
+    headers = {"User-Agent": "OSSOpportunityScout"}
+    try:
+        request = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except Exception as exc:
+        print(f"Platform fetch failed for {url}: {exc}")
+        return ""
+
+
+def issue_comments(item, token):
+    """Fetch comments for payment verification; basic filters cap threads at 25."""
+    repo, number = bounty.issue_repo_and_number(item)
+    if not repo or not number or not int(item.get("comments") or 0):
+        return []
+    comments = bounty.github_get(
+        f"https://api.github.com/repos/{repo}/issues/{number}/comments?per_page=100",
+        token,
+    )
+    return comments if isinstance(comments, list) else []
+
+
+def supplemental_payment_signal(item):
+    """Recognize explicit paid-work wording outside the upstream vocabulary."""
+    title, body, labels, _ = issue_text(item)
+    text = f"{title}\n{body}"
+    term = r"(?:cash\s+prize|stipend|sponsored(?:\s+work)?|funded\s+task)"
+    near_amount = re.search(
+        term + r".{0,80}?(" + EXTENDED_AMOUNT_RE + r")",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if near_amount:
+        return f"explicit paid-work wording: {near_amount.group(1).strip()}"
+
+    amount_near = re.search(
+        r"(" + EXTENDED_AMOUNT_RE + r").{0,80}?" + term,
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if amount_near:
+        return f"explicit paid-work wording: {amount_near.group(1).strip()}"
+
+    if (
+        ("bountyhub.dev" in text.lower() or "bountyhub.dev" in labels)
+        and re.search(EXTENDED_AMOUNT_RE, text, re.IGNORECASE)
+    ):
+        amount = re.search(EXTENDED_AMOUNT_RE, text, re.IGNORECASE)
+        return f"named bounty platform + amount (BountyHub): {amount.group(0).strip()}"
+
+    return None
+
+
+def comment_payment_signal(item, token):
+    """Recognize confirmed platform comments and trusted bounty commands."""
+    comments = issue_comments(item, token)
+
+    # Prefer explicit bot/platform confirmations over the command that triggered them.
+    for comment in comments:
+        body = str(comment.get("body", ""))
+        login = str((comment.get("user") or {}).get("login", "")).lower()
+        amount = re.search(EXTENDED_AMOUNT_RE, body, re.IGNORECASE)
+
+        if (
+            amount
+            and ("algora" in login or "algora.io" in body.lower())
+            and re.search(r"\bbounty created\b", body, re.IGNORECASE)
+        ):
+            return f"confirmed bounty platform comment (Algora): {amount.group(0).strip()}"
+
+        if (
+            amount
+            and ("opire" in login or "opire.dev" in body.lower())
+            and re.search(r"\b(?:reward|bounty)\b", body, re.IGNORECASE)
+        ):
+            return f"confirmed bounty platform comment (Opire): {amount.group(0).strip()}"
+
+        if (
+            amount
+            and ("bountyhub" in login or "bountyhub.dev" in body.lower())
+            and re.search(r"\bbounty\b.*\bcreated\b|\bcreated\b.*\bbounty\b", body, re.IGNORECASE | re.DOTALL)
+        ):
+            return f"confirmed bounty platform comment (BountyHub): {amount.group(0).strip()}"
+
+    # Commands alone are accepted only from a repo owner/member/collaborator.
+    for comment in comments:
+        body = str(comment.get("body", ""))
+        association = str(comment.get("author_association", "")).upper()
+        if association not in TRUSTED_ASSOCIATIONS:
+            continue
+
+        reward = re.search(
+            r"/reward\s+(\d[\d,]*(?:\.\d+)?)\b",
+            body,
+            re.IGNORECASE,
+        )
+        if reward:
+            return f"explicit /reward comment: ${reward.group(1)}"
+
+        algora = re.search(
+            r"/bounty\s+(" + EXTENDED_AMOUNT_RE + r")",
+            body,
+            re.IGNORECASE,
+        )
+        if algora:
+            return f"explicit /bounty comment: {algora.group(1).strip()}"
+
+    return None
+
+
+def issue_from_github_url(url, token):
+    """Fetch a GitHub source issue from a platform-discovered URL."""
+    match = re.match(
+        r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)",
+        str(url),
+    )
+    if not match:
+        return None
+    repo, number = match.group(1), int(match.group(2))
+    item = bounty.github_get(
+        f"https://api.github.com/repos/{repo}/issues/{number}",
+        token,
+    )
+    return item if isinstance(item, dict) else None
+
+
+def issuehunt_platform_refs():
+    """Read the official IssueHunt funded-issues pages."""
+    refs = {}
+    for page in range(1, ISSUEHUNT_PAGES + 1):
+        url = "https://oss.issuehunt.io/issues"
+        if page > 1:
+            url += f"?page={page}"
+        page_html = fetch_text(url)
+        if not page_html:
+            continue
+
+        pattern = re.compile(
+            r'href=["\'](/r/([^/"\']+)/([^/"\']+)/issues/(\d+))["\']',
+            re.IGNORECASE,
+        )
+        for match in pattern.finditer(page_html):
+            owner, repo, number = match.group(2), match.group(3), match.group(4)
+            source_url = f"https://github.com/{owner}/{repo}/issues/{number}"
+            nearby = page_html[match.end():match.end() + 1200]
+            amount = re.search(r"\$\s*\d[\d,]*(?:\.\d+)?", nearby)
+            signal = "confirmed bounty platform feed (IssueHunt)"
+            if amount:
+                signal += f": {amount.group(0).strip()}"
+            refs[source_url] = signal
+    return refs
+
+
+def opire_platform_refs():
+    """Read visible Opire bounty cards and map them back to GitHub issues."""
+    refs = {}
+    home = fetch_text("https://app.opire.dev/home")
+    if not home:
+        return refs
+
+    normalized = home.replace("\\/", "/")
+    direct = re.findall(
+        r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+        normalized,
+    )
+    for source_url in direct[:PLATFORM_FETCH_LIMIT]:
+        refs[source_url] = "confirmed bounty platform feed (Opire)"
+
+    detail_paths = list(dict.fromkeys(re.findall(
+        r'href=["\'](/issues/[A-Za-z0-9_-]+)["\']',
+        normalized,
+    )))[:PLATFORM_FETCH_LIMIT]
+
+    for path in detail_paths:
+        detail = fetch_text("https://app.opire.dev" + path)
+        if not detail:
+            continue
+        detail = detail.replace("\\/", "/")
+        source = re.search(
+            r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+            detail,
+        )
+        if not source:
+            continue
+        amount = re.search(
+            r"\$\s*\d[\d,]*(?:\.\d+)?\s+bounty\b",
+            detail,
+            re.IGNORECASE,
+        )
+        signal = "confirmed bounty platform feed (Opire)"
+        if amount:
+            signal += f": {amount.group(0).split()[0]}"
+        refs[source.group(0)] = signal
+
+    return refs
+
+
+def bountyhub_platform_refs():
+    """Read public BountyHub listings when the site exposes them in HTML."""
+    refs = {}
+    listing = fetch_text("https://www.bountyhub.dev/en/bounties")
+    if not listing:
+        return refs
+
+    normalized = listing.replace("\\/", "/")
+    direct = re.findall(
+        r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+        normalized,
+    )
+    for source_url in direct[:PLATFORM_FETCH_LIMIT]:
+        refs[source_url] = "confirmed bounty platform feed (BountyHub)"
+
+    detail_paths = list(dict.fromkeys(re.findall(
+        r'href=["\'](/en/bounty/view/[A-Za-z0-9_-]+)["\']',
+        normalized,
+    )))[:PLATFORM_FETCH_LIMIT]
+
+    for path in detail_paths:
+        detail = fetch_text("https://www.bountyhub.dev" + path)
+        if not detail:
+            continue
+        detail = detail.replace("\\/", "/")
+        source = re.search(
+            r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+            detail,
+        )
+        if not source:
+            continue
+        amount = re.search(EXTENDED_AMOUNT_RE, detail, re.IGNORECASE)
+        signal = "confirmed bounty platform feed (BountyHub)"
+        if amount:
+            signal += f": {amount.group(0).strip()}"
+        refs[source.group(0)] = signal
+
+    return refs
+
+
+def platform_paid_refs():
+    """Collect official-platform discoveries, deduped by source GitHub issue URL."""
+    refs = {}
+    for source in (
+        issuehunt_platform_refs(),
+        opire_platform_refs(),
+        bountyhub_platform_refs(),
+    ):
+        refs.update(source)
+    return refs
 
 
 def contribution_guide(repo, token):
@@ -323,18 +598,56 @@ def strategic_rejection(item, token):
     return bounty.active_claim_reason(repo, number, int(item.get("comments") or 0), token)
 
 
-def verify(item, token, repo_cache, guide_cache, require_paid=False):
+def verify(
+    item,
+    token,
+    repo_cache,
+    guide_cache,
+    require_paid=False,
+    payment_signal_override=None,
+):
     fresh, reason = refresh_issue(item, token)
     if reason:
         return None, reason
     if not bounty.is_clean_candidate(fresh):
         return None, "failed basic eligibility filter after source refresh"
 
-    signal = bounty.payment_signal(fresh)
+    issue_signal = bounty.payment_signal(fresh) or supplemental_payment_signal(fresh)
+    comment_signal = None
+    if not issue_signal and int(fresh.get("comments") or 0):
+        comment_signal = comment_payment_signal(fresh, token)
+    signal = issue_signal or comment_signal or payment_signal_override
+
     if require_paid or signal:
-        reason, signal = bounty.candidate_rejection_reason(fresh, token)
-        if reason:
+        reason, verified_issue_signal = bounty.candidate_rejection_reason(
+            fresh,
+            token,
+        )
+        if reason and reason != "no explicit payment signal":
             return None, reason
+
+        if verified_issue_signal:
+            signal = verified_issue_signal
+
+        if not signal:
+            return None, "no explicit payment signal"
+
+        # The upstream verifier stops before competition checks when payment is
+        # only present in comments/platform feeds, so finish those checks here.
+        if reason == "no explicit payment signal":
+            repo, number = bounty.issue_repo_and_number(fresh)
+            pr_reason = bounty.has_existing_implementation_pr(repo, number, token)
+            if pr_reason:
+                return None, pr_reason
+            claim_reason = bounty.active_claim_reason(
+                repo,
+                number,
+                int(fresh.get("comments") or 0),
+                token,
+            )
+            if claim_reason:
+                return None, claim_reason
+
         lane = "paid"
     else:
         reason = strategic_rejection(fresh, token)
@@ -363,7 +676,8 @@ def add_reject(counts, examples, item, reason):
 
 def discover_paid(token, seen, repo_cache, guide_cache):
     found, touched, rejected, examples = [], set(), {}, []
-    for query in bounty.SEARCH_QUERIES:
+
+    for query in PAID_DISCOVERY_QUERIES:
         for item in bounty.search_github(query, token).get("items", []):
             url = item.get("html_url")
             if not url or url in seen or url in touched:
@@ -371,12 +685,45 @@ def discover_paid(token, seen, repo_cache, guide_cache):
             touched.add(url)
             if not bounty.is_clean_candidate(item):
                 continue
-            candidate, reason = verify(item, token, repo_cache, guide_cache, True)
+            candidate, reason = verify(
+                item,
+                token,
+                repo_cache,
+                guide_cache,
+                require_paid=True,
+            )
             if reason:
                 add_reject(rejected, examples, item, reason)
                 print(f"Skipping paid candidate {url}: {reason}")
             else:
                 found.append(candidate)
+
+    # Official platform feeds can expose funded issues that contain no bounty
+    # keywords on GitHub at all. Source GitHub issue still gets final authority.
+    for source_url, platform_signal in platform_paid_refs().items():
+        if source_url in seen or source_url in touched:
+            continue
+        touched.add(source_url)
+        item = issue_from_github_url(source_url, token)
+        if not item:
+            continue
+        if not bounty.is_clean_candidate(item):
+            continue
+
+        candidate, reason = verify(
+            item,
+            token,
+            repo_cache,
+            guide_cache,
+            require_paid=True,
+            payment_signal_override=platform_signal,
+        )
+        if reason:
+            add_reject(rejected, examples, item, reason)
+            print(f"Skipping platform candidate {source_url}: {reason}")
+        else:
+            found.append(candidate)
+
     return found, rejected, examples
 
 

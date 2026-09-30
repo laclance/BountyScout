@@ -22,7 +22,9 @@ jobs:
           python-version: '3.x'
 
       - name: Validate scouts
-        run: python -m py_compile scout_bounties.py opportunity_scout.py
+        run: |
+          python -m py_compile scout_bounties.py opportunity_scout.py test_opportunity_scout.py
+          python -m unittest -v test_opportunity_scout.py
 
       - name: Run OSS Opportunity Scout
         env:
