@@ -1,16 +1,19 @@
+import ast
 import io
 import json
 import os
 import tempfile
+from pathlib import Path
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import mock_open, patch
 
 import scout_bounties as scout
 
 
-def issue(**overrides):
+def issue(**overrides: Any) -> dict[str, Any]:
     base = {
         "html_url": "https://github.com/acme/widget/issues/42",
         "title": "Fix deterministic regression",
@@ -26,30 +29,30 @@ def issue(**overrides):
 
 
 class FakeResponse:
-    def __init__(self, body=b"{}"):
+    def __init__(self, body: bytes = b"{}") -> None:
         self.body = body
 
-    def __enter__(self):
+    def __enter__(self) -> "FakeResponse":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> bool:
         return False
 
-    def read(self):
+    def read(self) -> bytes:
         return self.body
 
 
 class StateTests(unittest.TestCase):
-    def test_load_missing_returns_empty(self):
+    def test_load_missing_returns_empty(self) -> None:
         with patch.object(scout.os.path, "exists", return_value=False):
             self.assertEqual(scout.load_seen_bounties(), set())
 
-    def test_load_list_returns_set(self):
+    def test_load_list_returns_set(self) -> None:
         with patch.object(scout.os.path, "exists", return_value=True), \
              patch("builtins.open", mock_open(read_data='["b", "a"]')):
             self.assertEqual(scout.load_seen_bounties(), {"a", "b"})
 
-    def test_load_non_list_and_bad_json_return_empty(self):
+    def test_load_non_list_and_bad_json_return_empty(self) -> None:
         with patch.object(scout.os.path, "exists", return_value=True), \
              patch("builtins.open", mock_open(read_data='{"x": 1}')):
             self.assertEqual(scout.load_seen_bounties(), set())
@@ -57,7 +60,7 @@ class StateTests(unittest.TestCase):
              patch("builtins.open", mock_open(read_data='{')):
             self.assertEqual(scout.load_seen_bounties(), set())
 
-    def test_save_success_sorts_and_failure_returns_false(self):
+    def test_save_success_sorts_and_failure_returns_false(self) -> None:
         handle = mock_open()
         with patch("builtins.open", handle):
             self.assertTrue(scout.save_seen_bounties({"b", "a"}))
@@ -69,7 +72,7 @@ class StateTests(unittest.TestCase):
 
 
 class HttpTests(unittest.TestCase):
-    def test_github_get_success_and_failure(self):
+    def test_github_get_success_and_failure(self) -> None:
         with patch.object(
             scout.urllib.request,
             "urlopen",
@@ -83,7 +86,7 @@ class HttpTests(unittest.TestCase):
         with patch.object(scout.urllib.request, "urlopen", side_effect=OSError("boom")):
             self.assertIsNone(scout.github_get("https://example"))
 
-    def test_search_github_encodes_and_normalizes(self):
+    def test_search_github_encodes_and_normalizes(self) -> None:
         with patch.object(scout, "github_get", return_value={"items": [1]}) as get:
             self.assertEqual(scout.search_github('a b', "t", per_page=7), {"items": [1]})
             self.assertIn("per_page=7", get.call_args.args[0])
@@ -93,7 +96,7 @@ class HttpTests(unittest.TestCase):
 
 
 class PaymentTests(unittest.TestCase):
-    def test_payment_signal_variants(self):
+    def test_payment_signal_variants(self) -> None:
         self.assertEqual(
             scout.payment_signal(issue(body="/bounty $25")),
             "explicit bounty command: $25",
@@ -116,27 +119,27 @@ class PaymentTests(unittest.TestCase):
         )
         self.assertIsNone(scout.payment_signal(issue(body="bounty maybe someday", title="Task")))
 
-    def test_issue_repo_and_number(self):
+    def test_issue_repo_and_number(self) -> None:
         self.assertEqual(scout.issue_repo_and_number(issue()), ("acme/widget", 42))
         self.assertEqual(
             scout.issue_repo_and_number({"html_url": "https://example.com/no"}),
             (None, None),
         )
 
-    def test_usd_like_amount(self):
+    def test_usd_like_amount(self) -> None:
         self.assertEqual(scout.usd_like_amount_from_signal("reward $1,234.50"), 1234.5)
         self.assertEqual(scout.usd_like_amount_from_signal("reward 25 USDC"), 25.0)
         self.assertIsNone(scout.usd_like_amount_from_signal("reward €25"))
         self.assertIsNone(scout.usd_like_amount_from_signal(None))
 
-    def test_parse_datetime(self):
+    def test_parse_datetime(self) -> None:
         self.assertIsNotNone(scout.parse_github_datetime("2026-09-30T12:00:00Z"))
         self.assertIsNone(scout.parse_github_datetime(None))
         self.assertIsNone(scout.parse_github_datetime("not-a-date"))
 
 
 class CompetitionTests(unittest.TestCase):
-    def test_existing_pr_detected_and_absent(self):
+    def test_existing_pr_detected_and_absent(self) -> None:
         prs = {"items": [{
             "title": "Fixes #42",
             "body": "",
@@ -148,7 +151,7 @@ class CompetitionTests(unittest.TestCase):
         with patch.object(scout, "search_github", return_value={"items": [{"title": "Other", "body": ""}]}):
             self.assertIsNone(scout.has_existing_implementation_pr("acme/widget", 42, "t"))
 
-    def test_active_claim_paths(self):
+    def test_active_claim_paths(self) -> None:
         self.assertIsNone(scout.active_claim_reason("a/b", 1, 0, "t"))
         with patch.object(scout, "github_get", return_value=None):
             self.assertIsNone(scout.active_claim_reason("a/b", 1, 2, "t"))
@@ -164,7 +167,7 @@ class CompetitionTests(unittest.TestCase):
 
 
 class EligibilityTests(unittest.TestCase):
-    def test_clean_candidate_rejections_and_acceptance(self):
+    def test_clean_candidate_rejections_and_acceptance(self) -> None:
         cases = [
             issue(pull_request={}),
             issue(html_url="https://github.com/laclance/BountyScout/issues/1"),
@@ -179,7 +182,7 @@ class EligibilityTests(unittest.TestCase):
                 self.assertFalse(scout.is_clean_candidate(item))
         self.assertTrue(scout.is_clean_candidate(issue()))
 
-    def test_candidate_rejection_paths(self):
+    def test_candidate_rejection_paths(self) -> None:
         proposal = issue(body="[Bounty proposal] $100")
         self.assertEqual(
             scout.candidate_rejection_reason(proposal, "t")[0],
@@ -215,13 +218,13 @@ class EligibilityTests(unittest.TestCase):
 
 
 class RankingTests(unittest.TestCase):
-    def test_fetch_repo_metadata(self):
+    def test_fetch_repo_metadata(self) -> None:
         with patch.object(scout, "github_get", return_value={"stargazers_count": 10}):
             self.assertEqual(scout.fetch_repo_metadata("a/b", "t")["stargazers_count"], 10)
         with patch.object(scout, "github_get", return_value=[]):
             self.assertEqual(scout.fetch_repo_metadata("a/b", "t"), {})
 
-    def test_score_candidate_signal_reward_and_tier_branches(self):
+    def test_score_candidate_signal_reward_and_tier_branches(self) -> None:
         now = datetime.now(timezone.utc)
         base_item = issue(created_at=now.isoformat(), comments=0, labels=["help wanted"])
 
@@ -264,14 +267,14 @@ class RankingTests(unittest.TestCase):
 
 
 class NotificationTests(unittest.TestCase):
-    def _assert_post(self, fn, *args):
+    def _assert_post(self, fn: Any, *args: Any) -> Any:
         with patch.object(scout.urllib.request, "urlopen", return_value=FakeResponse()) as opened:
             self.assertTrue(fn(*args))
             req = opened.call_args.args[0]
             self.assertEqual(req.method, "POST")
             return req
 
-    def test_notification_success_payloads(self):
+    def test_notification_success_payloads(self) -> None:
         req = self._assert_post(scout.send_telegram_notification, "bot", "chat", "hello")
         self.assertIn(b'"chat_id": "chat"', req.data)
 
@@ -288,7 +291,7 @@ class NotificationTests(unittest.TestCase):
         self.assertIn(b'"bounty-alert"', req.data)
         self.assertEqual(req.headers["Authorization"], "Bearer tok")
 
-    def test_notification_failures(self):
+    def test_notification_failures(self) -> None:
         with patch.object(scout.urllib.request, "urlopen", side_effect=OSError("x")):
             self.assertFalse(scout.send_telegram_notification("bot", "chat", "m"))
             self.assertFalse(scout.send_discord_notification("https://hook", "m"))
@@ -296,7 +299,7 @@ class NotificationTests(unittest.TestCase):
 
 
 class MainTests(unittest.TestCase):
-    def test_main_no_candidates(self):
+    def test_main_no_candidates(self) -> None:
         with patch.dict(os.environ, {}, clear=True), \
              patch.object(scout, "load_seen_bounties", return_value=set()), \
              patch.object(scout, "search_github", return_value={"items": []}), \
@@ -304,7 +307,7 @@ class MainTests(unittest.TestCase):
             scout.main()
             self.assertIn("No new clean paid bounty opportunities found.", buf.getvalue())
 
-    def test_main_full_delivery_marks_seen_and_dedupes(self):
+    def test_main_full_delivery_marks_seen_and_dedupes(self) -> None:
         item = issue(comments=1)
         env = {
             "GITHUB_TOKEN": "tok",
@@ -329,14 +332,14 @@ class MainTests(unittest.TestCase):
             gh.assert_called_once()
             save.assert_called_once_with({item["html_url"]})
 
-    def test_main_rejected_seen_and_failed_delivery_do_not_save(self):
+    def test_main_rejected_seen_and_failed_delivery_do_not_save(self) -> None:
         seen_item = issue(html_url="https://github.com/acme/widget/issues/1")
         rejected_item = issue(html_url="https://github.com/acme/widget/issues/2")
         accepted_item = issue(html_url="https://github.com/acme/widget/issues/3")
         results = {"items": [seen_item, rejected_item, accepted_item]}
         env = {"TELEGRAM_BOT_TOKEN": "tb", "TELEGRAM_CHAT_ID": "chat"}
 
-        def rejection(item_, token):
+        def rejection(item_: dict[str, Any], token: str | None) -> tuple[str | None, str | None]:
             if item_["html_url"].endswith("/2"):
                 return "no explicit payment signal", None
             return None, "payment term + amount: $25"
@@ -354,7 +357,7 @@ class MainTests(unittest.TestCase):
 
 
 class CoverageGapTests(unittest.TestCase):
-    def test_score_zero_reward_old_issue_and_no_star_branches(self):
+    def test_score_zero_reward_old_issue_and_no_star_branches(self) -> None:
         now = datetime.now(timezone.utc)
         score, tier, reasons = scout.score_candidate(
             issue(
@@ -372,7 +375,7 @@ class CoverageGapTests(unittest.TestCase):
         self.assertGreaterEqual(score, 0)
         self.assertIn(tier, {"strong", "promising", "low-confidence"})
 
-    def test_main_skips_dirty_reuses_repo_cache_and_can_fail_state_save(self):
+    def test_main_skips_dirty_reuses_repo_cache_and_can_fail_state_save(self) -> None:
         dirty = issue(
             html_url="https://github.com/acme/widget/issues/40",
             assignees=[{"login": "taken"}],
@@ -395,7 +398,7 @@ class CoverageGapTests(unittest.TestCase):
         meta.assert_called_once_with("acme/widget", None)
         save.assert_called_once()
 
-    def test_main_short_circuit_telegram_condition_without_chat(self):
+    def test_main_short_circuit_telegram_condition_without_chat(self) -> None:
         item_ = issue(comments=0)
         env = {"TELEGRAM_BOT_TOKEN": "tb", "DISCORD_WEBHOOK_URL": "https://hook"}
         with patch.dict(os.environ, env, clear=True), \
@@ -413,6 +416,39 @@ class CoverageGapTests(unittest.TestCase):
             scout.main()
         tg.assert_not_called()
         save.assert_not_called()
+
+
+class TypingCoverageTests(unittest.TestCase):
+    def test_every_python_function_is_annotated(self) -> None:
+        for path in sorted(Path(".").glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                with self.subTest(path=str(path), function=node.name, line=node.lineno):
+                    self.assertIsNotNone(node.returns, "missing return annotation")
+                    arguments = [
+                        *node.args.posonlyargs,
+                        *node.args.args,
+                        *node.args.kwonlyargs,
+                    ]
+                    for argument in arguments:
+                        if argument.arg in {"self", "cls"}:
+                            continue
+                        self.assertIsNotNone(
+                            argument.annotation,
+                            f"missing annotation for {argument.arg}",
+                        )
+                    if node.args.vararg is not None:
+                        self.assertIsNotNone(
+                            node.args.vararg.annotation,
+                            f"missing annotation for *{node.args.vararg.arg}",
+                        )
+                    if node.args.kwarg is not None:
+                        self.assertIsNotNone(
+                            node.args.kwarg.annotation,
+                            f"missing annotation for **{node.args.kwarg.arg}",
+                        )
 
 
 if __name__ == "__main__":
