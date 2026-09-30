@@ -593,7 +593,8 @@ def add_reject(counts, examples, item, reason):
 
 def discover_paid(token, seen, repo_cache, guide_cache):
     found, touched, rejected, examples = [], set(), {}, []
-    for query in bounty.SEARCH_QUERIES:
+
+    for query in PAID_DISCOVERY_QUERIES:
         for item in bounty.search_github(query, token).get("items", []):
             url = item.get("html_url")
             if not url or url in seen or url in touched:
@@ -601,12 +602,45 @@ def discover_paid(token, seen, repo_cache, guide_cache):
             touched.add(url)
             if not bounty.is_clean_candidate(item):
                 continue
-            candidate, reason = verify(item, token, repo_cache, guide_cache, True)
+            candidate, reason = verify(
+                item,
+                token,
+                repo_cache,
+                guide_cache,
+                require_paid=True,
+            )
             if reason:
                 add_reject(rejected, examples, item, reason)
                 print(f"Skipping paid candidate {url}: {reason}")
             else:
                 found.append(candidate)
+
+    # Official platform feeds can expose funded issues that contain no bounty
+    # keywords on GitHub at all. Source GitHub issue still gets final authority.
+    for source_url, platform_signal in platform_paid_refs().items():
+        if source_url in seen or source_url in touched:
+            continue
+        touched.add(source_url)
+        item = issue_from_github_url(source_url, token)
+        if not item:
+            continue
+        if not bounty.is_clean_candidate(item):
+            continue
+
+        candidate, reason = verify(
+            item,
+            token,
+            repo_cache,
+            guide_cache,
+            require_paid=True,
+            payment_signal_override=platform_signal,
+        )
+        if reason:
+            add_reject(rejected, examples, item, reason)
+            print(f"Skipping platform candidate {source_url}: {reason}")
+        else:
+            found.append(candidate)
+
     return found, rejected, examples
 
 
