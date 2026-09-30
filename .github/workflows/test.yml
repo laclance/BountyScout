@@ -8,8 +8,6 @@ on:
       - "test_opportunity_scout.py"
       - "test_scout_bounties.py"
       - ".coveragerc"
-      - "test_scout_bounties.py"
-      - ".coveragerc"
       - ".github/workflows/test.yml"
   push:
     branches: [main]
@@ -17,6 +15,9 @@ on:
       - "scout_bounties.py"
       - "opportunity_scout.py"
       - "test_opportunity_scout.py"
+      - "test_scout_bounties.py"
+      - ".coveragerc"
+      - ".github/workflows/test.yml"
 
 jobs:
   test:
