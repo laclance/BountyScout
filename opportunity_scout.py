@@ -79,10 +79,24 @@ def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
     return title, body, labels, f"{title}\n{body}".lower()
 
 
+CODE_FILE_RE = re.compile(
+    r"(?<![\w.-])(?:[\w.-]+/)*[\w.-]+\.(?:go|sh|py|yaml|yml)\b",
+    re.IGNORECASE,
+)
+
+
+def code_reference_count(text: str) -> int:
+    return len({match.group(0).lower() for match in CODE_FILE_RE.finditer(text)})
+
+
 def estimate_effort(item: Mapping[str, Any]) -> str:
     title, body, labels, text = issue_text(item)
+    comments = int(item.get("comments") or 0)
+    file_refs = code_reference_count(body)
+
     if (
         "kind/feature" in labels
+        or title.lower().startswith(("fr:", "feature request:"))
         or re.search(
             r"\b(?:propos(?:e|ed|ing|al)|epic|roadmap|redesign|rewrite|"
             r"migration|multi-phase|architecture|large refactor|rfc|"
@@ -93,29 +107,51 @@ def estimate_effort(item: Mapping[str, Any]) -> str:
             r"\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\b",
             text,
         )
+        or len(body) > 12000
+        or comments > 12
     ):
         return "1d+"
+
     if (
         re.search(r"\b(?:typo|spelling|readme|documentation|docs-only)\b", text)
         and len(body) < 5000
     ):
         return "<1h"
+
+    mobile_or_desktop = any(
+        marker in labels for marker in ("os-android", "os-ios", "os-macos", "os-windows")
+    )
+    missing_reproduction = "_no response_" in text or "no response" in text
+    suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", body))
     if (
-        re.search(
-            r"\b(?:regression|deterministic|panic|deadlock|race|leak|incorrect|"
-            r"failing test|unit test|single|small|narrow|fix)\b",
-            f"{title.lower()} {labels} {text[:3000]}",
-        )
-        and int(item.get("comments") or 0) <= 5
+        file_refs >= 4
+        or len(body) > 8500
+        or (mobile_or_desktop and missing_reproduction)
+        or (re.search(r"\bsuggested fix(?:es)?\b", text) and suggested_fix_bullets >= 3)
     ):
+        return "6–12h"
+
+    bounded = re.search(
+        r"\b(?:regression|deterministic|panics?|deadlocks?|races?|"
+        r"leaks?|incorrect|failing tests?|unit tests?|single|small|narrow|"
+        r"no-op|stale|fix(?:es|ed|ing)?)\b|"
+        r"\bnever closes\b|\bevery sync\b",
+        f"{title.lower()} {labels} {text[:4500]}",
+    )
+    if bounded and comments <= 3 and len(body) < 4500 and file_refs <= 2:
         return "1–3h"
-    if len(body) > 12000 or int(item.get("comments") or 0) > 12:
-        return "1d+"
+
     return "3–6h"
 
 
 def effort_hours(effort: str) -> float:
-    return {"<1h": 0.75, "1–3h": 2.0, "3–6h": 4.5, "1d+": 10.0}[effort]
+    return {
+        "<1h": 0.75,
+        "1–3h": 2.0,
+        "3–6h": 4.5,
+        "6–12h": 9.0,
+        "1d+": 16.0,
+    }[effort]
 
 
 def competition(item: Mapping[str, Any]) -> str:
@@ -615,32 +651,32 @@ def build_candidate(
     career = 0
     career_reasons = []
     if stars >= 10000:
-        career += 20
+        career += 18
         career_reasons.append("10k+ star repo")
     elif stars >= 1000:
-        career += 17
+        career += 14
         career_reasons.append("1k+ star repo")
     elif stars >= 100:
-        career += 11
+        career += 9
     elif stars >= 10:
-        career += 5
+        career += 4
     if active_30d:
-        career += 10
+        career += 8
         career_reasons.append("repo active in last 30d")
     if repo in TARGET_REPOS:
-        career += 20
+        career += 14
         career_reasons.append("target repo bonus")
 
     language = str(repo_meta.get("language") or "Unknown")
     lang = language.lower()
     skill = (
-        14
+        12
         if lang == "go"
-        else 13
-        if lang in ("typescript", "javascript")
         else 11
+        if lang in ("typescript", "javascript")
+        else 9
         if lang in ("ruby", "php")
-        else 10
+        else 8
         if lang == "hcl"
         else 0
     )
@@ -667,13 +703,16 @@ def build_candidate(
     if any(term in text for term in infra_terms):
         skill += 6
         career_reasons.append("target infrastructure/domain fit")
-    career += min(20, skill)
+    career += min(18, skill)
 
     depth_terms = (
         "race",
         "deadlock",
         "concurrency",
         "network",
+        "dns",
+        "proxy",
+        "routing",
         "protocol",
         "controller",
         "distributed",
@@ -685,36 +724,68 @@ def build_candidate(
     )
     depth = sum(term in text for term in depth_terms)
     career += (
-        15
+        14
         if depth >= 3
-        else 9
+        else 8
         if depth >= 1
-        else 5
+        else 4
         if re.search(r"\b(?:test|regression|bug|fix)\b", text)
         else 0
     )
     if depth:
         career_reasons.append("meaningful technical depth")
 
-    merge = 0
+    issue_points = 0
     if re.search(r"\b(?:test|tests|regression)\b", text):
-        merge += 5
+        issue_points += 6
         career_reasons.append("tests/regression signal")
-    if "help wanted" in labels_text or "good first issue" in labels_text:
-        merge += 4
-        career_reasons.append("maintainer contributor signal")
+
+    maintainer_ready = any(
+        label in labels_text
+        for label in ("help wanted", "good first issue", "triage/accepted", "refined")
+    )
+    if maintainer_ready:
+        issue_points += 8
+        career_reasons.append("maintainer-ready signal")
+
     if guide:
-        merge += 3
+        issue_points += 3
         career_reasons.append("contribution guide found")
+
+    effort_points = {
+        "<1h": 9,
+        "1–3h": 7,
+        "3–6h": 4,
+        "6–12h": 1,
+        "1d+": 0,
+    }[effort]
+    issue_points += effort_points
     if effort in ("<1h", "1–3h"):
-        merge += 8
         career_reasons.append("bounded implementation scope")
-    elif effort == "3–6h":
-        merge += 4
-    career += min(20, merge)
-    career -= {"none": 0, "low": 2, "medium": 7, "high": 15}[comp]
-    if effort == "1d+":
-        career -= 8
+
+    _, body, _, _ = issue_text(item)
+    clarity = 0
+    if re.search(r"\b(?:root cause|code path|cause \(from)\b", text):
+        clarity += 3
+    if "steps to reproduce" in text and "_no response_" not in text:
+        clarity += 2
+    if re.search(r"\b(?:suggested fix|possible fix|expected behavior)\b", text):
+        clarity += 2
+    refs = code_reference_count(body)
+    clarity += min(3, refs)
+    if clarity >= 5:
+        career_reasons.append("clear implementation/reproduction detail")
+    elif clarity:
+        career_reasons.append("implementation detail available")
+    issue_points += min(10, clarity)
+
+    career += min(30, issue_points)
+    career -= {"none": 0, "low": 2, "medium": 6, "high": 12}[comp]
+    if effort == "6–12h":
+        career -= 3
+        career_reasons.append("broader implementation scope")
+    elif effort == "1d+":
+        career -= 10
         career_reasons.append("large-scope penalty")
     career = max(0, min(100, career))
 
@@ -746,7 +817,7 @@ def build_candidate(
         "language": language,
         "labels": labels,
         "cash_reasons": cash_reasons[:6],
-        "career_reasons": career_reasons[:8],
+        "career_reasons": career_reasons[:10],
         "contribution_guide": guide,
         "comments": int(item.get("comments") or 0),
         "updated_at": item.get("updated_at"),
@@ -1000,7 +1071,6 @@ def github_report_ref(text: Any) -> str:
 
 
 def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
-    lane = "Paid" if candidate["paid"] else "Strategic OSS"
     hourly = (
         f"~${candidate['expected_hourly']:.0f}/h"
         if candidate["expected_hourly"] is not None
@@ -1011,39 +1081,64 @@ def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
         if candidate["contribution_guide"]
         else "not found at common paths"
     )
-    return (
-        f"#### {idx}. [{candidate['repo']} #{candidate['issue_number']}: "
-        f"{github_report_ref(candidate['title'])}]({github_report_ref(candidate['url'])})\n"
-        f"- **Paid / unpaid:** {lane}\n"
-        f"- **Reward:** {candidate['reward'] or 'none'}\n"
-        f"- **Payment confidence:** {candidate['payment_confidence']}/100\n"
-        f"- **Cash score:** {candidate['cash_score']}/100\n"
-        f"- **Career score:** {candidate['career_score']}/100\n"
-        f"- **Effort:** {candidate['effort']}\n"
-        f"- **Expected hourly value:** {hourly}\n"
-        f"- **Competition:** {candidate['competition']}\n"
-        f"- **Repo stars:** {candidate['stars']}\n"
-        f"- **Repo recent activity:** {candidate['recent_activity']}\n"
-        f"- **Language:** {candidate['language']}\n"
-        f"- **Labels:** {', '.join(candidate['labels']) or 'none'}\n"
-        f"- **Contribution process:** {guide}\n"
-        f"- **Cash reasons:** {', '.join(candidate['cash_reasons']) or 'unpaid lane'}\n"
-        f"- **Career reasons:** {', '.join(candidate['career_reasons'])}\n"
-        f"- **Rejection reason:** none\n\n"
+    lines = [
+        f"#### {idx}. [{candidate['repo']} #{candidate['issue_number']}]({github_report_ref(candidate['url'])}): "
+        f"{github_report_ref(candidate['title'])}",
+    ]
+    if candidate["paid"]:
+        lines.extend(
+            [
+                f"- **Reward:** {candidate['reward'] or 'unknown'}",
+                f"- **Payment confidence:** {candidate['payment_confidence']}/100",
+                f"- **Cash score:** {candidate['cash_score']}/100",
+                f"- **Effort:** {candidate['effort']}",
+                f"- **Expected hourly value:** {hourly}",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                f"- **Career score:** {candidate['career_score']}/100",
+                f"- **Effort:** {candidate['effort']}",
+            ]
+        )
+
+    lines.extend(
+        [
+            f"- **Competition:** {candidate['competition']}",
+            f"- **Repo stars:** {candidate['stars']}",
+            f"- **Repo recent activity:** {candidate['recent_activity']}",
+            f"- **Language:** {candidate['language']}",
+            f"- **Labels:** {', '.join(candidate['labels']) or 'none'}",
+            f"- **Contribution process:** {guide}",
+        ]
     )
+    if candidate["paid"]:
+        lines.append(f"- **Cash reasons:** {', '.join(candidate['cash_reasons'])}")
+    else:
+        lines.append(f"- **Career reasons:** {', '.join(candidate['career_reasons'])}")
+    return "\n".join(lines) + "\n\n"
 
 
 def notification_candidate(candidate: Mapping[str, Any], idx: int) -> list[str]:
     title = str(candidate["title"] or "")
     if len(title) > 100:
         title = title[:97] + "..."
-    return [
-        f"{idx}. *{candidate['repo']} #{candidate['issue_number']}* — {title}",
-        f"   • {'paid' if candidate['paid'] else 'strategic OSS'} | reward: {candidate['reward'] or 'none'}",
-        f"   • Cash {candidate['cash_score']}/100 | Career {candidate['career_score']}/100",
-        f"   • {candidate['effort']} | competition: {candidate['competition']}",
-        f"   • {candidate['url']}",
-    ]
+    lines = [f"{idx}. *{candidate['repo']} #{candidate['issue_number']}* — {title}"]
+    if candidate["paid"]:
+        lines.append(
+            f"   • paid bounty | reward: {candidate['reward'] or 'unknown'} | "
+            f"cash: {candidate['cash_score']}/100"
+        )
+    else:
+        lines.append(f"   • strategic OSS | career: {candidate['career_score']}/100")
+    lines.extend(
+        [
+            f"   • {candidate['effort']} | competition: {candidate['competition']}",
+            f"   • {candidate['url']}",
+        ]
+    )
+    return lines
 
 
 def main() -> None:

@@ -100,7 +100,9 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertEqual(text, "abc\ndef")
 
     def test_effort_all_buckets(self) -> None:
+        self.assertEqual(scout.code_reference_count("a.go a.go pkg/b.sh docs/c.yaml"), 3)
         self.assertEqual(scout.estimate_effort(issue(title="Architecture rewrite")), "1d+")
+        self.assertEqual(scout.estimate_effort(issue(title="FR: Support ExternalName")), "1d+")
         self.assertEqual(
             scout.estimate_effort(
                 issue(title="Add support for Connection Pool", labels=["kind/feature"])
@@ -115,7 +117,43 @@ class BasicHeuristicTests(unittest.TestCase):
         )
         self.assertEqual(scout.estimate_effort(issue(title="README typo", body="small")), "<1h")
         self.assertEqual(
-            scout.estimate_effort(issue(title="Fix deterministic bug", comments=2)), "1–3h"
+            scout.estimate_effort(issue(title="TCP mode leaks upstream connection", comments=0)),
+            "1–3h",
+        )
+        self.assertEqual(
+            scout.estimate_effort(
+                issue(
+                    title="Broad logger cleanup",
+                    body="a.go b.go c.go d.go",
+                    comments=1,
+                )
+            ),
+            "6–12h",
+        )
+        self.assertEqual(
+            scout.estimate_effort(issue(title="Broad bug", body="x" * 9000, comments=1)),
+            "6–12h",
+        )
+        self.assertEqual(
+            scout.estimate_effort(
+                issue(
+                    title="Android split tunnel bug",
+                    body="### Steps to reproduce\n\n_No response_",
+                    labels=["OS-android"],
+                    comments=8,
+                )
+            ),
+            "6–12h",
+        )
+        self.assertEqual(
+            scout.estimate_effort(
+                issue(
+                    title="Watcher backlog",
+                    body="Suggested fixes\n- first\n- second\n- third",
+                    comments=0,
+                )
+            ),
+            "6–12h",
         )
         self.assertEqual(scout.estimate_effort(issue(title="Feature", body="x" * 13000)), "1d+")
         self.assertEqual(scout.estimate_effort(issue(title="Feature", comments=13)), "1d+")
@@ -127,7 +165,8 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertEqual(scout.effort_hours("<1h"), 0.75)
         self.assertEqual(scout.effort_hours("1–3h"), 2.0)
         self.assertEqual(scout.effort_hours("3–6h"), 4.5)
-        self.assertEqual(scout.effort_hours("1d+"), 10.0)
+        self.assertEqual(scout.effort_hours("6–12h"), 9.0)
+        self.assertEqual(scout.effort_hours("1d+"), 16.0)
         for comments, expected in [(0, "none"), (3, "low"), (8, "medium"), (9, "high")]:
             self.assertEqual(scout.competition(issue(comments=comments)), expected)
 
@@ -628,6 +667,59 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(result["competition"], "none")
         self.assertEqual(result["contribution_guide"], "guide")
 
+    def test_issue_specific_ranking_breaks_repo_score_ties(self) -> None:
+        meta = repo_meta(language="Go", stargazers_count=37000)
+        quick = scout.build_candidate(
+            issue(
+                html_url="https://github.com/tailscale/tailscale/issues/21590",
+                title="cmd/tsnet-proxy: TCP mode leaks upstream connection",
+                body="proxyTCP never closes the upstream connection.",
+                comments=0,
+            ),
+            "strategic",
+            None,
+            meta,
+            "guide",
+        )
+        broad = scout.build_candidate(
+            issue(
+                html_url="https://github.com/tailscale/tailscale/issues/20958",
+                title="containerboot watcher backlog",
+                body=(
+                    "Cause (from source): watcher queue blocks.\n"
+                    "Steps to reproduce\n1. trigger a netmap burst\n"
+                    "cmd/containerboot/main.go kube/services/services.go\n"
+                    "Suggested fix\n- move refresh\n- resubscribe\n- skip no-op"
+                ),
+                comments=0,
+            ),
+            "strategic",
+            None,
+            meta,
+            "guide",
+        )
+        accepted = scout.build_candidate(
+            issue(
+                html_url="https://github.com/kubernetes/kubernetes/issues/142384",
+                title="gsutil will no longer be available",
+                body="get-kube.sh log-dump/log-dump.sh gce/util.sh gce/gci/mounter/stage-upload.sh",
+                labels=[{"name": "help wanted"}, {"name": "triage/accepted"}],
+                comments=7,
+            ),
+            "strategic",
+            None,
+            meta,
+            "guide",
+        )
+
+        self.assertEqual(quick["effort"], "1–3h")
+        self.assertEqual(broad["effort"], "6–12h")
+        self.assertEqual(accepted["effort"], "6–12h")
+        self.assertGreaterEqual(
+            len({quick["career_score"], broad["career_score"], accepted["career_score"]}), 2
+        )
+        self.assertIn("maintainer-ready signal", accepted["career_reasons"])
+
     def test_build_strategic_candidate_and_non_usd_paid(self) -> None:
         strategic = scout.build_candidate(
             issue(title="Feature", body="api", comments=9),
@@ -986,6 +1078,9 @@ class FormattingAndMainTests(unittest.TestCase):
             1,
         )
         self.assertIn("Cash score", md)
+        self.assertNotIn("Career score", md)
+        self.assertNotIn("Paid / unpaid", md)
+        self.assertNotIn("Rejection reason", md)
         self.assertIn("contribution guide", md)
         self.assertNotIn("https://github.com/example/project/issues/42", md)
         self.assertIn(
@@ -998,13 +1093,25 @@ class FormattingAndMainTests(unittest.TestCase):
             candidate(expected_hourly=None, contribution_guide=None, paid=False, reward=None),
             2,
         )
-        self.assertIn("unknown / not USD-comparable", no_guide)
+        self.assertIn("Career score", no_guide)
+        self.assertNotIn("Cash score", no_guide)
+        self.assertNotIn("Reward", no_guide)
+        self.assertNotIn("Payment confidence", no_guide)
+        self.assertNotIn("Expected hourly value", no_guide)
+        self.assertNotIn("Rejection reason", no_guide)
         self.assertIn("not found at common paths", no_guide)
 
         long = candidate(title="x" * 150)
         lines = scout.notification_candidate(long, 1)
         self.assertLessEqual(len(lines[0]), 160)
-        self.assertIn("paid", "\n".join(lines))
+        self.assertIn("paid bounty", "\n".join(lines))
+        self.assertNotIn("career:", "\n".join(lines))
+
+        strategic_lines = scout.notification_candidate(candidate(paid=False), 2)
+        self.assertIn("strategic OSS", "\n".join(strategic_lines))
+        self.assertIn("career:", "\n".join(strategic_lines))
+        self.assertNotIn("reward:", "\n".join(strategic_lines))
+        self.assertNotIn("cash:", "\n".join(strategic_lines))
 
     def test_main_no_queue(self) -> None:
         with (
