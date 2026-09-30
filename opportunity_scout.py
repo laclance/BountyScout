@@ -284,14 +284,12 @@ def extended_competition_reason(item, token):
     if reason:
         return reason
 
-    reason = bounty.active_claim_reason(
-        repo,
-        number,
-        int(item.get("comments") or 0),
-        token,
-    )
-    if reason:
-        return reason
+    for comment in comments:
+        body = str(comment.get("body", ""))
+        for pattern in bounty.CLAIM_PATTERNS:
+            if re.search(pattern, body, re.IGNORECASE):
+                author = (comment.get("user") or {}).get("login", "someone")
+                return f"active claim by @{author}"
 
     return supplemental_claim_reason(item, token, comments)
 
@@ -693,7 +691,19 @@ def strategic_rejection(item, token):
     )):
         return "support/triage issue rather than a contributor task"
 
-    label_set = {label.strip() for label in labels.split() if label.strip()}
+    label_set = {
+        (
+            str(label.get("name", ""))
+            if isinstance(label, dict)
+            else str(label)
+        ).strip().lower()
+        for label in (item.get("labels") or [])
+        if (
+            str(label.get("name", ""))
+            if isinstance(label, dict)
+            else str(label)
+        ).strip()
+    }
     if (
         TRIAGE_PENDING_LABELS & label_set
         and not TRIAGE_ACCEPTED_LABELS & label_set
