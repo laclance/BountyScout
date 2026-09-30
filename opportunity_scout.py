@@ -162,6 +162,175 @@ def github_get_optional(url, token):
         return None
 
 
+def fetch_text(url, timeout=12):
+    """Fetch public HTML for official bounty-platform discovery pages."""
+    headers = {"User-Agent": "OSSOpportunityScout"}
+    try:
+        request = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except Exception as exc:
+        print(f"Platform fetch failed for {url}: {exc}")
+        return ""
+
+
+def issue_comments(item, token):
+    """Fetch comments for payment verification; basic filters cap threads at 25."""
+    repo, number = bounty.issue_repo_and_number(item)
+    if not repo or not number or not int(item.get("comments") or 0):
+        return []
+    comments = bounty.github_get(
+        f"https://api.github.com/repos/{repo}/issues/{number}/comments?per_page=100",
+        token,
+    )
+    return comments if isinstance(comments, list) else []
+
+
+def comment_payment_signal(item, token):
+    """Recognize confirmed platform comments and trusted bounty commands."""
+    comments = issue_comments(item, token)
+
+    # Prefer explicit bot/platform confirmations over the command that triggered them.
+    for comment in comments:
+        body = str(comment.get("body", ""))
+        login = str((comment.get("user") or {}).get("login", "")).lower()
+        amount = re.search(EXTENDED_AMOUNT_RE, body, re.IGNORECASE)
+
+        if (
+            amount
+            and ("algora" in login or "algora.io" in body.lower())
+            and re.search(r"\bbounty created\b", body, re.IGNORECASE)
+        ):
+            return f"confirmed bounty platform comment (Algora): {amount.group(0).strip()}"
+
+        if (
+            amount
+            and ("opire" in login or "opire.dev" in body.lower())
+            and re.search(r"\b(?:reward|bounty)\b", body, re.IGNORECASE)
+        ):
+            return f"confirmed bounty platform comment (Opire): {amount.group(0).strip()}"
+
+    # Commands alone are accepted only from a repo owner/member/collaborator.
+    for comment in comments:
+        body = str(comment.get("body", ""))
+        association = str(comment.get("author_association", "")).upper()
+        if association not in TRUSTED_ASSOCIATIONS:
+            continue
+
+        reward = re.search(
+            r"/reward\s+(\d[\d,]*(?:\.\d+)?)\b",
+            body,
+            re.IGNORECASE,
+        )
+        if reward:
+            return f"explicit /reward comment: $\{reward.group(1)}"
+
+        algora = re.search(
+            r"/bounty\s+(" + EXTENDED_AMOUNT_RE + r")",
+            body,
+            re.IGNORECASE,
+        )
+        if algora:
+            return f"explicit /bounty comment: {algora.group(1).strip()}"
+
+    return None
+
+
+def issue_from_github_url(url, token):
+    """Fetch a GitHub source issue from a platform-discovered URL."""
+    match = re.match(
+        r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)",
+        str(url),
+    )
+    if not match:
+        return None
+    repo, number = match.group(1), int(match.group(2))
+    item = bounty.github_get(
+        f"https://api.github.com/repos/{repo}/issues/{number}",
+        token,
+    )
+    return item if isinstance(item, dict) else None
+
+
+def issuehunt_platform_refs():
+    """Read the official IssueHunt funded-issues pages."""
+    refs = {}
+    for page in range(1, ISSUEHUNT_PAGES + 1):
+        url = "https://oss.issuehunt.io/issues"
+        if page > 1:
+            url += f"?page={page}"
+        page_html = fetch_text(url)
+        if not page_html:
+            continue
+
+        pattern = re.compile(
+            r'href=["\'](/r/([^/"\']+)/([^/"\']+)/issues/(\d+))["\']',
+            re.IGNORECASE,
+        )
+        for match in pattern.finditer(page_html):
+            owner, repo, number = match.group(2), match.group(3), match.group(4)
+            source_url = f"https://github.com/{owner}/{repo}/issues/{number}"
+            nearby = page_html[match.end():match.end() + 1200]
+            amount = re.search(r"\$\s*\d[\d,]*(?:\.\d+)?", nearby)
+            signal = "confirmed bounty platform feed (IssueHunt)"
+            if amount:
+                signal += f": {amount.group(0).strip()}"
+            refs[source_url] = signal
+    return refs
+
+
+def opire_platform_refs():
+    """Read visible Opire bounty cards and map them back to GitHub issues."""
+    refs = {}
+    home = fetch_text("https://app.opire.dev/home")
+    if not home:
+        return refs
+
+    normalized = home.replace("\\/", "/")
+    direct = re.findall(
+        r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+        normalized,
+    )
+    for source_url in direct[:PLATFORM_FETCH_LIMIT]:
+        refs[source_url] = "confirmed bounty platform feed (Opire)"
+
+    detail_paths = list(dict.fromkeys(re.findall(
+        r'href=["\'](/issues/[A-Za-z0-9_-]+)["\']',
+        normalized,
+    )))[:PLATFORM_FETCH_LIMIT]
+
+    for path in detail_paths:
+        detail = fetch_text("https://app.opire.dev" + path)
+        if not detail:
+            continue
+        detail = detail.replace("\\/", "/")
+        source = re.search(
+            r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+            detail,
+        )
+        if not source:
+            continue
+        amount = re.search(
+            r"\$\s*\d[\d,]*(?:\.\d+)?\s+bounty\b",
+            detail,
+            re.IGNORECASE,
+        )
+        signal = "confirmed bounty platform feed (Opire)"
+        if amount:
+            signal += f": {amount.group(0).split()[0]}"
+        refs[source.group(0)] = signal
+
+    return refs
+
+
+def platform_paid_refs():
+    """Collect official-platform discoveries, deduped by source GitHub issue URL."""
+    refs = {}
+    for source in (issuehunt_platform_refs(), opire_platform_refs()):
+        refs.update(source)
+    return refs
+
+
 def contribution_guide(repo, token):
     for path in ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"):
         data = github_get_optional(
