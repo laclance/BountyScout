@@ -1,16 +1,16 @@
-name: Scout Active Bounties Hourly
+name: OSS Opportunity Scout Hourly
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs at minute 0 of every single hour, everyday
-  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI tab
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   scout:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Needed to commit and persist seen_bounties.json state file
-      issues: write   # Needed if you choose Option A (Native GitHub Issue alerts)
+      contents: write
+      issues: write
 
     steps:
       - name: Checkout Code
@@ -21,18 +21,16 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Run Bounty Scout
+      - name: Validate scouts
+        run: python -m py_compile scout_bounties.py opportunity_scout.py
+
+      - name: Run OSS Opportunity Scout
         env:
-          # Required for GitHub API search and native issue notification
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-          # Optional: Configure Telegram notification secrets
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          
-          # Optional: Configure Discord notification secrets
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python scout_bounties.py
+        run: python opportunity_scout.py
 
       - name: Commit & Push Updated Seen Bounties State
         run: |
