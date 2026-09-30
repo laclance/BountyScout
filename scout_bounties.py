@@ -37,6 +37,22 @@ CLAIM_PATTERNS = [
 ]
 
 
+UNFUNDED_PROPOSAL_PATTERNS = [
+    r"\[bounty proposal\]",
+    r"\bproposed amount, not an existing award\b",
+    r"\$\s*\d[\d,]*(?:\.\d+)?\s+proposed\b",
+    r"\bwould (?:a |an )?(?:us\$|\$)?\s*\d[\d,]*(?:\.\d+)? bounty be appropriate\b",
+    r"\bpropos(?:e|ed|ing) (?:a )?(?:paid work|bounty)\b",
+]
+
+META_ALERT_MARKERS = [
+    "new in-scope",
+    "bug bounty program(s) added",
+    "bounty-watch",
+    "bounty watch",
+]
+
+
 def load_seen_bounties():
     """Load previously seen bounty URLs from the state file."""
     if os.path.exists(STATE_FILE):
@@ -151,11 +167,13 @@ def issue_repo_and_number(item):
 
 def has_existing_implementation_pr(repo, issue_number, token):
     """Return a reason when an open PR appears to implement the issue."""
-    query = f'repo:{repo} is:pr is:open in:title,body "{issue_number}"'
-    results = search_github(query, token, per_page=20)
+    # Search the number broadly. Quoting a bare issue number can miss PR
+    # references such as "Fixes #123" in GitHub's search index.
+    query = f"repo:{repo} is:pr is:open {issue_number}"
+    results = search_github(query, token, per_page=50)
 
     issue_ref = re.compile(
-        rf"(?:#\s*{issue_number}\b|/issues/{issue_number}\b)",
+        rf"(?:#\s*{issue_number}\b|/issues/{issue_number}\b|issue\s+#?\s*{issue_number}\b)",
         re.IGNORECASE,
     )
     for pr in results.get("items", []):
@@ -235,6 +253,29 @@ def is_clean_candidate(item):
 
 def candidate_rejection_reason(item, token):
     """Apply strict money + competition checks and return a rejection reason."""
+    title = str(item.get("title", ""))
+    body = str(item.get("body", ""))
+    labels = item.get("labels") or []
+    label_names = [
+        str(label.get("name", "")) if isinstance(label, dict) else str(label)
+        for label in labels
+    ]
+    combined = f"{title}\n{body}"
+    lower_combined = combined.lower()
+    lower_labels = " ".join(label_names).lower()
+
+    if any(
+        re.search(pattern, combined, re.IGNORECASE)
+        for pattern in UNFUNDED_PROPOSAL_PATTERNS
+    ):
+        return "unfunded bounty proposal, not an existing award", None
+
+    if any(
+        marker in lower_combined or marker in lower_labels
+        for marker in META_ALERT_MARKERS
+    ):
+        return "meta/monitoring alert, not a contributor task", None
+
     signal = payment_signal(item)
     if not signal:
         return "no explicit payment signal", None
