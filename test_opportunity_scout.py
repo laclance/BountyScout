@@ -295,11 +295,11 @@ class HttpAndPlatformTests(unittest.TestCase):
             "https://www.bountyhub.dev/en/bounty/view/B": "Reward $125 https://github.com/acme/widget/issues/2",
         }
         with patch.object(scout, "fetch_text", side_effect=pages.get):
-            refs = bountyhub_platform_refs()
+            refs = scout.bountyhub_platform_refs()
         self.assertIn("https://github.com/direct/repo/issues/1", refs)
         self.assertEqual(refs["https://github.com/acme/widget/issues/2"], "confirmed bounty platform feed (BountyHub): $125")
         with patch.object(scout, "fetch_text", return_value=""):
-            self.assertEqual(bountyhub_platform_refs(), {})
+            self.assertEqual(scout.bountyhub_platform_refs(), {})
 
     def test_platform_paid_refs_merge_precedence(self) -> None:
         with patch.object(scout, "issuehunt_platform_refs", return_value={"u": "issuehunt"}), \
@@ -996,7 +996,7 @@ class CoverageGapTests(unittest.TestCase):
             ),
         }
         with patch.object(scout, "fetch_text", side_effect=bountyhub_pages.get):
-            refs = bountyhub_platform_refs()
+            refs = scout.bountyhub_platform_refs()
         self.assertEqual(
             refs["https://github.com/acme/widget/issues/4"],
             "confirmed bounty platform feed (BountyHub): $75",
