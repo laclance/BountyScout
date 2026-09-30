@@ -80,7 +80,7 @@ def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
 
 
 CODE_FILE_RE = re.compile(
-    r"(?<![\\w.-])(?:[\\w.-]+/)*[\\w.-]+\\.(?:go|sh|py|yaml|yml)\\b",
+    r"(?<![\w.-])(?:[\w.-]+/)*[\w.-]+\.(?:go|sh|py|yaml|yml)\b",
     re.IGNORECASE,
 )
 
@@ -98,13 +98,13 @@ def estimate_effort(item: Mapping[str, Any]) -> str:
         "kind/feature" in labels
         or title.lower().startswith(("fr:", "feature request:"))
         or re.search(
-            r"\\b(?:propos(?:e|ed|ing|al)|epic|roadmap|redesign|rewrite|"
+            r"\b(?:propos(?:e|ed|ing|al)|epic|roadmap|redesign|rewrite|"
             r"migration|multi-phase|architecture|large refactor|rfc|"
-            r"connection pool|add support|explore publishing)\\b",
+            r"connection pool|add support|explore publishing)\b",
             text,
         )
         or re.search(
-            r"\\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\\b",
+            r"\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\b",
             text,
         )
         or len(body) > 12000
@@ -113,7 +113,7 @@ def estimate_effort(item: Mapping[str, Any]) -> str:
         return "1d+"
 
     if (
-        re.search(r"\\b(?:typo|spelling|readme|documentation|docs-only)\\b", text)
+        re.search(r"\b(?:typo|spelling|readme|documentation|docs-only)\b", text)
         and len(body) < 5000
     ):
         return "<1h"
@@ -122,23 +122,23 @@ def estimate_effort(item: Mapping[str, Any]) -> str:
         marker in labels for marker in ("os-android", "os-ios", "os-macos", "os-windows")
     )
     missing_reproduction = "_no response_" in text or "no response" in text
-    suggested_fix_bullets = len(re.findall(r"(?m)^\\s*-\\s+", body))
+    suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", body))
     if (
         file_refs >= 4
         or len(body) > 8500
         or (mobile_or_desktop and missing_reproduction)
         or (
-            re.search(r"\\bsuggested fixes?\\b", text)
+            re.search(r"\bsuggested fixes?\b", text)
             and suggested_fix_bullets >= 3
         )
     ):
         return "6–12h"
 
     bounded = re.search(
-        r"\\b(?:regression|deterministic|panics?|deadlocks?|races?|"
+        r"\b(?:regression|deterministic|panics?|deadlocks?|races?|"
         r"leaks?|incorrect|failing tests?|unit tests?|single|small|narrow|"
-        r"no-op|stale|fix(?:es|ed|ing)?)\\b|"
-        r"\\bnever closes\\b|\\bevery sync\\b",
+        r"no-op|stale|fix(?:es|ed|ing)?)\b|"
+        r"\bnever closes\b|\bevery sync\b",
         f"{title.lower()} {labels} {text[:4500]}",
     )
     if bounded and comments <= 3 and len(body) < 4500 and file_refs <= 2:
