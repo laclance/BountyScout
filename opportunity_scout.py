@@ -870,21 +870,17 @@ def discover_strategic(token, seen, paid_urls, repo_cache, guide_cache):
 
 
 def github_report_ref(text):
-    """Render GitHub issue/PR references without creating cross-repo mentions."""
+    """Make GitHub issue/PR URLs clickable without creating backlinks."""
     value = str(text or "")
-    value = re.sub(
-        r"https://github\.com/([^/\s]+)/([^/\s]+)/issues/(\d+)",
-        lambda m: f"{m.group(1)}/{m.group(2)} — issue {m.group(3)}",
+    return re.sub(
+        r"https://github\.com/([^/\s]+)/([^/\s]+)/(issues|pull)/(\d+)",
+        lambda m: (
+            f"https://redirect.github.com/{m.group(1)}/{m.group(2)}/"
+            f"{m.group(3)}/{m.group(4)}"
+        ),
         value,
         flags=re.IGNORECASE,
     )
-    value = re.sub(
-        r"https://github\.com/([^/\s]+)/([^/\s]+)/pull/(\d+)",
-        lambda m: f"{m.group(1)}/{m.group(2)} — PR {m.group(3)}",
-        value,
-        flags=re.IGNORECASE,
-    )
-    return re.sub(r"(?<![A-Za-z0-9_/])#(\d+)\b", r"issue \1", value)
 
 
 def markdown_candidate(candidate, idx):
@@ -892,7 +888,8 @@ def markdown_candidate(candidate, idx):
     hourly = f"~${candidate['expected_hourly']:.0f}/h" if candidate["expected_hourly"] is not None else "unknown / not USD-comparable"
     guide = f"[contribution guide]({candidate['contribution_guide']})" if candidate["contribution_guide"] else "not found at common paths"
     return (
-        f"#### {idx}. {candidate['repo']} — issue {candidate['issue_number']}: {github_report_ref(candidate['title'])}\n"
+        f"#### {idx}. [{candidate['repo']} #{candidate['issue_number']}: "
+        f"{github_report_ref(candidate['title'])}]({github_report_ref(candidate['url'])})\n"
         f"- **Paid / unpaid:** {lane}\n"
         f"- **Reward:** {candidate['reward'] or 'none'}\n"
         f"- **Payment confidence:** {candidate['payment_confidence']}/100\n"
@@ -986,7 +983,7 @@ def main():
                 source = github_report_ref(item["url"])
                 title = github_report_ref(item["title"] or source)
                 reason = github_report_ref(item["reason"])
-                body += f"- {title} — source: {source} — {reason}\n"
+                body += f"- [{title}]({source}): {reason}\n"
         delivered = bounty.create_github_issue(
             repo_fullname,
             token,
