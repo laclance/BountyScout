@@ -76,10 +76,18 @@ def issue_text(item):
 
 def estimate_effort(item):
     title, body, labels, text = issue_text(item)
-    if re.search(
-        r"\b(?:proposal|epic|roadmap|redesign|rewrite|migration|multi-phase|"
-        r"architecture|large refactor|rfc)\b",
-        text,
+    if (
+        "kind/feature" in labels
+        or re.search(
+            r"\b(?:propos(?:e|ed|ing|al)|epic|roadmap|redesign|rewrite|"
+            r"migration|multi-phase|architecture|large refactor|rfc|"
+            r"connection pool|add support|explore publishing)\b",
+            text,
+        )
+        or re.search(
+            r"\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\b",
+            text,
+        )
     ):
         return "1d+"
     if re.search(
@@ -191,6 +199,99 @@ def issue_comments(item, token):
         token,
     )
     return comments if isinstance(comments, list) else []
+
+
+SUPPLEMENTAL_CLAIM_PATTERNS = [
+    r"\bplanning (?:a |the )?fix\b",
+    r"\bplanning to (?:fix|work on|implement|handle)\b",
+    r"\bplan to (?:fix|work on|implement|handle)\b",
+    r"\bstarting (?:work on|a fix for)\b",
+    r"\bi(?:'ll| will) (?:fix|work on|implement|handle)\b",
+    r"\bimplementing (?:this|a fix)\b",
+    r"\bworking on (?:a |the )?fix\b",
+]
+TRIAGE_PENDING_LABELS = {"needs-triage"}
+TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
+
+
+def linked_open_pr_reason(item, token, comments=None):
+    """Detect explicit implementation PR links in issue comments."""
+    repo, number = bounty.issue_repo_and_number(item)
+    if not repo or not number or not int(item.get("comments") or 0):
+        return None
+
+    comments = issue_comments(item, token) if comments is None else comments
+    repo_pattern = re.escape(repo)
+    candidates = []
+
+    for comment in comments:
+        body = str(comment.get("body", ""))
+        candidates.extend(
+            re.findall(
+                rf"https://github\.com/{repo_pattern}/pull/(\d+)",
+                body,
+                re.IGNORECASE,
+            )
+        )
+        candidates.extend(
+            re.findall(
+                r"\b(?:related|implementation|opened|submitted)\s+"
+                r"(?:pr|pull request)\s*:?\s*#(\d+)\b",
+                body,
+                re.IGNORECASE,
+            )
+        )
+
+    for pr_number in dict.fromkeys(candidates):
+        pr = bounty.github_get(
+            f"https://api.github.com/repos/{repo}/pulls/{pr_number}",
+            token,
+        )
+        if isinstance(pr, dict) and pr.get("state") == "open":
+            url = pr.get("html_url") or f"https://github.com/{repo}/pull/{pr_number}"
+            return f"existing open implementation PR: {url}"
+
+    return None
+
+
+def supplemental_claim_reason(item, token, comments=None):
+    """Detect clear work claims not covered by the upstream scanner."""
+    if not int(item.get("comments") or 0):
+        return None
+    comments = issue_comments(item, token) if comments is None else comments
+
+    for comment in comments:
+        body = str(comment.get("body", ""))
+        for pattern in SUPPLEMENTAL_CLAIM_PATTERNS:
+            if re.search(pattern, body, re.IGNORECASE):
+                author = (comment.get("user") or {}).get("login", "someone")
+                return f"active claim by @{author}"
+    return None
+
+
+def extended_competition_reason(item, token):
+    """Check search-index PRs, comment-linked PRs, and explicit work claims."""
+    repo, number = bounty.issue_repo_and_number(item)
+    if not repo or not number:
+        return "could not identify repository/issue number"
+
+    reason = bounty.has_existing_implementation_pr(repo, number, token)
+    if reason:
+        return reason
+
+    comments = issue_comments(item, token)
+    reason = linked_open_pr_reason(item, token, comments)
+    if reason:
+        return reason
+
+    for comment in comments:
+        body = str(comment.get("body", ""))
+        for pattern in bounty.CLAIM_PATTERNS:
+            if re.search(pattern, body, re.IGNORECASE):
+                author = (comment.get("user") or {}).get("login", "someone")
+                return f"active claim by @{author}"
+
+    return supplemental_claim_reason(item, token, comments)
 
 
 def supplemental_payment_signal(item):
@@ -589,13 +690,27 @@ def strategic_rejection(item, token):
         "waiting for info", "waiting-for-info", "invalid",
     )):
         return "support/triage issue rather than a contributor task"
-    repo, number = bounty.issue_repo_and_number(item)
-    if not repo or not number:
-        return "could not identify repository/issue number"
-    reason = bounty.has_existing_implementation_pr(repo, number, token)
-    if reason:
-        return reason
-    return bounty.active_claim_reason(repo, number, int(item.get("comments") or 0), token)
+
+    label_set = {
+        (
+            str(label.get("name", ""))
+            if isinstance(label, dict)
+            else str(label)
+        ).strip().lower()
+        for label in (item.get("labels") or [])
+        if (
+            str(label.get("name", ""))
+            if isinstance(label, dict)
+            else str(label)
+        ).strip()
+    }
+    if (
+        TRIAGE_PENDING_LABELS & label_set
+        and not TRIAGE_ACCEPTED_LABELS & label_set
+    ):
+        return "awaiting maintainer triage"
+
+    return extended_competition_reason(item, token)
 
 
 def verify(
@@ -636,17 +751,9 @@ def verify(
         # only present in comments/platform feeds, so finish those checks here.
         if reason == "no explicit payment signal":
             repo, number = bounty.issue_repo_and_number(fresh)
-            pr_reason = bounty.has_existing_implementation_pr(repo, number, token)
-            if pr_reason:
-                return None, pr_reason
-            claim_reason = bounty.active_claim_reason(
-                repo,
-                number,
-                int(fresh.get("comments") or 0),
-                token,
-            )
-            if claim_reason:
-                return None, claim_reason
+            competition_reason = extended_competition_reason(fresh, token)
+            if competition_reason:
+                return None, competition_reason
 
         lane = "paid"
     else:
