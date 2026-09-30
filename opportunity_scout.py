@@ -34,6 +34,23 @@ TARGET_REPO_QUERY_CHUNK = 3
 STRATEGIC_VERIFY_LIMIT = 12
 REPORT_LIMIT = 8
 
+PAID_DISCOVERY_QUERIES = list(dict.fromkeys(
+    bounty.SEARCH_QUERIES + [
+        'is:issue is:open "/reward" in:comments sort:updated-desc',
+        'is:issue is:open "/bounty" in:comments sort:updated-desc',
+        'is:issue is:open "bountyhub.dev" in:title,body,comments sort:updated-desc',
+        'is:issue is:open (reward OR compensation OR payout OR "cash prize") "$" in:title,body sort:updated-desc',
+    ]
+))
+EXTENDED_AMOUNT_RE = (
+    r"(?:[$€£¥₹R]\s*\d[\d,]*(?:\.\d+)?|"
+    r"\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|cad|aud|nzd|jpy|chf|"
+    r"inr|zar|dai|xmr|sol|eth|btc)\b)"
+)
+PLATFORM_FETCH_LIMIT = 20
+ISSUEHUNT_PAGES = 2
+TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+
 
 def target_repo_queries():
     queries = []
