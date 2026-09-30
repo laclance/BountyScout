@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import json
 import os
 import re
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from typing import Any, Mapping
 
 import scout_bounties as bounty
 
@@ -53,7 +56,7 @@ ISSUEHUNT_PAGES = 2
 TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
-def target_repo_queries():
+def target_repo_queries() -> list[str]:
     queries = []
     for start in range(0, len(TARGET_REPOS), TARGET_REPO_QUERY_CHUNK):
         repos = " ".join(
@@ -64,7 +67,7 @@ def target_repo_queries():
     return queries
 
 
-def issue_text(item):
+def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
     title = str(item.get("title", ""))
     body = str(item.get("body", ""))
     labels = " ".join(
@@ -74,7 +77,7 @@ def issue_text(item):
     return title, body, labels, f"{title}\n{body}".lower()
 
 
-def estimate_effort(item):
+def estimate_effort(item: Mapping[str, Any]) -> str:
     title, body, labels, text = issue_text(item)
     if (
         "kind/feature" in labels
@@ -105,11 +108,11 @@ def estimate_effort(item):
     return "3–6h"
 
 
-def effort_hours(effort):
+def effort_hours(effort: str) -> float:
     return {"<1h": 0.75, "1–3h": 2.0, "3–6h": 4.5, "1d+": 10.0}[effort]
 
 
-def competition(item):
+def competition(item: Mapping[str, Any]) -> str:
     comments = int(item.get("comments") or 0)
     if comments == 0:
         return "none"
@@ -120,7 +123,7 @@ def competition(item):
     return "high"
 
 
-def payment_confidence(signal):
+def payment_confidence(signal: str | None) -> int:
     if not signal:
         return 0
     if signal.startswith("confirmed bounty platform"):
@@ -138,14 +141,14 @@ def payment_confidence(signal):
     return 85
 
 
-def reward_text(signal):
+def reward_text(signal: str | None) -> str | None:
     if not signal:
         return None
     match = re.search(EXTENDED_AMOUNT_RE, signal, re.IGNORECASE)
     return match.group(0).strip() if match else None
 
 
-def repo_activity(repo_meta):
+def repo_activity(repo_meta: Mapping[str, Any]) -> str:
     pushed = bounty.parse_github_datetime(repo_meta.get("pushed_at"))
     if not pushed:
         return "unknown"
@@ -161,7 +164,7 @@ def repo_activity(repo_meta):
     return f"{bucket} ({repo_meta.get('pushed_at')})"
 
 
-def github_get_optional(url, token):
+def github_get_optional(url: str, token: str | None) -> Any:
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "OSSOpportunityScout",
@@ -177,7 +180,7 @@ def github_get_optional(url, token):
         return None
 
 
-def fetch_text(url, timeout=12):
+def fetch_text(url: str, timeout: int = 12) -> str:
     """Fetch public HTML for official bounty-platform discovery pages."""
     headers = {"User-Agent": "OSSOpportunityScout"}
     try:
@@ -189,7 +192,7 @@ def fetch_text(url, timeout=12):
         return ""
 
 
-def issue_comments(item, token):
+def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str, Any]]:
     """Fetch comments for payment verification; basic filters cap threads at 25."""
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number or not int(item.get("comments") or 0):
@@ -214,7 +217,7 @@ TRIAGE_PENDING_LABELS = {"needs-triage"}
 TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
 
 
-def linked_open_pr_reason(item, token, comments=None):
+def linked_open_pr_reason(item: Mapping[str, Any], token: str | None, comments: list[dict[str, Any]] | None = None) -> str | None:
     """Detect explicit implementation PR links in issue comments."""
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number or not int(item.get("comments") or 0):
@@ -254,7 +257,7 @@ def linked_open_pr_reason(item, token, comments=None):
     return None
 
 
-def supplemental_claim_reason(item, token, comments=None):
+def supplemental_claim_reason(item: Mapping[str, Any], token: str | None, comments: list[dict[str, Any]] | None = None) -> str | None:
     """Detect clear work claims not covered by the upstream scanner."""
     if not int(item.get("comments") or 0):
         return None
@@ -269,7 +272,7 @@ def supplemental_claim_reason(item, token, comments=None):
     return None
 
 
-def extended_competition_reason(item, token):
+def extended_competition_reason(item: Mapping[str, Any], token: str | None) -> str | None:
     """Check search-index PRs, comment-linked PRs, and explicit work claims."""
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number:
@@ -294,7 +297,7 @@ def extended_competition_reason(item, token):
     return supplemental_claim_reason(item, token, comments)
 
 
-def supplemental_payment_signal(item):
+def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
     """Recognize explicit paid-work wording outside the upstream vocabulary."""
     title, body, labels, _ = issue_text(item)
     text = f"{title}\n{body}"
@@ -325,7 +328,7 @@ def supplemental_payment_signal(item):
     return None
 
 
-def comment_payment_signal(item, token):
+def comment_payment_signal(item: Mapping[str, Any], token: str | None) -> str | None:
     """Recognize confirmed platform comments and trusted bounty commands."""
     comments = issue_comments(item, token)
 
@@ -382,7 +385,7 @@ def comment_payment_signal(item, token):
     return None
 
 
-def issue_from_github_url(url, token):
+def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
     """Fetch a GitHub source issue from a platform-discovered URL."""
     match = re.match(
         r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)",
@@ -398,7 +401,7 @@ def issue_from_github_url(url, token):
     return item if isinstance(item, dict) else None
 
 
-def issuehunt_platform_refs():
+def issuehunt_platform_refs() -> dict[str, str]:
     """Read the official IssueHunt funded-issues pages."""
     refs = {}
     for page in range(1, ISSUEHUNT_PAGES + 1):
@@ -425,7 +428,7 @@ def issuehunt_platform_refs():
     return refs
 
 
-def opire_platform_refs():
+def opire_platform_refs() -> dict[str, str]:
     """Read visible Opire bounty cards and map them back to GitHub issues."""
     refs = {}
     home = fetch_text("https://app.opire.dev/home")
@@ -469,7 +472,7 @@ def opire_platform_refs():
     return refs
 
 
-def bountyhub_platform_refs():
+def bountyhub_platform_refs() -> dict[str, str]:
     """Read public BountyHub listings when the site exposes them in HTML."""
     refs = {}
     listing = fetch_text("https://www.bountyhub.dev/en/bounties")
@@ -509,7 +512,7 @@ def bountyhub_platform_refs():
     return refs
 
 
-def platform_paid_refs():
+def platform_paid_refs() -> dict[str, str]:
     """Collect official-platform discoveries, deduped by source GitHub issue URL."""
     refs = {}
     for source in (
@@ -521,7 +524,7 @@ def platform_paid_refs():
     return refs
 
 
-def contribution_guide(repo, token):
+def contribution_guide(repo: str, token: str | None) -> str | None:
     for path in ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"):
         data = github_get_optional(
             f"https://api.github.com/repos/{repo}/contents/{urllib.parse.quote(path)}",
@@ -532,7 +535,7 @@ def contribution_guide(repo, token):
     return None
 
 
-def build_candidate(item, lane, signal, repo_meta, guide):
+def build_candidate(item: Mapping[str, Any], lane: str, signal: str | None, repo_meta: Mapping[str, Any], guide: str | None) -> dict[str, Any]:
     repo, number = bounty.issue_repo_and_number(item)
     effort = estimate_effort(item)
     comp = competition(item)
@@ -665,7 +668,7 @@ def build_candidate(item, lane, signal, repo_meta, guide):
     }
 
 
-def refresh_issue(item, token):
+def refresh_issue(item: Mapping[str, Any], token: str | None) -> tuple[dict[str, Any] | None, str | None]:
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number:
         return None, "could not identify repository/issue number"
@@ -679,7 +682,7 @@ def refresh_issue(item, token):
     return fresh, None
 
 
-def strategic_rejection(item, token):
+def strategic_rejection(item: Mapping[str, Any], token: str | None) -> str | None:
     if not bounty.is_clean_candidate(item):
         return "failed basic eligibility filter"
     _, _, labels, text = issue_text(item)
@@ -714,13 +717,13 @@ def strategic_rejection(item, token):
 
 
 def verify(
-    item,
-    token,
-    repo_cache,
-    guide_cache,
-    require_paid=False,
-    payment_signal_override=None,
-):
+    item: Mapping[str, Any],
+    token: str | None,
+    repo_cache: dict[str, dict[str, Any]],
+    guide_cache: dict[str, str | None],
+    require_paid: bool = False,
+    payment_signal_override: str | None = None,
+) -> tuple[dict[str, Any] | None, str | None]:
     fresh, reason = refresh_issue(item, token)
     if reason:
         return None, reason
@@ -775,13 +778,18 @@ def verify(
     return build_candidate(fresh, lane, signal, repo_meta, guide_cache[repo]), None
 
 
-def add_reject(counts, examples, item, reason):
+def add_reject(counts: dict[str, int], examples: list[dict[str, Any]], item: Mapping[str, Any], reason: str) -> None:
     counts[reason] = counts.get(reason, 0) + 1
     if len(examples) < 12:
         examples.append({"url": item.get("html_url"), "title": item.get("title"), "reason": reason})
 
 
-def discover_paid(token, seen, repo_cache, guide_cache):
+def discover_paid(
+    token: str | None,
+    seen: set[str],
+    repo_cache: dict[str, dict[str, Any]],
+    guide_cache: dict[str, str | None],
+) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
     found, touched, rejected, examples = [], set(), {}, []
 
     for query in PAID_DISCOVERY_QUERIES:
@@ -834,7 +842,13 @@ def discover_paid(token, seen, repo_cache, guide_cache):
     return found, rejected, examples
 
 
-def discover_strategic(token, seen, paid_urls, repo_cache, guide_cache):
+def discover_strategic(
+    token: str | None,
+    seen: set[str],
+    paid_urls: set[str],
+    repo_cache: dict[str, dict[str, Any]],
+    guide_cache: dict[str, str | None],
+) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
     provisional, touched, rejected, examples = [], set(), {}, []
     for query in target_repo_queries() + STRATEGIC_GLOBAL_QUERIES:
         for item in bounty.search_github(query, token, per_page=12).get("items", []):
@@ -869,7 +883,7 @@ def discover_strategic(token, seen, paid_urls, repo_cache, guide_cache):
     return found, rejected, examples
 
 
-def github_report_ref(text):
+def github_report_ref(text: Any) -> str:
     """Make GitHub issue/PR URLs clickable without creating backlinks."""
     value = str(text or "")
     return re.sub(
@@ -883,7 +897,7 @@ def github_report_ref(text):
     )
 
 
-def markdown_candidate(candidate, idx):
+def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
     lane = "Paid" if candidate["paid"] else "Strategic OSS"
     hourly = f"~${candidate['expected_hourly']:.0f}/h" if candidate["expected_hourly"] is not None else "unknown / not USD-comparable"
     guide = f"[contribution guide]({candidate['contribution_guide']})" if candidate["contribution_guide"] else "not found at common paths"
@@ -909,7 +923,7 @@ def markdown_candidate(candidate, idx):
     )
 
 
-def notification_candidate(candidate, idx):
+def notification_candidate(candidate: Mapping[str, Any], idx: int) -> list[str]:
     title = str(candidate["title"] or "")
     if len(title) > 100:
         title = title[:97] + "..."
@@ -922,7 +936,7 @@ def notification_candidate(candidate, idx):
     ]
 
 
-def main():
+def main() -> None:
     token = os.environ.get("GITHUB_TOKEN")
     repo_fullname = os.environ.get("GITHUB_REPOSITORY")
     seen = bounty.load_seen_bounties()

@@ -1,15 +1,18 @@
+from __future__ import annotations
+
 import io
 import json
 import os
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import patch
 
 import opportunity_scout as scout
 
 
-def issue(**overrides):
+def issue(**overrides: Any) -> dict[str, Any]:
     base = {
         "html_url": "https://github.com/example/project/issues/42",
         "state": "open",
@@ -24,7 +27,7 @@ def issue(**overrides):
     return base
 
 
-def repo_meta(**overrides):
+def repo_meta(**overrides: Any) -> dict[str, Any]:
     base = {
         "stargazers_count": 1500,
         "pushed_at": datetime.now(timezone.utc).isoformat(),
@@ -35,7 +38,7 @@ def repo_meta(**overrides):
     return base
 
 
-def candidate(**overrides):
+def candidate(**overrides: Any) -> dict[str, Any]:
     base = {
         "repo": "example/project",
         "issue_number": 42,
@@ -66,28 +69,28 @@ def candidate(**overrides):
 
 
 class FakeResponse:
-    def __init__(self, body=b"{}"):
+    def __init__(self, body: bytes = b"{}") -> None:
         self.body = body
 
-    def __enter__(self):
+    def __enter__(self) -> "FakeResponse":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> bool:
         return False
 
-    def read(self):
+    def read(self) -> bytes:
         return self.body
 
 
 class BasicHeuristicTests(unittest.TestCase):
-    def test_target_repo_queries_chunk_all_targets(self):
+    def test_target_repo_queries_chunk_all_targets(self) -> None:
         queries = scout.target_repo_queries()
         self.assertEqual(len(queries), 5)
         joined = " ".join(queries)
         for repo in scout.TARGET_REPOS:
             self.assertIn(f"repo:{repo}", joined)
 
-    def test_issue_text_handles_dict_and_string_labels(self):
+    def test_issue_text_handles_dict_and_string_labels(self) -> None:
         title, body, labels, text = scout.issue_text(
             issue(title="ABC", body="DEF", labels=[{"name": "Help Wanted"}, "Bug"])
         )
@@ -95,7 +98,7 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertEqual(labels, "help wanted bug")
         self.assertEqual(text, "abc\ndef")
 
-    def test_effort_all_buckets(self):
+    def test_effort_all_buckets(self) -> None:
         self.assertEqual(scout.estimate_effort(issue(title="Architecture rewrite")), "1d+")
         self.assertEqual(
             scout.estimate_effort(issue(title="Add support for Connection Pool", labels=["kind/feature"])),
@@ -111,7 +114,7 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertEqual(scout.estimate_effort(issue(title="Feature", comments=13)), "1d+")
         self.assertEqual(scout.estimate_effort(issue(title="Feature", body="normal", comments=4)), "3–6h")
 
-    def test_effort_hours_and_competition(self):
+    def test_effort_hours_and_competition(self) -> None:
         self.assertEqual(scout.effort_hours("<1h"), 0.75)
         self.assertEqual(scout.effort_hours("1–3h"), 2.0)
         self.assertEqual(scout.effort_hours("3–6h"), 4.5)
@@ -119,7 +122,7 @@ class BasicHeuristicTests(unittest.TestCase):
         for comments, expected in [(0, "none"), (3, "low"), (8, "medium"), (9, "high")]:
             self.assertEqual(scout.competition(issue(comments=comments)), expected)
 
-    def test_payment_confidence_all_classes(self):
+    def test_payment_confidence_all_classes(self) -> None:
         cases = [
             (None, 0),
             ("confirmed bounty platform feed (Opire)", 100),
@@ -133,7 +136,7 @@ class BasicHeuristicTests(unittest.TestCase):
         for signal, expected in cases:
             self.assertEqual(scout.payment_confidence(signal), expected)
 
-    def test_reward_text_and_repo_activity(self):
+    def test_reward_text_and_repo_activity(self) -> None:
         self.assertIsNone(scout.reward_text(None))
         self.assertEqual(scout.reward_text("reward 25 CAD"), "25 CAD")
         self.assertIsNone(scout.reward_text("funded externally"))
@@ -151,7 +154,7 @@ class BasicHeuristicTests(unittest.TestCase):
 
 
 class HttpAndPlatformTests(unittest.TestCase):
-    def test_github_get_optional_success_failure_and_auth(self):
+    def test_github_get_optional_success_failure_and_auth(self) -> None:
         with patch.object(
             scout.urllib.request,
             "urlopen",
@@ -162,13 +165,13 @@ class HttpAndPlatformTests(unittest.TestCase):
         with patch.object(scout.urllib.request, "urlopen", side_effect=OSError("x")):
             self.assertIsNone(scout.github_get_optional("https://x", None))
 
-    def test_fetch_text_success_and_failure(self):
+    def test_fetch_text_success_and_failure(self) -> None:
         with patch.object(scout.urllib.request, "urlopen", return_value=FakeResponse(b"hello")):
             self.assertEqual(scout.fetch_text("https://x"), "hello")
         with patch.object(scout.urllib.request, "urlopen", side_effect=OSError("x")):
             self.assertEqual(scout.fetch_text("https://x"), "")
 
-    def test_issue_comments_paths(self):
+    def test_issue_comments_paths(self) -> None:
         self.assertEqual(scout.issue_comments({"html_url": "bad", "comments": 2}, "t"), [])
         self.assertEqual(scout.issue_comments(issue(comments=0), "t"), [])
         with patch.object(scout.bounty, "github_get", return_value={"not": "list"}):
@@ -176,7 +179,7 @@ class HttpAndPlatformTests(unittest.TestCase):
         with patch.object(scout.bounty, "github_get", return_value=[{"body": "x"}]):
             self.assertEqual(scout.issue_comments(issue(comments=1), "t"), [{"body": "x"}])
 
-    def test_supplemental_payment_signals(self):
+    def test_supplemental_payment_signals(self) -> None:
         variants = [
             ("Cash prize: $50 for merge", "explicit paid-work wording: $50"),
             ("Pay $60 as a stipend", "explicit paid-work wording: $60"),
@@ -194,7 +197,7 @@ class HttpAndPlatformTests(unittest.TestCase):
         )
         self.assertIsNone(scout.supplemental_payment_signal(issue(body="maybe paid someday")))
 
-    def test_comment_payment_confirmations_and_commands(self):
+    def test_comment_payment_confirmations_and_commands(self) -> None:
         comment_cases = [
             (
                 {"body": "$25 bounty created - algora.io/x", "user": {"login": "bot"}, "author_association": "NONE"},
@@ -234,7 +237,7 @@ class HttpAndPlatformTests(unittest.TestCase):
         ):
             self.assertIsNone(scout.comment_payment_signal(issue(), "t"))
 
-    def test_issue_from_github_url(self):
+    def test_issue_from_github_url(self) -> None:
         self.assertIsNone(scout.issue_from_github_url("bad", "t"))
         with patch.object(scout.bounty, "github_get", return_value=[]):
             self.assertIsNone(
@@ -247,7 +250,7 @@ class HttpAndPlatformTests(unittest.TestCase):
             )
             self.assertIn("/repos/a/b/issues/1", get.call_args.args[0])
 
-    def test_issuehunt_parser_empty_pagination_amount_and_no_amount(self):
+    def test_issuehunt_parser_empty_pagination_amount_and_no_amount(self) -> None:
         pages = {
             "https://oss.issuehunt.io/issues": (
                 '<a href="/r/apache/superset/issues/3821">x</a><span>$17.00</span>'
@@ -264,7 +267,7 @@ class HttpAndPlatformTests(unittest.TestCase):
         with patch.object(scout, "fetch_text", return_value=""):
             self.assertEqual(scout.issuehunt_platform_refs(), {})
 
-    def test_opire_parser_direct_details_missing_and_no_amount(self):
+    def test_opire_parser_direct_details_missing_and_no_amount(self) -> None:
         pages = {
             "https://app.opire.dev/home": (
                 "https:\\/\\/github.com\\/direct\\/repo\\/issues\\/1 "
@@ -280,7 +283,7 @@ class HttpAndPlatformTests(unittest.TestCase):
         with patch.object(scout, "fetch_text", return_value=""):
             self.assertEqual(scout.opire_platform_refs(), {})
 
-    def test_bountyhub_parser_direct_details_missing_and_amount(self):
+    def test_bountyhub_parser_direct_details_missing_and_amount(self) -> None:
         pages = {
             "https://www.bountyhub.dev/en/bounties": (
                 "https:\\/\\/github.com\\/direct\\/repo\\/issues\\/1 "
@@ -296,14 +299,14 @@ class HttpAndPlatformTests(unittest.TestCase):
         with patch.object(scout, "fetch_text", return_value=""):
             self.assertEqual(scout.bountyhub_platform_refs(), {})
 
-    def test_platform_paid_refs_merge_precedence(self):
+    def test_platform_paid_refs_merge_precedence(self) -> None:
         with patch.object(scout, "issuehunt_platform_refs", return_value={"u": "issuehunt"}), \
              patch.object(scout, "opire_platform_refs", return_value={"v": "opire"}), \
              patch.object(scout, "bountyhub_platform_refs", return_value={"u": "bountyhub"}):
             self.assertEqual(scout.platform_paid_refs(), {"u": "bountyhub", "v": "opire"})
 
-    def test_contribution_guide_found_and_missing(self):
-        def getter(url, token):
+    def test_contribution_guide_found_and_missing(self) -> None:
+        def getter(url: str, token: str | None) -> Any:
             return {"html_url": "guide"} if "docs/CONTRIBUTING.md" in url else None
 
         with patch.object(scout, "github_get_optional", side_effect=getter):
@@ -313,7 +316,7 @@ class HttpAndPlatformTests(unittest.TestCase):
 
 
 class CalibrationTests(unittest.TestCase):
-    def test_linked_open_pr_reason_paths(self):
+    def test_linked_open_pr_reason_paths(self) -> None:
         self.assertIsNone(
             scout.linked_open_pr_reason(
                 {"html_url": "bad", "comments": 1},
@@ -362,7 +365,7 @@ class CalibrationTests(unittest.TestCase):
                 )
             )
 
-    def test_supplemental_claim_reason_paths(self):
+    def test_supplemental_claim_reason_paths(self) -> None:
         self.assertIsNone(scout.supplemental_claim_reason(issue(comments=0), "t"))
 
         with patch.object(
@@ -394,7 +397,7 @@ class CalibrationTests(unittest.TestCase):
             )
         )
 
-    def test_extended_competition_reason_all_sources(self):
+    def test_extended_competition_reason_all_sources(self) -> None:
         self.assertEqual(
             scout.extended_competition_reason(
                 {"html_url": "bad", "comments": 0},
@@ -486,7 +489,7 @@ class CalibrationTests(unittest.TestCase):
         ):
             self.assertIsNone(scout.extended_competition_reason(issue(), "t"))
 
-    def test_real_queue_calibration_examples(self):
+    def test_real_queue_calibration_examples(self) -> None:
         aws = issue(
             title="ipamd can allocate an EC2-unassigned IP after restart when IMDS is stale",
             body="deterministic regression",
@@ -534,7 +537,7 @@ class CalibrationTests(unittest.TestCase):
 
 
 class CandidateTests(unittest.TestCase):
-    def test_build_paid_candidate_scoring(self):
+    def test_build_paid_candidate_scoring(self) -> None:
         item_ = issue(
             body="network concurrency regression tests",
             labels=[{"name": "help wanted"}],
@@ -554,7 +557,7 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(result["competition"], "none")
         self.assertEqual(result["contribution_guide"], "guide")
 
-    def test_build_strategic_candidate_and_non_usd_paid(self):
+    def test_build_strategic_candidate_and_non_usd_paid(self) -> None:
         strategic = scout.build_candidate(
             issue(title="Feature", body="api", comments=9),
             "strategic",
@@ -576,7 +579,7 @@ class CandidateTests(unittest.TestCase):
         self.assertIsNone(paid["expected_hourly"])
         self.assertIn("reward not USD-comparable", paid["cash_reasons"])
 
-    def test_build_candidate_language_effort_competition_branches(self):
+    def test_build_candidate_language_effort_competition_branches(self) -> None:
         languages = ["TypeScript", "JavaScript", "Ruby", "HCL", "Rust"]
         for lang in languages:
             result = scout.build_candidate(
@@ -590,7 +593,7 @@ class CandidateTests(unittest.TestCase):
 
 
 class VerificationTests(unittest.TestCase):
-    def test_refresh_issue_all_paths(self):
+    def test_refresh_issue_all_paths(self) -> None:
         self.assertEqual(
             scout.refresh_issue({"html_url": "bad"}, "t")[1],
             "could not identify repository/issue number",
@@ -607,7 +610,7 @@ class VerificationTests(unittest.TestCase):
             self.assertIsNone(reason)
             self.assertEqual(fresh["state"], "open")
 
-    def test_strategic_rejection_paths(self):
+    def test_strategic_rejection_paths(self) -> None:
         with patch.object(scout.bounty, "is_clean_candidate", return_value=False):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "failed basic eligibility filter")
 
@@ -640,7 +643,7 @@ class VerificationTests(unittest.TestCase):
                 )
             )
 
-    def test_verify_refresh_and_clean_failures(self):
+    def test_verify_refresh_and_clean_failures(self) -> None:
         with patch.object(scout, "refresh_issue", return_value=(None, "closed")):
             self.assertEqual(scout.verify(issue(), "t", {}, {})[1], "closed")
         with patch.object(scout, "refresh_issue", return_value=(issue(), None)), \
@@ -650,7 +653,7 @@ class VerificationTests(unittest.TestCase):
                 "failed basic eligibility filter after source refresh",
             )
 
-    def test_verify_paid_issue_signal_success_and_repo_failures(self):
+    def test_verify_paid_issue_signal_success_and_repo_failures(self) -> None:
         fresh = issue(body="bounty $100", comments=0)
         with patch.object(scout, "refresh_issue", return_value=(fresh, None)), \
              patch.object(scout.bounty, "candidate_rejection_reason", return_value=(None, "payment term + amount: $100")), \
@@ -669,7 +672,7 @@ class VerificationTests(unittest.TestCase):
              patch.object(scout, "build_candidate", return_value={"ok": True}):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True), ({"ok": True}, None))
 
-    def test_verify_comment_or_override_runs_competition_checks(self):
+    def test_verify_comment_or_override_runs_competition_checks(self) -> None:
         fresh = issue(body="", title="Task", comments=1)
         base = [
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
@@ -692,7 +695,7 @@ class VerificationTests(unittest.TestCase):
         with patch.object(scout, "comment_payment_signal", return_value=None):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True)[1], "no explicit payment signal")
 
-    def test_verify_non_payment_rejection_and_strategic_success(self):
+    def test_verify_non_payment_rejection_and_strategic_success(self) -> None:
         paid = issue(body="bounty $100", comments=0)
         with patch.object(scout, "refresh_issue", return_value=(paid, None)), \
              patch.object(scout.bounty, "candidate_rejection_reason", return_value=("unfunded", "x")):
@@ -711,7 +714,7 @@ class VerificationTests(unittest.TestCase):
                 ({"lane": "strategic"}, None),
             )
 
-    def test_add_reject_caps_examples(self):
+    def test_add_reject_caps_examples(self) -> None:
         counts, examples = {}, []
         for i in range(15):
             scout.add_reject(counts, examples, {"html_url": str(i), "title": str(i)}, "why")
@@ -720,7 +723,7 @@ class VerificationTests(unittest.TestCase):
 
 
 class DiscoveryTests(unittest.TestCase):
-    def test_discover_paid_search_and_platform_paths(self):
+    def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
         duplicate = dict(a)
         dirty = issue(html_url="https://github.com/a/a/issues/2")
@@ -747,7 +750,7 @@ class DiscoveryTests(unittest.TestCase):
         selfEqual(rejected, {})
         selfEqual(examples, [])
 
-    def test_discover_paid_records_rejections_and_seen(self):
+    def test_discover_paid_records_rejections_and_seen(self) -> None:
         seen = issue(html_url="https://github.com/a/a/issues/1")
         bad = issue(html_url="https://github.com/a/a/issues/2")
         with patch.object(scout.bounty, "search_github", return_value={"items": [seen, bad]}), \
@@ -759,14 +762,14 @@ class DiscoveryTests(unittest.TestCase):
         self.assertGreater(rejected["claimed"], 0)
         self.assertEqual(examples[0]["reason"], "claimed")
 
-    def test_discover_strategic_filters_previews_and_verifies(self):
+    def test_discover_strategic_filters_previews_and_verifies(self) -> None:
         invalid = issue(html_url="bad")
         archived = issue(html_url="https://github.com/x/y/issues/2")
         good = issue(html_url="https://github.com/g/g/issues/3", title="Feature")
         paid = issue(html_url="https://github.com/p/p/issues/4", body="bounty $100")
         items = [invalid, archived, good, paid]
 
-        def meta(repo, token):
+        def meta(repo: str, token: str | None) -> dict[str, Any]:
             if repo == "x/y":
                 return repo_meta(archived=True)
             return repo_meta()
@@ -791,7 +794,7 @@ class DiscoveryTests(unittest.TestCase):
 
 
 class FormattingAndMainTests(unittest.TestCase):
-    def test_markdown_and_notification_formatting(self):
+    def test_markdown_and_notification_formatting(self) -> None:
         self.assertEqual(
             scout.github_report_ref(
                 "https://github.com/acme/widget/issues/42 and "
@@ -827,7 +830,7 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertLessEqual(len(lines[0]), 160)
         self.assertIn("paid", "\n".join(lines))
 
-    def test_main_no_queue(self):
+    def test_main_no_queue(self) -> None:
         with patch.dict(os.environ, {}, clear=True), \
              patch.object(scout.bounty, "load_seen_bounties", return_value=set()), \
              patch.object(scout, "discover_paid", return_value=([], {}, [])), \
@@ -836,7 +839,7 @@ class FormattingAndMainTests(unittest.TestCase):
             scout.main()
             self.assertIn("No new verified OSS opportunities found.", buf.getvalue())
 
-    def test_main_dedupes_notifies_reports_and_saves(self):
+    def test_main_dedupes_notifies_reports_and_saves(self) -> None:
         low = candidate(priority_score=50, cash_score=50, career_score=50)
         high = candidate(priority_score=90, cash_score=90, career_score=90)
         strategic = candidate(
@@ -899,7 +902,7 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertIn(high["url"], saved)
         self.assertIn(strategic["url"], saved)
 
-    def test_main_no_delivery_does_not_save(self):
+    def test_main_no_delivery_does_not_save(self) -> None:
         paid = candidate()
         env = {"TELEGRAM_BOT_TOKEN": "tb", "TELEGRAM_CHAT_ID": "chat"}
         with patch.dict(os.environ, env, clear=True), \
@@ -914,7 +917,7 @@ class FormattingAndMainTests(unittest.TestCase):
 
 
 class CoverageGapTests(unittest.TestCase):
-    def test_trusted_non_command_comment_falls_through_to_next_comment(self):
+    def test_trusted_non_command_comment_falls_through_to_next_comment(self) -> None:
         comments = [
             {
                 "body": "I support funding this",
@@ -933,7 +936,7 @@ class CoverageGapTests(unittest.TestCase):
                 "explicit /reward comment: $7",
             )
 
-    def test_paid_candidate_under_100_stars(self):
+    def test_paid_candidate_under_100_stars(self) -> None:
         result = scout.build_candidate(
             issue(title="Feature", body="plain", comments=4),
             "paid",
@@ -949,7 +952,7 @@ class CoverageGapTests(unittest.TestCase):
         self.assertEqual(result["stars"], 50)
         self.assertGreater(result["cash_score"], 0)
 
-    def test_platform_detail_empty_amount_and_no_amount_branches(self):
+    def test_platform_detail_empty_amount_and_no_amount_branches(self) -> None:
         opire_pages = {
             "https://app.opire.dev/home": (
                 '<a href="/issues/A">a</a><a href="/issues/B">b</a><a href="/issues/C">c</a>'
@@ -998,7 +1001,7 @@ class CoverageGapTests(unittest.TestCase):
             "confirmed bounty platform feed (BountyHub)",
         )
 
-    def test_build_candidate_remaining_star_activity_target_and_effort_branches(self):
+    def test_build_candidate_remaining_star_activity_target_and_effort_branches(self) -> None:
         inactive = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
         cases = [
             (
@@ -1053,7 +1056,7 @@ class CoverageGapTests(unittest.TestCase):
         self.assertIn("target repo bonus", results[4]["career_reasons"])
         self.assertIn("large-scope penalty", results[5]["career_reasons"])
 
-    def test_verify_success_with_comment_signal_cached_repo_and_guide(self):
+    def test_verify_success_with_comment_signal_cached_repo_and_guide(self) -> None:
         fresh = issue(body="", title="Task", comments=1)
         repo_cache = {"example/project": repo_meta()}
         guide_cache = {"example/project": "cached-guide"}
@@ -1078,7 +1081,7 @@ class CoverageGapTests(unittest.TestCase):
         fetch_meta.assert_not_called()
         guide.assert_not_called()
 
-    def test_verify_strategic_rejection_branch(self):
+    def test_verify_strategic_rejection_branch(self) -> None:
         fresh = issue(body="", title="Feature", comments=0)
         with patch.object(scout, "refresh_issue", return_value=(fresh, None)), \
              patch.object(scout.bounty, "payment_signal", return_value=None), \
@@ -1086,7 +1089,7 @@ class CoverageGapTests(unittest.TestCase):
              patch.object(scout, "strategic_rejection", return_value="support"):
             self.assertEqual(scout.verify(fresh, "t", {}, {})[1], "support")
 
-    def test_discover_paid_platform_seen_and_rejection_branches(self):
+    def test_discover_paid_platform_seen_and_rejection_branches(self) -> None:
         source_seen = "https://github.com/a/a/issues/1"
         source_reject = "https://github.com/a/a/issues/2"
         item_reject = issue(html_url=source_reject)
@@ -1106,7 +1109,7 @@ class CoverageGapTests(unittest.TestCase):
         self.assertEqual(rejected["claimed"], 1)
         self.assertEqual(examples[0]["url"], source_reject)
 
-    def test_discover_strategic_seen_dirty_and_cached_repo_branches(self):
+    def test_discover_strategic_seen_dirty_and_cached_repo_branches(self) -> None:
         seen_item = issue(html_url="https://github.com/a/a/issues/1")
         dirty = issue(html_url="https://github.com/a/a/issues/2")
         cached = issue(html_url="https://github.com/a/a/issues/3", title="Feature")
@@ -1144,7 +1147,7 @@ class CoverageGapTests(unittest.TestCase):
         self.assertEqual(rejected, {})
         self.assertEqual(examples, [])
 
-    def test_main_keeps_higher_duplicate_and_github_report_without_examples(self):
+    def test_main_keeps_higher_duplicate_and_github_report_without_examples(self) -> None:
         high = candidate(priority_score=90)
         low = candidate(priority_score=40)
         env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/repo"}
@@ -1158,7 +1161,7 @@ class CoverageGapTests(unittest.TestCase):
         body = gh.call_args.args[3]
         self.assertNotIn("Verification rejects", body)
 
-    def test_main_short_circuit_conditions_with_no_delivery(self):
+    def test_main_short_circuit_conditions_with_no_delivery(self) -> None:
         item_ = candidate()
         env = {"TELEGRAM_BOT_TOKEN": "tb", "GITHUB_TOKEN": "tok"}
         with patch.dict(os.environ, env, clear=True), \

@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import json
 import os
 import urllib.request
 import urllib.parse
 import re
 from datetime import datetime, timezone
+from typing import Any, Iterable, Mapping
 
 # Configuration
 STATE_FILE = "seen_bounties.json"
@@ -53,7 +56,7 @@ META_ALERT_MARKERS = [
 ]
 
 
-def load_seen_bounties():
+def load_seen_bounties() -> set[str]:
     """Load previously seen bounty URLs from the state file."""
     if os.path.exists(STATE_FILE):
         try:
@@ -66,7 +69,7 @@ def load_seen_bounties():
     return set()
 
 
-def save_seen_bounties(seen_urls):
+def save_seen_bounties(seen_urls: Iterable[str]) -> bool:
     """Save the updated list of seen bounty URLs."""
     try:
         with open(STATE_FILE, "w", encoding="utf-8") as f:
@@ -77,7 +80,7 @@ def save_seen_bounties(seen_urls):
         return False
 
 
-def github_get(url, token=None, timeout=20):
+def github_get(url: str, token: str | None = None, timeout: int = 20) -> Any:
     """Fetch JSON from the GitHub API."""
     headers = {
         "Accept": "application/vnd.github+json",
@@ -96,14 +99,14 @@ def github_get(url, token=None, timeout=20):
         return None
 
 
-def search_github(query, token=None, per_page=15):
+def search_github(query: str, token: str | None = None, per_page: int = 15) -> dict[str, Any]:
     """Fetch search results from GitHub Issues API."""
     url = f"https://api.github.com/search/issues?{urllib.parse.urlencode({'q': query, 'per_page': per_page})}"
     data = github_get(url, token)
     return data if isinstance(data, dict) else {}
 
 
-def payment_signal(item):
+def payment_signal(item: Mapping[str, Any]) -> str | None:
     """Return a strong payment signal, or None when payment is not explicit."""
     title = str(item.get("title", ""))
     body = str(item.get("body", ""))
@@ -156,7 +159,7 @@ def payment_signal(item):
     return None
 
 
-def issue_repo_and_number(item):
+def issue_repo_and_number(item: Mapping[str, Any]) -> tuple[str | None, int | None]:
     """Extract owner/repo and issue number from a GitHub issue search item."""
     url = str(item.get("html_url", ""))
     match = re.match(r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)", url)
@@ -165,7 +168,7 @@ def issue_repo_and_number(item):
     return match.group(1), int(match.group(2))
 
 
-def has_existing_implementation_pr(repo, issue_number, token):
+def has_existing_implementation_pr(repo: str, issue_number: int, token: str | None) -> str | None:
     """Return a reason when an open PR appears to implement the issue."""
     # Search the number broadly. Quoting a bare issue number can miss PR
     # references such as "Fixes #123" in GitHub's search index.
@@ -184,7 +187,7 @@ def has_existing_implementation_pr(repo, issue_number, token):
     return None
 
 
-def active_claim_reason(repo, issue_number, comments_count, token):
+def active_claim_reason(repo: str, issue_number: int, comments_count: int, token: str | None) -> str | None:
     """Return a reason when recent comments clearly claim or implement the task."""
     if not comments_count:
         return None
@@ -209,7 +212,7 @@ def active_claim_reason(repo, issue_number, comments_count, token):
     return None
 
 
-def is_clean_candidate(item):
+def is_clean_candidate(item: Mapping[str, Any]) -> bool:
     """Basic triage before the more expensive payment/competition checks."""
     # Skip if already a Pull Request
     if "pull_request" in item:
@@ -251,7 +254,7 @@ def is_clean_candidate(item):
     return True
 
 
-def candidate_rejection_reason(item, token):
+def candidate_rejection_reason(item: Mapping[str, Any], token: str | None) -> tuple[str | None, str | None]:
     """Apply strict money + competition checks and return a rejection reason."""
     title = str(item.get("title", ""))
     body = str(item.get("body", ""))
@@ -300,7 +303,7 @@ def candidate_rejection_reason(item, token):
     return None, signal
 
 
-def parse_github_datetime(value):
+def parse_github_datetime(value: Any) -> datetime | None:
     """Parse a GitHub ISO timestamp, returning None when unavailable."""
     if not value:
         return None
@@ -310,7 +313,7 @@ def parse_github_datetime(value):
         return None
 
 
-def usd_like_amount_from_signal(signal):
+def usd_like_amount_from_signal(signal: str | None) -> float | None:
     """Extract a USD-like amount from a payment signal when comparable."""
     if not signal:
         return None
@@ -330,13 +333,13 @@ def usd_like_amount_from_signal(signal):
     return None
 
 
-def fetch_repo_metadata(repo, token):
+def fetch_repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
     """Fetch lightweight repository metadata used only for ranking."""
     data = github_get(f"https://api.github.com/repos/{repo}", token)
     return data if isinstance(data, dict) else {}
 
 
-def score_candidate(item, signal, repo_meta):
+def score_candidate(item: Mapping[str, Any], signal: str, repo_meta: Mapping[str, Any]) -> tuple[int, str, list[str]]:
     """Return a transparent 0-100 triage score and short reasons."""
     score = 0
     reasons = []
@@ -461,7 +464,7 @@ def score_candidate(item, signal, repo_meta):
     return score, tier, reasons[:6]
 
 
-def send_telegram_notification(token, chat_id, message):
+def send_telegram_notification(token: str, chat_id: str, message: str) -> bool:
     """Send a notification message via Telegram Bot API."""
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
@@ -485,7 +488,7 @@ def send_telegram_notification(token, chat_id, message):
         return False
 
 
-def send_discord_notification(webhook_url, message):
+def send_discord_notification(webhook_url: str, message: str) -> bool:
     """Send a notification message via Discord Webhook."""
     payload = {"content": message}
     req = urllib.request.Request(
@@ -503,7 +506,7 @@ def send_discord_notification(webhook_url, message):
         return False
 
 
-def create_github_issue(repo_fullname, token, title, body):
+def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
     """Create an issue in the host repository to trigger a native GitHub alert."""
     url = f"https://api.github.com/repos/{repo_fullname}/issues"
     payload = {
@@ -532,7 +535,7 @@ def create_github_issue(repo_fullname, token, title, body):
         return False
 
 
-def main():
+def main() -> None:
     # Load credentials/secrets from environment variables.
     github_token = os.environ.get("GITHUB_TOKEN")
     repo_fullname = os.environ.get("GITHUB_REPOSITORY")
