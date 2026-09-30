@@ -1,0 +1,26 @@
+name: Test OSS Opportunity Scout
+
+on:
+  pull_request:
+    paths:
+      - "scout_bounties.py"
+      - "opportunity_scout.py"
+      - "test_opportunity_scout.py"
+      - ".github/workflows/test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scout_bounties.py"
+      - "opportunity_scout.py"
+      - "test_opportunity_scout.py"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: python -m py_compile scout_bounties.py opportunity_scout.py test_opportunity_scout.py
+      - run: python -m unittest -v test_opportunity_scout.py
