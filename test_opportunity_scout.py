@@ -97,6 +97,14 @@ class BasicHeuristicTests(unittest.TestCase):
 
     def test_effort_all_buckets(self):
         self.assertEqual(scout.estimate_effort(issue(title="Architecture rewrite")), "1d+")
+        self.assertEqual(
+            scout.estimate_effort(issue(title="Add support for Connection Pool", labels=["kind/feature"])),
+            "1d+",
+        )
+        self.assertEqual(
+            scout.estimate_effort(issue(title="Android DNS regression", body="dual SIM device reproduction")),
+            "1d+",
+        )
         self.assertEqual(scout.estimate_effort(issue(title="README typo", body="small")), "<1h")
         self.assertEqual(scout.estimate_effort(issue(title="Fix deterministic bug", comments=2)), "1–3h")
         self.assertEqual(scout.estimate_effort(issue(title="Feature", body="x" * 13000)), "1d+")
@@ -304,6 +312,227 @@ class HttpAndPlatformTests(unittest.TestCase):
             self.assertIsNone(scout.contribution_guide("a/b", "t"))
 
 
+class CalibrationTests(unittest.TestCase):
+    def test_linked_open_pr_reason_paths(self):
+        self.assertIsNone(
+            scout.linked_open_pr_reason(
+                {"html_url": "bad", "comments": 1},
+                "t",
+            )
+        )
+        self.assertIsNone(scout.linked_open_pr_reason(issue(comments=0), "t"))
+
+        direct_comments = [{
+            "body": "This is the related PR: https://github.com/example/project/pull/142565",
+        }]
+        with patch.object(scout, "issue_comments", return_value=direct_comments), \
+             patch.object(
+                 scout.bounty,
+                 "github_get",
+                 return_value={"state": "open"},
+             ):
+            self.assertEqual(
+                scout.linked_open_pr_reason(issue(comments=1), "t"),
+                "existing open implementation PR: https://github.com/example/project/pull/142565",
+            )
+
+        phrase_comments = [
+            {"body": "submitted PR #10"},
+            {"body": "implementation pull request #11"},
+        ]
+        with patch.object(
+            scout.bounty,
+            "github_get",
+            side_effect=[
+                {"state": "closed", "html_url": "https://github.com/example/project/pull/10"},
+                {"state": "open", "html_url": "https://github.com/example/project/pull/11"},
+            ],
+        ):
+            self.assertEqual(
+                scout.linked_open_pr_reason(issue(comments=2), "t", phrase_comments),
+                "existing open implementation PR: https://github.com/example/project/pull/11",
+            )
+
+        with patch.object(scout.bounty, "github_get", return_value=[]):
+            self.assertIsNone(
+                scout.linked_open_pr_reason(
+                    issue(comments=1),
+                    "t",
+                    [{"body": "opened PR #12"}],
+                )
+            )
+
+    def test_supplemental_claim_reason_paths(self):
+        self.assertIsNone(scout.supplemental_claim_reason(issue(comments=0), "t"))
+
+        with patch.object(
+            scout,
+            "issue_comments",
+            return_value=[{"body": "Planning a fix:"}],
+        ):
+            self.assertEqual(
+                scout.supplemental_claim_reason(issue(comments=1), "t"),
+                "active claim by @someone",
+            )
+
+        self.assertEqual(
+            scout.supplemental_claim_reason(
+                issue(comments=1),
+                "t",
+                [{
+                    "body": "I'll implement this",
+                    "user": {"login": "dev"},
+                }],
+            ),
+            "active claim by @dev",
+        )
+        self.assertIsNone(
+            scout.supplemental_claim_reason(
+                issue(comments=1),
+                "t",
+                [{"body": "Thanks for the report"}],
+            )
+        )
+
+    def test_extended_competition_reason_all_sources(self):
+        self.assertEqual(
+            scout.extended_competition_reason(
+                {"html_url": "bad", "comments": 0},
+                "t",
+            ),
+            "could not identify repository/issue number",
+        )
+
+        with patch.object(
+            scout.bounty,
+            "has_existing_implementation_pr",
+            return_value="search pr",
+        ):
+            self.assertEqual(
+                scout.extended_competition_reason(issue(), "t"),
+                "search pr",
+            )
+
+        with patch.object(
+            scout.bounty,
+            "has_existing_implementation_pr",
+            return_value=None,
+        ), patch.object(
+            scout,
+            "issue_comments",
+            return_value=[{"body": "related PR #8"}],
+        ), patch.object(
+            scout,
+            "linked_open_pr_reason",
+            return_value="linked pr",
+        ):
+            self.assertEqual(
+                scout.extended_competition_reason(issue(), "t"),
+                "linked pr",
+            )
+
+        claim_comments = [{
+            "body": "I'm working on this",
+            "user": {"login": "dev"},
+        }]
+        with patch.object(
+            scout.bounty,
+            "has_existing_implementation_pr",
+            return_value=None,
+        ), patch.object(
+            scout,
+            "issue_comments",
+            return_value=claim_comments,
+        ), patch.object(
+            scout,
+            "linked_open_pr_reason",
+            return_value=None,
+        ):
+            self.assertEqual(
+                scout.extended_competition_reason(issue(), "t"),
+                "active claim by @dev",
+            )
+
+        with patch.object(
+            scout.bounty,
+            "has_existing_implementation_pr",
+            return_value=None,
+        ), patch.object(
+            scout,
+            "issue_comments",
+            return_value=[{"body": "Planning a fix", "user": {"login": "dev2"}}],
+        ), patch.object(
+            scout,
+            "linked_open_pr_reason",
+            return_value=None,
+        ):
+            self.assertEqual(
+                scout.extended_competition_reason(issue(), "t"),
+                "active claim by @dev2",
+            )
+
+        with patch.object(
+            scout.bounty,
+            "has_existing_implementation_pr",
+            return_value=None,
+        ), patch.object(
+            scout,
+            "issue_comments",
+            return_value=[],
+        ), patch.object(
+            scout,
+            "linked_open_pr_reason",
+            return_value=None,
+        ):
+            self.assertIsNone(scout.extended_competition_reason(issue(), "t"))
+
+    def test_real_queue_calibration_examples(self):
+        aws = issue(
+            title="ipamd can allocate an EC2-unassigned IP after restart when IMDS is stale",
+            body="deterministic regression",
+            labels=[{"name": "bug"}, {"name": "good first issue"}],
+            comments=1,
+        )
+        self.assertEqual(scout.estimate_effort(aws), "1–3h")
+        with patch.object(
+            scout,
+            "issue_comments",
+            return_value=[{
+                "body": "Planning a fix:",
+                "user": {"login": "laclance"},
+            }],
+        ), patch.object(
+            scout.bounty,
+            "has_existing_implementation_pr",
+            return_value=None,
+        ), patch.object(
+            scout,
+            "linked_open_pr_reason",
+            return_value=None,
+        ):
+            self.assertEqual(
+                scout.extended_competition_reason(aws, "t"),
+                "active claim by @laclance",
+            )
+
+        connection_pool = issue(
+            title="Client-go: Add support for Connection Pool",
+            body="I would like to propose adding support.",
+            labels=[{"name": "kind/feature"}, {"name": "needs-triage"}],
+        )
+        self.assertEqual(scout.estimate_effort(connection_pool), "1d+")
+        self.assertEqual(
+            scout.strategic_rejection(connection_pool, "t"),
+            "awaiting maintainer triage",
+        )
+
+        tailscale = issue(
+            title="Android DNS regression",
+            body="dual SIM + Wi-Fi reproduction on a physical phone",
+        )
+        self.assertEqual(scout.estimate_effort(tailscale), "1d+")
+
+
 class CandidateTests(unittest.TestCase):
     def test_build_paid_candidate_scoring(self):
         item_ = issue(
@@ -394,11 +623,22 @@ class VerificationTests(unittest.TestCase):
             scout.strategic_rejection({"html_url": "bad", "title": "x", "body": "", "labels": []}, "t"),
             "could not identify repository/issue number",
         )
-        with patch.object(scout.bounty, "has_existing_implementation_pr", return_value="pr"):
+        with patch.object(scout, "extended_competition_reason", return_value="pr"):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "pr")
-        with patch.object(scout.bounty, "has_existing_implementation_pr", return_value=None), \
-             patch.object(scout.bounty, "active_claim_reason", return_value="claim"):
+        with patch.object(scout, "extended_competition_reason", return_value="claim"):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "claim")
+
+        self.assertEqual(
+            scout.strategic_rejection(issue(labels=["needs-triage"]), "t"),
+            "awaiting maintainer triage",
+        )
+        with patch.object(scout, "extended_competition_reason", return_value=None):
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(labels=[{"name": "needs-triage"}, {"name": "good first issue"}]),
+                    "t",
+                )
+            )
 
     def test_verify_refresh_and_clean_failures(self):
         with patch.object(scout, "refresh_issue", return_value=(None, "closed")):
@@ -442,17 +682,14 @@ class VerificationTests(unittest.TestCase):
             self.addCleanup(p.stop)
 
         with patch.object(scout, "comment_payment_signal", return_value="explicit /reward comment: $50"), \
-             patch.object(scout.bounty, "has_existing_implementation_pr", return_value="pr"):
+             patch.object(scout, "extended_competition_reason", return_value="pr"):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True)[1], "pr")
 
         with patch.object(scout, "comment_payment_signal", return_value="explicit /reward comment: $50"), \
-             patch.object(scout.bounty, "has_existing_implementation_pr", return_value=None), \
-             patch.object(scout.bounty, "active_claim_reason", return_value="claim"):
+             patch.object(scout, "extended_competition_reason", return_value="claim"):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True)[1], "claim")
 
-        with patch.object(scout, "comment_payment_signal", return_value=None), \
-             patch.object(scout.bounty, "has_existing_implementation_pr", return_value=None), \
-             patch.object(scout.bounty, "active_claim_reason", return_value=None):
+        with patch.object(scout, "comment_payment_signal", return_value=None):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True)[1], "no explicit payment signal")
 
     def test_verify_non_payment_rejection_and_strategic_success(self):
