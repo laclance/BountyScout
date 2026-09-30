@@ -628,5 +628,232 @@ class FormattingAndMainTests(unittest.TestCase):
             save.assert_not_called()
 
 
+
+class CoverageGapTests(unittest.TestCase):
+    def test_platform_detail_empty_amount_and_no_amount_branches(self):
+        opire_pages = {
+            "https://app.opire.dev/home": (
+                '<a href="/issues/A">a</a><a href="/issues/B">b</a><a href="/issues/C">c</a>'
+            ),
+            "https://app.opire.dev/issues/A": "",
+            "https://app.opire.dev/issues/B": (
+                "$50 bounty https://github.com/acme/widget/issues/2"
+            ),
+            "https://app.opire.dev/issues/C": (
+                "funded https://github.com/acme/widget/issues/3"
+            ),
+        }
+        with patch.object(scout, "fetch_text", side_effect=opire_pages.get):
+            refs = scout.opire_platform_refs()
+        self.assertEqual(
+            refs["https://github.com/acme/widget/issues/2"],
+            "confirmed bounty platform feed (Opire): $50",
+        )
+        self.assertEqual(
+            refs["https://github.com/acme/widget/issues/3"],
+            "confirmed bounty platform feed (Opire)",
+        )
+
+        bountyhub_pages = {
+            "https://www.bountyhub.dev/en/bounties": (
+                '<a href="/en/bounty/view/A">a</a>'
+                '<a href="/en/bounty/view/B">b</a>'
+                '<a href="/en/bounty/view/C">c</a>'
+            ),
+            "https://www.bountyhub.dev/en/bounty/view/A": "",
+            "https://www.bountyhub.dev/en/bounty/view/B": (
+                "$75 https://github.com/acme/widget/issues/4"
+            ),
+            "https://www.bountyhub.dev/en/bounty/view/C": (
+                "funded https://github.com/acme/widget/issues/5"
+            ),
+        }
+        with patch.object(scout, "fetch_text", side_effect=bountyhub_pages.get):
+            refs = scout.bountyhub_platform_refs()
+        self.assertEqual(
+            refs["https://github.com/acme/widget/issues/4"],
+            "confirmed bounty platform feed (BountyHub): $75",
+        )
+        self.assertEqual(
+            refs["https://github.com/acme/widget/issues/5"],
+            "confirmed bounty platform feed (BountyHub)",
+        )
+
+    def test_build_candidate_remaining_star_activity_target_and_effort_branches(self):
+        inactive = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+        cases = [
+            (
+                issue(title="Feature", body="plain", comments=4),
+                "paid",
+                "payment term + amount: $25",
+                repo_meta(stargazers_count=500, pushed_at=inactive, language="Rust"),
+            ),
+            (
+                issue(title="Feature", body="plain", comments=4),
+                "strategic",
+                None,
+                repo_meta(stargazers_count=1500, pushed_at=inactive, language="Rust"),
+            ),
+            (
+                issue(title="Feature", body="plain", comments=4),
+                "strategic",
+                None,
+                repo_meta(stargazers_count=150, pushed_at=inactive, language="Rust"),
+            ),
+            (
+                issue(title="Feature", body="plain", comments=4),
+                "strategic",
+                None,
+                repo_meta(stargazers_count=0, pushed_at=inactive, language="Rust"),
+            ),
+            (
+                issue(
+                    html_url="https://github.com/tailscale/tailscale/issues/99",
+                    title="Feature",
+                    body="plain",
+                    comments=4,
+                ),
+                "strategic",
+                None,
+                repo_meta(stargazers_count=50, pushed_at=inactive, language="Go"),
+            ),
+            (
+                issue(title="Architecture redesign", body="plain", comments=0),
+                "strategic",
+                None,
+                repo_meta(stargazers_count=50, pushed_at=inactive, language="Rust"),
+            ),
+        ]
+        results = [
+            scout.build_candidate(item_, lane, signal, meta, None)
+            for item_, lane, signal, meta in cases
+        ]
+        self.assertEqual(results[0]["cash_score"] > 0, True)
+        self.assertEqual(results[1]["stars"], 1500)
+        self.assertEqual(results[3]["stars"], 0)
+        self.assertIn("target repo bonus", results[4]["career_reasons"])
+        self.assertIn("large-scope penalty", results[5]["career_reasons"])
+
+    def test_verify_success_with_comment_signal_cached_repo_and_guide(self):
+        fresh = issue(body="", title="Task", comments=1)
+        repo_cache = {"example/project": repo_meta()}
+        guide_cache = {"example/project": "cached-guide"}
+        with patch.object(scout, "refresh_issue", return_value=(fresh, None)), \
+             patch.object(scout.bounty, "payment_signal", return_value=None), \
+             patch.object(scout, "supplemental_payment_signal", return_value=None), \
+             patch.object(scout, "comment_payment_signal", return_value="explicit /reward comment: $50"), \
+             patch.object(
+                 scout.bounty,
+                 "candidate_rejection_reason",
+                 return_value=("no explicit payment signal", None),
+             ), \
+             patch.object(scout.bounty, "has_existing_implementation_pr", return_value=None), \
+             patch.object(scout.bounty, "active_claim_reason", return_value=None), \
+             patch.object(scout.bounty, "fetch_repo_metadata") as fetch_meta, \
+             patch.object(scout, "contribution_guide") as guide, \
+             patch.object(scout, "build_candidate", return_value={"ok": True}):
+            self.assertEqual(
+                scout.verify(fresh, "t", repo_cache, guide_cache, True),
+                ({"ok": True}, None),
+            )
+        fetch_meta.assert_not_called()
+        guide.assert_not_called()
+
+    def test_verify_strategic_rejection_branch(self):
+        fresh = issue(body="", title="Feature", comments=0)
+        with patch.object(scout, "refresh_issue", return_value=(fresh, None)), \
+             patch.object(scout.bounty, "payment_signal", return_value=None), \
+             patch.object(scout, "supplemental_payment_signal", return_value=None), \
+             patch.object(scout, "strategic_rejection", return_value="support"):
+            self.assertEqual(scout.verify(fresh, "t", {}, {})[1], "support")
+
+    def test_discover_paid_platform_seen_and_rejection_branches(self):
+        source_seen = "https://github.com/a/a/issues/1"
+        source_reject = "https://github.com/a/a/issues/2"
+        item_reject = issue(html_url=source_reject)
+        with patch.object(scout.bounty, "search_github", return_value={"items": []}), \
+             patch.object(
+                 scout,
+                 "platform_paid_refs",
+                 return_value={source_seen: "sig", source_reject: "sig"},
+             ), \
+             patch.object(scout, "issue_from_github_url", return_value=item_reject), \
+             patch.object(scout.bounty, "is_clean_candidate", return_value=True), \
+             patch.object(scout, "verify", return_value=(None, "claimed")):
+            found, rejected, examples = scout.discover_paid(
+                "t", {source_seen}, {}, {}
+            )
+        self.assertEqual(found, [])
+        self.assertEqual(rejected["claimed"], 1)
+        self.assertEqual(examples[0]["url"], source_reject)
+
+    def test_discover_strategic_seen_dirty_and_cached_repo_branches(self):
+        seen_item = issue(html_url="https://github.com/a/a/issues/1")
+        dirty = issue(html_url="https://github.com/a/a/issues/2")
+        cached = issue(html_url="https://github.com/a/a/issues/3", title="Feature")
+        cache = {"a/a": repo_meta()}
+        with patch.object(scout, "target_repo_queries", return_value=["q"]), \
+             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []), \
+             patch.object(
+                 scout.bounty,
+                 "search_github",
+                 return_value={"items": [seen_item, dirty, cached]},
+             ), \
+             patch.object(
+                 scout.bounty,
+                 "is_clean_candidate",
+                 side_effect=lambda x: x["html_url"] != dirty["html_url"],
+             ), \
+             patch.object(scout.bounty, "fetch_repo_metadata") as fetch_meta, \
+             patch.object(
+                 scout,
+                 "build_candidate",
+                 return_value=candidate(
+                     url=cached["html_url"], priority_score=70
+                 ),
+             ), \
+             patch.object(
+                 scout,
+                 "verify",
+                 return_value=(candidate(url=cached["html_url"]), None),
+             ):
+            found, rejected, examples = scout.discover_strategic(
+                "t", {seen_item["html_url"]}, set(), cache, {}
+            )
+        self.assertEqual([x["url"] for x in found], [cached["html_url"]])
+        fetch_meta.assert_not_called()
+        self.assertEqual(rejected, {})
+        self.assertEqual(examples, [])
+
+    def test_main_keeps_higher_duplicate_and_github_report_without_examples(self):
+        high = candidate(priority_score=90)
+        low = candidate(priority_score=40)
+        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/repo"}
+        with patch.dict(os.environ, env, clear=True), \
+             patch.object(scout.bounty, "load_seen_bounties", return_value=set()), \
+             patch.object(scout, "discover_paid", return_value=([high, low], {}, [])), \
+             patch.object(scout, "discover_strategic", return_value=([], {}, [])), \
+             patch.object(scout.bounty, "create_github_issue", return_value=True) as gh, \
+             patch.object(scout.bounty, "save_seen_bounties", return_value=True):
+            scout.main()
+        body = gh.call_args.args[3]
+        self.assertNotIn("Verification rejects", body)
+
+    def test_main_short_circuit_conditions_with_no_delivery(self):
+        item_ = candidate()
+        env = {"TELEGRAM_BOT_TOKEN": "tb", "GITHUB_TOKEN": "tok"}
+        with patch.dict(os.environ, env, clear=True), \
+             patch.object(scout.bounty, "load_seen_bounties", return_value=set()), \
+             patch.object(scout, "discover_paid", return_value=([item_], {}, [])), \
+             patch.object(scout, "discover_strategic", return_value=([], {}, [])), \
+             patch.object(scout.bounty, "send_telegram_notification") as tg, \
+             patch.object(scout.bounty, "create_github_issue") as gh, \
+             patch.object(scout.bounty, "save_seen_bounties") as save:
+            scout.main()
+        tg.assert_not_called()
+        gh.assert_not_called()
+        save.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
