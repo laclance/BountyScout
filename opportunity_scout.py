@@ -515,18 +515,56 @@ def strategic_rejection(item, token):
     return bounty.active_claim_reason(repo, number, int(item.get("comments") or 0), token)
 
 
-def verify(item, token, repo_cache, guide_cache, require_paid=False):
+def verify(
+    item,
+    token,
+    repo_cache,
+    guide_cache,
+    require_paid=False,
+    payment_signal_override=None,
+):
     fresh, reason = refresh_issue(item, token)
     if reason:
         return None, reason
     if not bounty.is_clean_candidate(fresh):
         return None, "failed basic eligibility filter after source refresh"
 
-    signal = bounty.payment_signal(fresh)
+    issue_signal = bounty.payment_signal(fresh)
+    comment_signal = None
+    if not issue_signal and int(fresh.get("comments") or 0):
+        comment_signal = comment_payment_signal(fresh, token)
+    signal = issue_signal or comment_signal or payment_signal_override
+
     if require_paid or signal:
-        reason, signal = bounty.candidate_rejection_reason(fresh, token)
-        if reason:
+        reason, verified_issue_signal = bounty.candidate_rejection_reason(
+            fresh,
+            token,
+        )
+        if reason and reason != "no explicit payment signal":
             return None, reason
+
+        if verified_issue_signal:
+            signal = verified_issue_signal
+
+        if not signal:
+            return None, "no explicit payment signal"
+
+        # The upstream verifier stops before competition checks when payment is
+        # only present in comments/platform feeds, so finish those checks here.
+        if reason == "no explicit payment signal":
+            repo, number = bounty.issue_repo_and_number(fresh)
+            pr_reason = bounty.has_existing_implementation_pr(repo, number, token)
+            if pr_reason:
+                return None, pr_reason
+            claim_reason = bounty.active_claim_reason(
+                repo,
+                number,
+                int(fresh.get("comments") or 0),
+                token,
+            )
+            if claim_reason:
+                return None, claim_reason
+
         lane = "paid"
     else:
         reason = strategic_rejection(fresh, token)
