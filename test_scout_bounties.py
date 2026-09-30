@@ -5,11 +5,12 @@ import io
 import json
 import os
 import tempfile
+import urllib.request
 from pathlib import Path
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import mock_open, patch
 
 import scout_bounties as scout
@@ -37,7 +38,7 @@ class FakeResponse:
     def __enter__(self) -> "FakeResponse":
         return self
 
-    def __exit__(self, *args: Any) -> bool:
+    def __exit__(self, *args: Any) -> Literal[False]:
         return False
 
     def read(self) -> bytes:
@@ -46,19 +47,19 @@ class FakeResponse:
 
 class StateTests(unittest.TestCase):
     def test_load_missing_returns_empty(self) -> None:
-        with patch.object(scout.os.path, "exists", return_value=False):
+        with patch.object(os.path, "exists", return_value=False):
             self.assertEqual(scout.load_seen_bounties(), set())
 
     def test_load_list_returns_set(self) -> None:
-        with patch.object(scout.os.path, "exists", return_value=True), \
+        with patch.object(os.path, "exists", return_value=True), \
              patch("builtins.open", mock_open(read_data='["b", "a"]')):
             self.assertEqual(scout.load_seen_bounties(), {"a", "b"})
 
     def test_load_non_list_and_bad_json_return_empty(self) -> None:
-        with patch.object(scout.os.path, "exists", return_value=True), \
+        with patch.object(os.path, "exists", return_value=True), \
              patch("builtins.open", mock_open(read_data='{"x": 1}')):
             self.assertEqual(scout.load_seen_bounties(), set())
-        with patch.object(scout.os.path, "exists", return_value=True), \
+        with patch.object(os.path, "exists", return_value=True), \
              patch("builtins.open", mock_open(read_data='{')):
             self.assertEqual(scout.load_seen_bounties(), set())
 
@@ -76,7 +77,7 @@ class StateTests(unittest.TestCase):
 class HttpTests(unittest.TestCase):
     def test_github_get_success_and_failure(self) -> None:
         with patch.object(
-            scout.urllib.request,
+            urllib.request,
             "urlopen",
             return_value=FakeResponse(b'{"ok": true}'),
         ) as opened:
@@ -85,7 +86,7 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(req.headers["Authorization"], "Bearer tok")
             self.assertEqual(opened.call_args.kwargs["timeout"], 3)
 
-        with patch.object(scout.urllib.request, "urlopen", side_effect=OSError("boom")):
+        with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
             self.assertIsNone(scout.github_get("https://example"))
 
     def test_search_github_encodes_and_normalizes(self) -> None:
@@ -148,7 +149,10 @@ class CompetitionTests(unittest.TestCase):
             "html_url": "https://github.com/acme/widget/pull/9",
         }]}
         with patch.object(scout, "search_github", return_value=prs):
-            self.assertIn("pull/9", scout.has_existing_implementation_pr("acme/widget", 42, "t"))
+            reason = scout.has_existing_implementation_pr("acme/widget", 42, "t")
+            self.assertIsNotNone(reason)
+            assert reason is not None
+            self.assertIn("pull/9", reason)
 
         with patch.object(scout, "search_github", return_value={"items": [{"title": "Other", "body": ""}]}):
             self.assertIsNone(scout.has_existing_implementation_pr("acme/widget", 42, "t"))
@@ -216,6 +220,8 @@ class EligibilityTests(unittest.TestCase):
              patch.object(scout, "active_claim_reason", return_value=None):
             reason, signal = scout.candidate_rejection_reason(issue(), "t")
             self.assertIsNone(reason)
+            self.assertIsNotNone(signal)
+            assert signal is not None
             self.assertIn("$100", signal)
 
 
@@ -251,7 +257,7 @@ class RankingTests(unittest.TestCase):
                 comments=comments,
                 created_at=(now - timedelta(days=20)).isoformat(),
             )
-            meta = {"stargazers_count": stars}
+            meta: dict[str, Any] = {"stargazers_count": stars}
             if pushed:
                 meta["pushed_at"] = pushed.isoformat()
             score, tier, reasons = scout.score_candidate(item, signal, meta)
@@ -270,7 +276,7 @@ class RankingTests(unittest.TestCase):
 
 class NotificationTests(unittest.TestCase):
     def _assert_post(self, fn: Any, *args: Any) -> Any:
-        with patch.object(scout.urllib.request, "urlopen", return_value=FakeResponse()) as opened:
+        with patch.object(urllib.request, "urlopen", return_value=FakeResponse()) as opened:
             self.assertTrue(fn(*args))
             req = opened.call_args.args[0]
             self.assertEqual(req.method, "POST")
@@ -294,7 +300,7 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(req.headers["Authorization"], "Bearer tok")
 
     def test_notification_failures(self) -> None:
-        with patch.object(scout.urllib.request, "urlopen", side_effect=OSError("x")):
+        with patch.object(urllib.request, "urlopen", side_effect=OSError("x")):
             self.assertFalse(scout.send_telegram_notification("bot", "chat", "m"))
             self.assertFalse(scout.send_discord_notification("https://hook", "m"))
             self.assertFalse(scout.create_github_issue("a/b", "t", "x", "y"))
