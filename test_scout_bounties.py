@@ -352,5 +352,68 @@ class MainTests(unittest.TestCase):
             save.assert_not_called()
 
 
+
+class CoverageGapTests(unittest.TestCase):
+    def test_score_zero_reward_old_issue_and_no_star_branches(self):
+        now = datetime.now(timezone.utc)
+        score, tier, reasons = scout.score_candidate(
+            issue(
+                title="Task",
+                body="",
+                comments=6,
+                created_at=(now - timedelta(days=120)).isoformat(),
+            ),
+            "payment term + amount: $0",
+            {
+                "stargazers_count": 0,
+                "pushed_at": (now - timedelta(days=365)).isoformat(),
+            },
+        )
+        self.assertGreaterEqual(score, 0)
+        self.assertIn(tier, {"strong", "promising", "low-confidence"})
+
+    def test_main_skips_dirty_reuses_repo_cache_and_can_fail_state_save(self):
+        dirty = issue(
+            html_url="https://github.com/acme/widget/issues/40",
+            assignees=[{"login": "taken"}],
+        )
+        first = issue(html_url="https://github.com/acme/widget/issues/41", comments=0)
+        second = issue(html_url="https://github.com/acme/widget/issues/42", comments=0)
+        env = {"DISCORD_WEBHOOK_URL": "https://hook"}
+        with patch.dict(os.environ, env, clear=True), \
+             patch.object(scout, "load_seen_bounties", return_value=set()), \
+             patch.object(scout, "search_github", return_value={"items": [dirty, first, second]}), \
+             patch.object(
+                 scout,
+                 "candidate_rejection_reason",
+                 return_value=(None, "payment term + amount: $25"),
+             ), \
+             patch.object(scout, "fetch_repo_metadata", return_value={}) as meta, \
+             patch.object(scout, "send_discord_notification", return_value=True), \
+             patch.object(scout, "save_seen_bounties", return_value=False) as save:
+            scout.main()
+        meta.assert_called_once_with("acme/widget", None)
+        save.assert_called_once()
+
+    def test_main_short_circuit_telegram_condition_without_chat(self):
+        item_ = issue(comments=0)
+        env = {"TELEGRAM_BOT_TOKEN": "tb", "DISCORD_WEBHOOK_URL": "https://hook"}
+        with patch.dict(os.environ, env, clear=True), \
+             patch.object(scout, "load_seen_bounties", return_value=set()), \
+             patch.object(scout, "search_github", return_value={"items": [item_]}), \
+             patch.object(
+                 scout,
+                 "candidate_rejection_reason",
+                 return_value=(None, "payment term + amount: $25"),
+             ), \
+             patch.object(scout, "fetch_repo_metadata", return_value={}), \
+             patch.object(scout, "send_telegram_notification") as tg, \
+             patch.object(scout, "send_discord_notification", return_value=False), \
+             patch.object(scout, "save_seen_bounties") as save:
+            scout.main()
+        tg.assert_not_called()
+        save.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
