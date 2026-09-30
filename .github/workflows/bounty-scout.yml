@@ -21,12 +21,13 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install test dependency
-        run: python -m pip install coverage
+      - name: Install validation dependencies
+        run: python -m pip install coverage mypy
 
       - name: Validate scouts
         run: |
           python -m py_compile scout_bounties.py opportunity_scout.py test_scout_bounties.py test_opportunity_scout.py
+          mypy
           coverage run --branch -m unittest -v
           coverage report
 
