@@ -884,7 +884,7 @@ def discover_strategic(
             provisional.append((preview["priority_score"], preview["career_score"], preview["cash_score"], item))
 
     provisional.sort(key=lambda row: row[:3], reverse=True)
-    found = []
+    found: list[dict[str, Any]] = []
     for _, _, _, item in provisional[:STRATEGIC_VERIFY_LIMIT]:
         candidate, reason = verify(item, token, repo_cache, guide_cache)
         if reason:
