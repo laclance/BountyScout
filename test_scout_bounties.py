@@ -291,7 +291,7 @@ class NotificationTests(unittest.TestCase):
     def test_notification_failures(self):
         with patch.object(scout.urllib.request, "urlopen", side_effect=OSError("x")):
             self.assertFalse(scout.send_telegram_notification("bot", "chat", "m"))
-            self.assertFalse(scout.send_discord_notification("hook", "m"))
+            self.assertFalse(scout.send_discord_notification("https://hook", "m"))
             self.assertFalse(scout.create_github_issue("a/b", "t", "x", "y"))
 
 
