@@ -9,12 +9,44 @@ from datetime import datetime, timezone
 STATE_FILE = "seen_bounties.json"
 MAX_COMMENTS = 25  # Filter out overcrowded threads
 
-# GitHub search queries for active bounty opportunities
-SEARCH_QUERIES = [
+# Lane 1: explicit paid bounty discovery.
+PAID_SEARCH_QUERIES = [
     'is:issue is:open bounty in:title,body sort:updated-desc',
     'is:issue is:open reward bounty sort:updated-desc',
     'is:issue is:open "paid" "PR" "bounty" sort:updated-desc',
     'is:issue is:open "Opire" bounty sort:updated-desc',
+]
+
+# Lane 2: respected infrastructure/backend repositories. Repo qualifiers are
+# grouped into small chunks so we do not spend one Search API request per repo.
+TARGET_REPOS = [
+    "aws/amazon-vpc-cni-k8s",
+    "kubernetes/kubernetes",
+    "kubernetes-sigs/controller-runtime",
+    "kubernetes-sigs/external-dns",
+    "kubernetes-sigs/aws-load-balancer-controller",
+    "tailscale/tailscale",
+    "cilium/cilium",
+    "prometheus/prometheus",
+    "prometheus/client_golang",
+    "grafana/loki",
+    "open-telemetry/opentelemetry-go",
+    "hashicorp/terraform",
+    "fluxcd/flux2",
+    "argoproj/argo-cd",
+    "golangci/golangci-lint",
+]
+TARGET_REPO_QUERY_CHUNK = 3
+STRATEGIC_VERIFY_LIMIT = 12
+REPORT_LIMIT = 8
+
+# Global discovery stays intentionally narrow. These are supplements to the
+# target-repo lane, not a generic "good first issue" scraper.
+STRATEGIC_GLOBAL_QUERIES = [
+    'is:issue is:open no:assignee label:"help wanted" regression sort:updated-desc',
+    'is:issue is:open no:assignee label:"help wanted" tests sort:updated-desc',
+    'is:issue is:open no:assignee label:"bug" kubernetes sort:updated-desc',
+    'is:issue is:open no:assignee label:"bug" networking sort:updated-desc',
 ]
 
 # Strong payment signals. A plain mention of "bounty", "paid", or "reward" is
@@ -228,6 +260,7 @@ def is_clean_candidate(item):
         "active bounty scan results",
         "new opportunities found",
         "new opportunityies found",
+        "oss opportunity queue",
     ]
     if any(marker in title or marker in body for marker in generated_alert_markers):
         return False
