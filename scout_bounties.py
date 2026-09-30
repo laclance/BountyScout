@@ -300,6 +300,167 @@ def candidate_rejection_reason(item, token):
     return None, signal
 
 
+def parse_github_datetime(value):
+    """Parse a GitHub ISO timestamp, returning None when unavailable."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
+def usd_like_amount_from_signal(signal):
+    """Extract a USD-like amount from a payment signal when comparable."""
+    if not signal:
+        return None
+
+    dollar = re.search(r"\$\s*(\d[\d,]*(?:\.\d+)?)", signal)
+    if dollar:
+        return float(dollar.group(1).replace(",", ""))
+
+    currency = re.search(
+        r"(\d[\d,]*(?:\.\d+)?)\s*(?:usd|usdc|usdt)\b",
+        signal,
+        re.IGNORECASE,
+    )
+    if currency:
+        return float(currency.group(1).replace(",", ""))
+
+    return None
+
+
+def fetch_repo_metadata(repo, token):
+    """Fetch lightweight repository metadata used only for ranking."""
+    data = github_get(f"https://api.github.com/repos/{repo}", token)
+    return data if isinstance(data, dict) else {}
+
+
+def score_candidate(item, signal, repo_meta):
+    """Return a transparent 0-100 triage score and short reasons."""
+    score = 0
+    reasons = []
+
+    # Payment confidence. All candidates already passed the payment filter;
+    # this only ranks stronger evidence above weaker evidence.
+    if signal.startswith("explicit bounty command"):
+        score += 25
+        reasons.append("explicit bounty command")
+    elif signal.startswith("bounty labels"):
+        score += 22
+        reasons.append("amount-bearing bounty labels")
+    elif signal.startswith("named bounty platform"):
+        score += 20
+        reasons.append("named bounty platform")
+    else:
+        score += 16
+        reasons.append("explicit payment wording")
+
+    # Reward size matters, but only modestly: a tiny task can still be useful.
+    amount = usd_like_amount_from_signal(signal)
+    if amount is not None:
+        if amount >= 100:
+            score += 14
+            reasons.append("$100+ stated reward")
+        elif amount >= 25:
+            score += 10
+            reasons.append("$25+ stated reward")
+        elif amount >= 5:
+            score += 6
+            reasons.append("$5+ stated reward")
+        elif amount > 0:
+            score += 3
+            reasons.append("micro-bounty")
+
+    # Prefer established, active repositories without making stars mandatory.
+    stars = int(repo_meta.get("stargazers_count") or 0)
+    if stars >= 1000:
+        score += 15
+        reasons.append("established repo")
+    elif stars >= 100:
+        score += 10
+        reasons.append("100+ repo stars")
+    elif stars >= 10:
+        score += 5
+        reasons.append("10+ repo stars")
+
+    pushed_at = parse_github_datetime(repo_meta.get("pushed_at"))
+    if pushed_at:
+        repo_age_days = (datetime.now(timezone.utc) - pushed_at).days
+        if repo_age_days <= 30:
+            score += 10
+            reasons.append("repo active in last 30d")
+        elif repo_age_days <= 90:
+            score += 5
+            reasons.append("repo active in last 90d")
+
+    if repo_meta.get("archived"):
+        score -= 30
+        reasons.append("archived repo")
+
+    # Fresh, quiet issues are less likely to have hidden competition.
+    comments = int(item.get("comments") or 0)
+    if comments == 0:
+        score += 8
+        reasons.append("zero comments")
+    elif comments <= 2:
+        score += 5
+        reasons.append("very low comment count")
+    elif comments <= 5:
+        score += 2
+
+    created_at = parse_github_datetime(item.get("created_at"))
+    if created_at:
+        issue_age_days = (datetime.now(timezone.utc) - created_at).days
+        if issue_age_days <= 7:
+            score += 8
+            reasons.append("fresh issue")
+        elif issue_age_days <= 30:
+            score += 4
+            reasons.append("recent issue")
+
+    title = str(item.get("title", ""))
+    body = str(item.get("body", ""))
+    text = f"{title}\n{body}".lower()
+    labels = item.get("labels") or []
+    label_names = " ".join(
+        str(label.get("name", "")) if isinstance(label, dict) else str(label)
+        for label in labels
+    ).lower()
+
+    if any(term in label_names for term in ("good first issue", "help wanted")):
+        score += 5
+        reasons.append("contributor-friendly label")
+
+    if re.search(r"\b(?:test|tests|regression)\b", text):
+        score += 5
+        reasons.append("test/regression scope")
+
+    if re.search(
+        r"\b(?:one|single|small|narrow|deterministic|regression|fix)\b",
+        title.lower(),
+    ):
+        score += 5
+        reasons.append("apparently bounded scope")
+
+    if re.search(
+        r"\b(?:epic|roadmap|multi-phase|full system|architecture overhaul|rewrite)\b",
+        text,
+    ):
+        score -= 10
+        reasons.append("broad-scope wording")
+
+    score = max(0, min(100, score))
+    if score >= 70:
+        tier = "strong"
+    elif score >= 50:
+        tier = "promising"
+    else:
+        tier = "low-confidence"
+
+    return score, tier, reasons[:6]
+
+
 def send_telegram_notification(token, chat_id, message):
     """Send a notification message via Telegram Bot API."""
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -384,6 +545,7 @@ def main():
     new_bounties = []
     new_bounty_urls = set()
     rejected = {}
+    repo_metadata_cache = {}
 
     print("Scouting GitHub for active bounties...")
     for query in SEARCH_QUERIES:
@@ -402,6 +564,11 @@ def main():
                 continue
 
             repo, _ = issue_repo_and_number(item)
+            if repo not in repo_metadata_cache:
+                repo_metadata_cache[repo] = fetch_repo_metadata(repo, github_token)
+            repo_meta = repo_metadata_cache[repo]
+
+            score, tier, score_reasons = score_candidate(item, signal, repo_meta)
             new_bounties.append({
                 "title": item.get("title"),
                 "url": url,
@@ -409,6 +576,10 @@ def main():
                 "comments": item.get("comments"),
                 "updated_at": item.get("updated_at"),
                 "payment_signal": signal,
+                "score": score,
+                "tier": tier,
+                "score_reasons": score_reasons,
+                "stars": int(repo_meta.get("stargazers_count") or 0),
             })
             new_bounty_urls.add(url)
 
@@ -417,6 +588,11 @@ def main():
             f"{reason}={count}" for reason, count in sorted(rejected.items())
         )
         print(f"Filtered candidates: {summary}")
+
+    new_bounties.sort(
+        key=lambda bounty: (bounty["score"], -int(bounty["comments"] or 0)),
+        reverse=True,
+    )
 
     if not new_bounties:
         print("No new clean paid bounty opportunities found.")
@@ -433,7 +609,14 @@ def main():
     for idx, bounty in enumerate(new_bounties, start=1):
         notif_lines.append(f"{idx}. *{bounty['title']}*")
         notif_lines.append(f"   • Repository: `{bounty['repo']}`")
+        notif_lines.append(
+            f"   • Scout score: {bounty['score']}/100 ({bounty['tier']})"
+        )
         notif_lines.append(f"   • Payment signal: {bounty['payment_signal']}")
+        notif_lines.append(f"   • Repo stars: {bounty['stars']}")
+        notif_lines.append(
+            f"   • Why: {', '.join(bounty['score_reasons'])}"
+        )
         notif_lines.append(f"   • Comments: {bounty['comments']}")
         notif_lines.append(f"   • Link: {bounty['url']}\n")
 
@@ -473,13 +656,17 @@ def main():
             f"### Clean Paid Bounty Scan Results\n\n"
             f"**Scan Time:** {now_str}\n\n"
             "Filtered for explicit payment, no current assignee, no obvious "
-            "active claim, and no open implementation PR found.\n\n"
+            "active claim, and no open implementation PR found. Results are "
+            "sorted by a transparent triage score.\n\n"
         )
         for idx, bounty in enumerate(new_bounties, start=1):
             issue_body += (
                 f"#### {idx}. [{bounty['title']}]({bounty['url']})\n"
                 f"- **Repository:** [{bounty['repo']}](https://github.com/{bounty['repo']})\n"
+                f"- **Scout score:** {bounty['score']}/100 ({bounty['tier']})\n"
                 f"- **Payment signal:** {bounty['payment_signal']}\n"
+                f"- **Repo stars:** {bounty['stars']}\n"
+                f"- **Why:** {', '.join(bounty['score_reasons'])}\n"
                 f"- **Comments:** {bounty['comments']}\n"
                 f"- **Last Updated:** {bounty['updated_at']}\n\n"
             )
