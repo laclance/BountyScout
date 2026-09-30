@@ -797,7 +797,8 @@ class FormattingAndMainTests(unittest.TestCase):
                 "https://github.com/acme/widget/issues/42 and "
                 "https://github.com/acme/widget/pull/9 plus #77"
             ),
-            "acme/widget — issue 42 and acme/widget — PR 9 plus issue 77",
+            "https://redirect.github.com/acme/widget/issues/42 and "
+            "https://redirect.github.com/acme/widget/pull/9 plus #77",
         )
         self.assertEqual(scout.github_report_ref(None), "")
 
@@ -808,8 +809,11 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertIn("Cash score", md)
         self.assertIn("contribution guide", md)
         self.assertNotIn("https://github.com/example/project/issues/42", md)
-        self.assertIn("example/project — issue 42", md)
-        self.assertIn("issue 850", md)
+        self.assertIn(
+            "https://redirect.github.com/example/project/issues/42",
+            md,
+        )
+        self.assertIn("#850", md)
 
         no_guide = scout.markdown_candidate(
             candidate(expected_hourly=None, contribution_guide=None, paid=False, reward=None),
@@ -874,8 +878,18 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertNotIn("https://github.com/example/project/issues/", github_body)
         self.assertNotIn("https://github.com/acme/upstream/issues/", github_body)
         self.assertNotIn("https://github.com/acme/upstream/pull/", github_body)
-        self.assertIn("acme/upstream — issue 123", github_body)
-        self.assertIn("acme/upstream — PR 456", github_body)
+        self.assertIn(
+            "https://redirect.github.com/example/project/issues/42",
+            github_body,
+        )
+        self.assertIn(
+            "https://redirect.github.com/acme/upstream/issues/123",
+            github_body,
+        )
+        self.assertIn(
+            "https://redirect.github.com/acme/upstream/pull/456",
+            github_body,
+        )
 
         telegram_message = tg.call_args.args[2]
         self.assertIn(high["url"], telegram_message)
