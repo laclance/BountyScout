@@ -7,31 +7,40 @@ on:
 
 jobs:
   scout:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       issues: write
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
       - name: Install validation dependencies
         run: python -m pip install coverage mypy ruff==0.16.9
 
-      - name: Validate scouts
-        run: |
-          ruff format --check .
-          ruff check .
-          python -m py_compile scout_bounties.py opportunity_scout.py test_scout_bounties.py test_opportunity_scout.py
-          mypy
-          coverage run --branch -m unittest -v
-          coverage report
+      - name: Check Ruff formatting
+        run: ruff format --check .
+
+      - name: Lint with Ruff
+        run: ruff check .
+
+      - name: Compile Python
+        run: python -m py_compile scout_bounties.py opportunity_scout.py test_scout_bounties.py test_opportunity_scout.py
+
+      - name: Type check with mypy
+        run: mypy
+
+      - name: Run tests with branch coverage
+        run: coverage run --branch -m unittest -v
+
+      - name: Enforce coverage
+        run: coverage report
 
       - name: Run OSS Opportunity Scout
         env:
