@@ -127,10 +127,7 @@ def estimate_effort(item: Mapping[str, Any]) -> str:
         file_refs >= 4
         or len(body) > 8500
         or (mobile_or_desktop and missing_reproduction)
-        or (
-            re.search(r"\bsuggested fixes?\b", text)
-            and suggested_fix_bullets >= 3
-        )
+        or (re.search(r"\bsuggested fixes?\b", text) and suggested_fix_bullets >= 3)
     ):
         return "6–12h"
 

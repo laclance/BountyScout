@@ -117,9 +117,7 @@ class BasicHeuristicTests(unittest.TestCase):
         )
         self.assertEqual(scout.estimate_effort(issue(title="README typo", body="small")), "<1h")
         self.assertEqual(
-            scout.estimate_effort(
-                issue(title="TCP mode leaks upstream connection", comments=0)
-            ),
+            scout.estimate_effort(issue(title="TCP mode leaks upstream connection", comments=0)),
             "1–3h",
         )
         self.assertEqual(
@@ -669,7 +667,6 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(result["competition"], "none")
         self.assertEqual(result["contribution_guide"], "guide")
 
-
     def test_issue_specific_ranking_breaks_repo_score_ties(self) -> None:
         meta = repo_meta(language="Go", stargazers_count=37000)
         quick = scout.build_candidate(
@@ -717,7 +714,9 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(quick["effort"], "1–3h")
         self.assertEqual(broad["effort"], "6–12h")
         self.assertEqual(accepted["effort"], "6–12h")
-        self.assertGreaterEqual(len({quick["career_score"], broad["career_score"], accepted["career_score"]}), 2)
+        self.assertGreaterEqual(
+            len({quick["career_score"], broad["career_score"], accepted["career_score"]}), 2
+        )
         self.assertIn("maintainer-ready signal", accepted["career_reasons"])
 
     def test_build_strategic_candidate_and_non_usd_paid(self) -> None:
