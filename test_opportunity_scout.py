@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import json
 import os
 import unittest
 import urllib.request
@@ -103,18 +102,26 @@ class BasicHeuristicTests(unittest.TestCase):
     def test_effort_all_buckets(self) -> None:
         self.assertEqual(scout.estimate_effort(issue(title="Architecture rewrite")), "1d+")
         self.assertEqual(
-            scout.estimate_effort(issue(title="Add support for Connection Pool", labels=["kind/feature"])),
+            scout.estimate_effort(
+                issue(title="Add support for Connection Pool", labels=["kind/feature"])
+            ),
             "1d+",
         )
         self.assertEqual(
-            scout.estimate_effort(issue(title="Android DNS regression", body="dual SIM device reproduction")),
+            scout.estimate_effort(
+                issue(title="Android DNS regression", body="dual SIM device reproduction")
+            ),
             "1d+",
         )
         self.assertEqual(scout.estimate_effort(issue(title="README typo", body="small")), "<1h")
-        self.assertEqual(scout.estimate_effort(issue(title="Fix deterministic bug", comments=2)), "1–3h")
+        self.assertEqual(
+            scout.estimate_effort(issue(title="Fix deterministic bug", comments=2)), "1–3h"
+        )
         self.assertEqual(scout.estimate_effort(issue(title="Feature", body="x" * 13000)), "1d+")
         self.assertEqual(scout.estimate_effort(issue(title="Feature", comments=13)), "1d+")
-        self.assertEqual(scout.estimate_effort(issue(title="Feature", body="normal", comments=4)), "3–6h")
+        self.assertEqual(
+            scout.estimate_effort(issue(title="Feature", body="normal", comments=4)), "3–6h"
+        )
 
     def test_effort_hours_and_competition(self) -> None:
         self.assertEqual(scout.effort_hours("<1h"), 0.75)
@@ -192,9 +199,7 @@ class HttpAndPlatformTests(unittest.TestCase):
             self.assertEqual(scout.supplemental_payment_signal(issue(body=body)), expected)
 
         self.assertEqual(
-            scout.supplemental_payment_signal(
-                issue(body="See https://bountyhub.dev/x — $90")
-            ),
+            scout.supplemental_payment_signal(issue(body="See https://bountyhub.dev/x — $90")),
             "named bounty platform + amount (BountyHub): $90",
         )
         self.assertIsNone(scout.supplemental_payment_signal(issue(body="maybe paid someday")))
@@ -202,15 +207,27 @@ class HttpAndPlatformTests(unittest.TestCase):
     def test_comment_payment_confirmations_and_commands(self) -> None:
         comment_cases = [
             (
-                {"body": "$25 bounty created - algora.io/x", "user": {"login": "bot"}, "author_association": "NONE"},
+                {
+                    "body": "$25 bounty created - algora.io/x",
+                    "user": {"login": "bot"},
+                    "author_association": "NONE",
+                },
                 "confirmed bounty platform comment (Algora): $25",
             ),
             (
-                {"body": "Opire reward 30 USDC", "user": {"login": "opire-bot"}, "author_association": "NONE"},
+                {
+                    "body": "Opire reward 30 USDC",
+                    "user": {"login": "opire-bot"},
+                    "author_association": "NONE",
+                },
                 "confirmed bounty platform comment (Opire): 30 USDC",
             ),
             (
-                {"body": "A bounty of $40 has been created - bountyhub.dev/x", "user": {"login": "bot"}, "author_association": "NONE"},
+                {
+                    "body": "A bounty of $40 has been created - bountyhub.dev/x",
+                    "user": {"login": "bot"},
+                    "author_association": "NONE",
+                },
                 "confirmed bounty platform comment (BountyHub): $40",
             ),
         ]
@@ -221,30 +238,38 @@ class HttpAndPlatformTests(unittest.TestCase):
         with patch.object(
             scout,
             "issue_comments",
-            return_value=[{"body": "/reward 75", "author_association": "OWNER", "user": {"login": "m"}}],
+            return_value=[
+                {"body": "/reward 75", "author_association": "OWNER", "user": {"login": "m"}}
+            ],
         ):
-            self.assertEqual(scout.comment_payment_signal(issue(), "t"), "explicit /reward comment: $75")
+            self.assertEqual(
+                scout.comment_payment_signal(issue(), "t"), "explicit /reward comment: $75"
+            )
 
         with patch.object(
             scout,
             "issue_comments",
-            return_value=[{"body": "/bounty $88", "author_association": "MEMBER", "user": {"login": "m"}}],
+            return_value=[
+                {"body": "/bounty $88", "author_association": "MEMBER", "user": {"login": "m"}}
+            ],
         ):
-            self.assertEqual(scout.comment_payment_signal(issue(), "t"), "explicit /bounty comment: $88")
+            self.assertEqual(
+                scout.comment_payment_signal(issue(), "t"), "explicit /bounty comment: $88"
+            )
 
         with patch.object(
             scout,
             "issue_comments",
-            return_value=[{"body": "/reward 999", "author_association": "NONE", "user": {"login": "x"}}],
+            return_value=[
+                {"body": "/reward 999", "author_association": "NONE", "user": {"login": "x"}}
+            ],
         ):
             self.assertIsNone(scout.comment_payment_signal(issue(), "t"))
 
     def test_issue_from_github_url(self) -> None:
         self.assertIsNone(scout.issue_from_github_url("bad", "t"))
         with patch.object(bounty, "github_get", return_value=[]):
-            self.assertIsNone(
-                scout.issue_from_github_url("https://github.com/a/b/issues/1", "t")
-            )
+            self.assertIsNone(scout.issue_from_github_url("https://github.com/a/b/issues/1", "t"))
         with patch.object(bounty, "github_get", return_value={"state": "open"}) as get:
             self.assertEqual(
                 scout.issue_from_github_url("https://github.com/a/b/issues/1", "t"),
@@ -263,8 +288,14 @@ class HttpAndPlatformTests(unittest.TestCase):
         }
         with patch.object(scout, "fetch_text", side_effect=pages.get):
             refs = scout.issuehunt_platform_refs()
-        self.assertEqual(refs["https://github.com/apache/superset/issues/3821"], "confirmed bounty platform feed (IssueHunt): $17.00")
-        self.assertEqual(refs["https://github.com/acme/widget/issues/9"], "confirmed bounty platform feed (IssueHunt)")
+        self.assertEqual(
+            refs["https://github.com/apache/superset/issues/3821"],
+            "confirmed bounty platform feed (IssueHunt): $17.00",
+        )
+        self.assertEqual(
+            refs["https://github.com/acme/widget/issues/9"],
+            "confirmed bounty platform feed (IssueHunt)",
+        )
 
         with patch.object(scout, "fetch_text", return_value=""):
             self.assertEqual(scout.issuehunt_platform_refs(), {})
@@ -281,7 +312,10 @@ class HttpAndPlatformTests(unittest.TestCase):
         with patch.object(scout, "fetch_text", side_effect=pages.get):
             refs = scout.opire_platform_refs()
         self.assertIn("https://github.com/direct/repo/issues/1", refs)
-        self.assertEqual(refs["https://github.com/acme/widget/issues/2"], "confirmed bounty platform feed (Opire)")
+        self.assertEqual(
+            refs["https://github.com/acme/widget/issues/2"],
+            "confirmed bounty platform feed (Opire)",
+        )
         with patch.object(scout, "fetch_text", return_value=""):
             self.assertEqual(scout.opire_platform_refs(), {})
 
@@ -297,14 +331,19 @@ class HttpAndPlatformTests(unittest.TestCase):
         with patch.object(scout, "fetch_text", side_effect=pages.get):
             refs = scout.bountyhub_platform_refs()
         self.assertIn("https://github.com/direct/repo/issues/1", refs)
-        self.assertEqual(refs["https://github.com/acme/widget/issues/2"], "confirmed bounty platform feed (BountyHub): $125")
+        self.assertEqual(
+            refs["https://github.com/acme/widget/issues/2"],
+            "confirmed bounty platform feed (BountyHub): $125",
+        )
         with patch.object(scout, "fetch_text", return_value=""):
             self.assertEqual(scout.bountyhub_platform_refs(), {})
 
     def test_platform_paid_refs_merge_precedence(self) -> None:
-        with patch.object(scout, "issuehunt_platform_refs", return_value={"u": "issuehunt"}), \
-             patch.object(scout, "opire_platform_refs", return_value={"v": "opire"}), \
-             patch.object(scout, "bountyhub_platform_refs", return_value={"u": "bountyhub"}):
+        with (
+            patch.object(scout, "issuehunt_platform_refs", return_value={"u": "issuehunt"}),
+            patch.object(scout, "opire_platform_refs", return_value={"v": "opire"}),
+            patch.object(scout, "bountyhub_platform_refs", return_value={"u": "bountyhub"}),
+        ):
             self.assertEqual(scout.platform_paid_refs(), {"u": "bountyhub", "v": "opire"})
 
     def test_contribution_guide_found_and_missing(self) -> None:
@@ -327,15 +366,19 @@ class CalibrationTests(unittest.TestCase):
         )
         self.assertIsNone(scout.linked_open_pr_reason(issue(comments=0), "t"))
 
-        direct_comments = [{
-            "body": "This is the related PR: https://github.com/example/project/pull/142565",
-        }]
-        with patch.object(scout, "issue_comments", return_value=direct_comments), \
-             patch.object(
-                 bounty,
-                 "github_get",
-                 return_value={"state": "open"},
-             ):
+        direct_comments = [
+            {
+                "body": "This is the related PR: https://github.com/example/project/pull/142565",
+            }
+        ]
+        with (
+            patch.object(scout, "issue_comments", return_value=direct_comments),
+            patch.object(
+                bounty,
+                "github_get",
+                return_value={"state": "open"},
+            ),
+        ):
             self.assertEqual(
                 scout.linked_open_pr_reason(issue(comments=1), "t"),
                 "existing open implementation PR: https://github.com/example/project/pull/142565",
@@ -384,10 +427,12 @@ class CalibrationTests(unittest.TestCase):
             scout.supplemental_claim_reason(
                 issue(comments=1),
                 "t",
-                [{
-                    "body": "I'll implement this",
-                    "user": {"login": "dev"},
-                }],
+                [
+                    {
+                        "body": "I'll implement this",
+                        "user": {"login": "dev"},
+                    }
+                ],
             ),
             "active claim by @dev",
         )
@@ -418,76 +463,94 @@ class CalibrationTests(unittest.TestCase):
                 "search pr",
             )
 
-        with patch.object(
-            bounty,
-            "has_existing_implementation_pr",
-            return_value=None,
-        ), patch.object(
-            scout,
-            "issue_comments",
-            return_value=[{"body": "related PR #8"}],
-        ), patch.object(
-            scout,
-            "linked_open_pr_reason",
-            return_value="linked pr",
+        with (
+            patch.object(
+                bounty,
+                "has_existing_implementation_pr",
+                return_value=None,
+            ),
+            patch.object(
+                scout,
+                "issue_comments",
+                return_value=[{"body": "related PR #8"}],
+            ),
+            patch.object(
+                scout,
+                "linked_open_pr_reason",
+                return_value="linked pr",
+            ),
         ):
             self.assertEqual(
                 scout.extended_competition_reason(issue(), "t"),
                 "linked pr",
             )
 
-        claim_comments = [{
-            "body": "I'm working on this",
-            "user": {"login": "dev"},
-        }]
-        with patch.object(
-            bounty,
-            "has_existing_implementation_pr",
-            return_value=None,
-        ), patch.object(
-            scout,
-            "issue_comments",
-            return_value=claim_comments,
-        ), patch.object(
-            scout,
-            "linked_open_pr_reason",
-            return_value=None,
+        claim_comments = [
+            {
+                "body": "I'm working on this",
+                "user": {"login": "dev"},
+            }
+        ]
+        with (
+            patch.object(
+                bounty,
+                "has_existing_implementation_pr",
+                return_value=None,
+            ),
+            patch.object(
+                scout,
+                "issue_comments",
+                return_value=claim_comments,
+            ),
+            patch.object(
+                scout,
+                "linked_open_pr_reason",
+                return_value=None,
+            ),
         ):
             self.assertEqual(
                 scout.extended_competition_reason(issue(), "t"),
                 "active claim by @dev",
             )
 
-        with patch.object(
-            bounty,
-            "has_existing_implementation_pr",
-            return_value=None,
-        ), patch.object(
-            scout,
-            "issue_comments",
-            return_value=[{"body": "Planning a fix", "user": {"login": "dev2"}}],
-        ), patch.object(
-            scout,
-            "linked_open_pr_reason",
-            return_value=None,
+        with (
+            patch.object(
+                bounty,
+                "has_existing_implementation_pr",
+                return_value=None,
+            ),
+            patch.object(
+                scout,
+                "issue_comments",
+                return_value=[{"body": "Planning a fix", "user": {"login": "dev2"}}],
+            ),
+            patch.object(
+                scout,
+                "linked_open_pr_reason",
+                return_value=None,
+            ),
         ):
             self.assertEqual(
                 scout.extended_competition_reason(issue(), "t"),
                 "active claim by @dev2",
             )
 
-        with patch.object(
-            bounty,
-            "has_existing_implementation_pr",
-            return_value=None,
-        ), patch.object(
-            scout,
-            "issue_comments",
-            return_value=[],
-        ), patch.object(
-            scout,
-            "linked_open_pr_reason",
-            return_value=None,
+        with (
+            patch.object(
+                bounty,
+                "has_existing_implementation_pr",
+                return_value=None,
+            ),
+            patch.object(
+                scout,
+                "issue_comments",
+                return_value=[],
+            ),
+            patch.object(
+                scout,
+                "linked_open_pr_reason",
+                return_value=None,
+            ),
         ):
             self.assertIsNone(scout.extended_competition_reason(issue(), "t"))
 
@@ -499,21 +562,27 @@ class CalibrationTests(unittest.TestCase):
             comments=1,
         )
         self.assertEqual(scout.estimate_effort(aws), "1–3h")
-        with patch.object(
-            scout,
-            "issue_comments",
-            return_value=[{
-                "body": "Planning a fix:",
-                "user": {"login": "laclance"},
-            }],
-        ), patch.object(
-            bounty,
-            "has_existing_implementation_pr",
-            return_value=None,
-        ), patch.object(
-            scout,
-            "linked_open_pr_reason",
-            return_value=None,
+        with (
+            patch.object(
+                scout,
+                "issue_comments",
+                return_value=[
+                    {
+                        "body": "Planning a fix:",
+                        "user": {"login": "laclance"},
+                    }
+                ],
+            ),
+            patch.object(
+                bounty,
+                "has_existing_implementation_pr",
+                return_value=None,
+            ),
+            patch.object(
+                scout,
+                "linked_open_pr_reason",
+                return_value=None,
+            ),
         ):
             self.assertEqual(
                 scout.extended_competition_reason(aws, "t"),
@@ -585,7 +654,11 @@ class CandidateTests(unittest.TestCase):
         languages = ["TypeScript", "JavaScript", "Ruby", "HCL", "Rust"]
         for lang in languages:
             result = scout.build_candidate(
-                issue(title="README typo" if lang == "Rust" else "Feature", body="storage protocol", comments=2),
+                issue(
+                    title="README typo" if lang == "Rust" else "Feature",
+                    body="storage protocol",
+                    comments=2,
+                ),
                 "strategic",
                 None,
                 repo_meta(language=lang, stargazers_count=500),
@@ -616,7 +689,9 @@ class VerificationTests(unittest.TestCase):
 
     def test_strategic_rejection_paths(self) -> None:
         with patch.object(bounty, "is_clean_candidate", return_value=False):
-            self.assertEqual(scout.strategic_rejection(issue(), "t"), "failed basic eligibility filter")
+            self.assertEqual(
+                scout.strategic_rejection(issue(), "t"), "failed basic eligibility filter"
+            )
 
         self.assertEqual(
             scout.strategic_rejection(issue(body="OSS Opportunity Queue"), "t"),
@@ -627,7 +702,9 @@ class VerificationTests(unittest.TestCase):
             "support/triage issue rather than a contributor task",
         )
         self.assertEqual(
-            scout.strategic_rejection({"html_url": "bad", "title": "x", "body": "", "labels": []}, "t"),
+            scout.strategic_rejection(
+                {"html_url": "bad", "title": "x", "body": "", "labels": []}, "t"
+            ),
             "could not identify repository/issue number",
         )
         with patch.object(scout, "extended_competition_reason", return_value="pr"):
@@ -655,19 +732,23 @@ class VerificationTests(unittest.TestCase):
                 scout.verify(issue(), "t", {}, {})[1],
                 "could not refresh source issue",
             )
-        with patch.object(scout, "refresh_issue", return_value=(issue(), None)), \
-             patch.object(bounty, "is_clean_candidate", return_value=False):
+        with (
+            patch.object(scout, "refresh_issue", return_value=(issue(), None)),
+            patch.object(bounty, "is_clean_candidate", return_value=False),
+        ):
             self.assertEqual(
                 scout.verify(issue(), "t", {}, {})[1],
                 "failed basic eligibility filter after source refresh",
             )
 
         bad_repo = issue(html_url="not-github", comments=0)
-        with patch.object(scout, "refresh_issue", return_value=(bad_repo, None)), \
-             patch.object(bounty, "is_clean_candidate", return_value=True), \
-             patch.object(bounty, "payment_signal", return_value=None), \
-             patch.object(scout, "supplemental_payment_signal", return_value=None), \
-             patch.object(scout, "strategic_rejection", return_value=None):
+        with (
+            patch.object(scout, "refresh_issue", return_value=(bad_repo, None)),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(scout, "strategic_rejection", return_value=None),
+        ):
             self.assertEqual(
                 scout.verify(bad_repo, "t", {}, {})[1],
                 "could not identify repository/issue number",
@@ -675,21 +756,41 @@ class VerificationTests(unittest.TestCase):
 
     def test_verify_paid_issue_signal_success_and_repo_failures(self) -> None:
         fresh = issue(body="bounty $100", comments=0)
-        with patch.object(scout, "refresh_issue", return_value=(fresh, None)), \
-             patch.object(bounty, "candidate_rejection_reason", return_value=(None, "payment term + amount: $100")), \
-             patch.object(bounty, "fetch_repo_metadata", return_value={}):
-            self.assertEqual(scout.verify(fresh, "t", {}, {}, True)[1], "repository metadata unavailable")
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(
+                bounty,
+                "candidate_rejection_reason",
+                return_value=(None, "payment term + amount: $100"),
+            ),
+            patch.object(bounty, "fetch_repo_metadata", return_value={}),
+        ):
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {}, True)[1], "repository metadata unavailable"
+            )
 
-        with patch.object(scout, "refresh_issue", return_value=(fresh, None)), \
-             patch.object(bounty, "candidate_rejection_reason", return_value=(None, "payment term + amount: $100")), \
-             patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta(archived=True)):
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(
+                bounty,
+                "candidate_rejection_reason",
+                return_value=(None, "payment term + amount: $100"),
+            ),
+            patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta(archived=True)),
+        ):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True)[1], "repository is archived")
 
-        with patch.object(scout, "refresh_issue", return_value=(fresh, None)), \
-             patch.object(bounty, "candidate_rejection_reason", return_value=(None, "payment term + amount: $100")), \
-             patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()), \
-             patch.object(scout, "contribution_guide", return_value="guide"), \
-             patch.object(scout, "build_candidate", return_value={"ok": True}):
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(
+                bounty,
+                "candidate_rejection_reason",
+                return_value=(None, "payment term + amount: $100"),
+            ),
+            patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(scout, "contribution_guide", return_value="guide"),
+            patch.object(scout, "build_candidate", return_value={"ok": True}),
+        ):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True), ({"ok": True}, None))
 
     def test_verify_comment_or_override_runs_competition_checks(self) -> None:
@@ -698,37 +799,55 @@ class VerificationTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(bounty, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
-            patch.object(bounty, "candidate_rejection_reason", return_value=("no explicit payment signal", None)),
+            patch.object(
+                bounty,
+                "candidate_rejection_reason",
+                return_value=("no explicit payment signal", None),
+            ),
         ]
         for p in base:
             p.start()
             self.addCleanup(p.stop)
 
-        with patch.object(scout, "comment_payment_signal", return_value="explicit /reward comment: $50"), \
-             patch.object(scout, "extended_competition_reason", return_value="pr"):
+        with (
+            patch.object(
+                scout, "comment_payment_signal", return_value="explicit /reward comment: $50"
+            ),
+            patch.object(scout, "extended_competition_reason", return_value="pr"),
+        ):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True)[1], "pr")
 
-        with patch.object(scout, "comment_payment_signal", return_value="explicit /reward comment: $50"), \
-             patch.object(scout, "extended_competition_reason", return_value="claim"):
+        with (
+            patch.object(
+                scout, "comment_payment_signal", return_value="explicit /reward comment: $50"
+            ),
+            patch.object(scout, "extended_competition_reason", return_value="claim"),
+        ):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True)[1], "claim")
 
         with patch.object(scout, "comment_payment_signal", return_value=None):
-            self.assertEqual(scout.verify(fresh, "t", {}, {}, True)[1], "no explicit payment signal")
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {}, True)[1], "no explicit payment signal"
+            )
 
     def test_verify_non_payment_rejection_and_strategic_success(self) -> None:
         paid = issue(body="bounty $100", comments=0)
-        with patch.object(scout, "refresh_issue", return_value=(paid, None)), \
-             patch.object(bounty, "candidate_rejection_reason", return_value=("unfunded", "x")):
+        with (
+            patch.object(scout, "refresh_issue", return_value=(paid, None)),
+            patch.object(bounty, "candidate_rejection_reason", return_value=("unfunded", "x")),
+        ):
             self.assertEqual(scout.verify(paid, "t", {}, {}, True)[1], "unfunded")
 
         strategic = issue(body="", title="Feature", comments=0)
-        with patch.object(scout, "refresh_issue", return_value=(strategic, None)), \
-             patch.object(bounty, "payment_signal", return_value=None), \
-             patch.object(scout, "supplemental_payment_signal", return_value=None), \
-             patch.object(scout, "strategic_rejection", return_value=None), \
-             patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()), \
-             patch.object(scout, "contribution_guide", return_value=None), \
-             patch.object(scout, "build_candidate", return_value={"lane": "strategic"}):
+        with (
+            patch.object(scout, "refresh_issue", return_value=(strategic, None)),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(scout, "strategic_rejection", return_value=None),
+            patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(scout, "contribution_guide", return_value=None),
+            patch.object(scout, "build_candidate", return_value={"lane": "strategic"}),
+        ):
             self.assertEqual(
                 scout.verify(strategic, "t", {}, {}),
                 ({"lane": "strategic"}, None),
@@ -752,19 +871,43 @@ class DiscoveryTests(unittest.TestCase):
         platform_dirty = issue(html_url="https://github.com/p/p/issues/4")
         platform_bad = "https://github.com/p/p/issues/5"
 
-        with patch.object(bounty, "search_github", return_value={"items": [a, duplicate, dirty]}), \
-             patch.object(bounty, "is_clean_candidate", side_effect=lambda x: x["html_url"] != dirty["html_url"] and x["html_url"] != platform_dirty["html_url"]), \
-             patch.object(scout, "verify", side_effect=[(candidate(url=a["html_url"]), None), (candidate(url=platform["html_url"]), None)]), \
-             patch.object(scout, "platform_paid_refs", return_value={
-                 platform["html_url"]: "sig",
-                 platform_dirty["html_url"]: "sig",
-                 platform_bad: "sig",
-             }), \
-             patch.object(scout, "issue_from_github_url", side_effect=lambda url, token: {
-                 platform["html_url"]: platform,
-                 platform_dirty["html_url"]: platform_dirty,
-                 platform_bad: None,
-             }[url]):
+        with (
+            patch.object(bounty, "search_github", return_value={"items": [a, duplicate, dirty]}),
+            patch.object(
+                bounty,
+                "is_clean_candidate",
+                side_effect=lambda x: (
+                    x["html_url"] != dirty["html_url"]
+                    and x["html_url"] != platform_dirty["html_url"]
+                ),
+            ),
+            patch.object(
+                scout,
+                "verify",
+                side_effect=[
+                    (candidate(url=a["html_url"]), None),
+                    (candidate(url=platform["html_url"]), None),
+                ],
+            ),
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value={
+                    platform["html_url"]: "sig",
+                    platform_dirty["html_url"]: "sig",
+                    platform_bad: "sig",
+                },
+            ),
+            patch.object(
+                scout,
+                "issue_from_github_url",
+                side_effect=lambda url, token: {
+                    platform["html_url"]: platform,
+                    platform_dirty["html_url"]: platform_dirty,
+                    platform_bad: None,
+                }[url],
+            ),
+        ):
             found, rejected, examples = scout.discover_paid("t", set(), {}, {})
         selfEqual = self.assertEqual
         selfEqual({x["url"] for x in found}, {a["html_url"], platform["html_url"]})
@@ -774,10 +917,12 @@ class DiscoveryTests(unittest.TestCase):
     def test_discover_paid_records_rejections_and_seen(self) -> None:
         seen = issue(html_url="https://github.com/a/a/issues/1")
         bad = issue(html_url="https://github.com/a/a/issues/2")
-        with patch.object(bounty, "search_github", return_value={"items": [seen, bad]}), \
-             patch.object(bounty, "is_clean_candidate", return_value=True), \
-             patch.object(scout, "verify", return_value=(None, "claimed")), \
-             patch.object(scout, "platform_paid_refs", return_value={}):
+        with (
+            patch.object(bounty, "search_github", return_value={"items": [seen, bad]}),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(scout, "verify", return_value=(None, "claimed")),
+            patch.object(scout, "platform_paid_refs", return_value={}),
+        ):
             found, rejected, examples = scout.discover_paid("t", {seen["html_url"]}, {}, {})
         self.assertEqual(found, [])
         self.assertGreater(rejected["claimed"], 0)
@@ -795,19 +940,29 @@ class DiscoveryTests(unittest.TestCase):
                 return repo_meta(archived=True)
             return repo_meta()
 
-        with patch.object(scout, "target_repo_queries", return_value=["q"]), \
-             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []), \
-             patch.object(bounty, "search_github", return_value={"items": items}), \
-             patch.object(bounty, "is_clean_candidate", return_value=True), \
-             patch.object(bounty, "fetch_repo_metadata", side_effect=meta), \
-             patch.object(scout, "build_candidate", side_effect=lambda item_, lane, signal, meta_, guide: candidate(
-                 url=item_["html_url"],
-                 paid=(lane == "paid"),
-                 priority_score=90 if item_ is paid else 80,
-             )), \
-             patch.object(scout, "verify", side_effect=lambda item_, *args, **kwargs: (
-                 None, "reject"
-             ) if item_ is paid else (candidate(url=item_["html_url"]), None)):
+        with (
+            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(bounty, "search_github", return_value={"items": items}),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(bounty, "fetch_repo_metadata", side_effect=meta),
+            patch.object(
+                scout,
+                "build_candidate",
+                side_effect=lambda item_, lane, signal, meta_, guide: candidate(
+                    url=item_["html_url"],
+                    paid=(lane == "paid"),
+                    priority_score=90 if item_ is paid else 80,
+                ),
+            ),
+            patch.object(
+                scout,
+                "verify",
+                side_effect=lambda item_, *args, **kwargs: (
+                    (None, "reject") if item_ is paid else (candidate(url=item_["html_url"]), None)
+                ),
+            ),
+        ):
             found, rejected, examples = scout.discover_strategic("t", set(), set(), {}, {})
         self.assertEqual([x["url"] for x in found], [good["html_url"]])
         self.assertEqual(rejected["reject"], 1)
@@ -852,11 +1007,14 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertIn("paid", "\n".join(lines))
 
     def test_main_no_queue(self) -> None:
-        with patch.dict(os.environ, {}, clear=True), \
-             patch.object(bounty, "load_seen_bounties", return_value=set()), \
-             patch.object(scout, "discover_paid", return_value=([], {}, [])), \
-             patch.object(scout, "discover_strategic", return_value=([], {}, [])), \
-             io.StringIO() as buf, redirect_stdout(buf):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [])),
+            io.StringIO() as buf,
+            redirect_stdout(buf),
+        ):
             scout.main()
             self.assertIn("No new verified OSS opportunities found.", buf.getvalue())
 
@@ -882,18 +1040,19 @@ class FormattingAndMainTests(unittest.TestCase):
             "title": "Related to #123",
             "url": "https://github.com/acme/upstream/issues/123",
             "reason": (
-                "existing open implementation PR: "
-                "https://github.com/acme/upstream/pull/456"
+                "existing open implementation PR: https://github.com/acme/upstream/pull/456"
             ),
         }
-        with patch.dict(os.environ, env, clear=True), \
-             patch.object(bounty, "load_seen_bounties", return_value={"old"}), \
-             patch.object(scout, "discover_paid", return_value=([low, high], {"r1": 1}, [reject])), \
-             patch.object(scout, "discover_strategic", return_value=([strategic], {"r2": 2}, [])), \
-             patch.object(bounty, "send_telegram_notification", return_value=True) as tg, \
-             patch.object(bounty, "send_discord_notification", return_value=False) as dc, \
-             patch.object(bounty, "create_github_issue", return_value=True) as gh, \
-             patch.object(bounty, "save_seen_bounties", return_value=True) as save:
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(scout, "discover_paid", return_value=([low, high], {"r1": 1}, [reject])),
+            patch.object(scout, "discover_strategic", return_value=([strategic], {"r2": 2}, [])),
+            patch.object(bounty, "send_telegram_notification", return_value=True) as tg,
+            patch.object(bounty, "send_discord_notification", return_value=False) as dc,
+            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(bounty, "save_seen_bounties", return_value=True) as save,
+        ):
             scout.main()
         tg.assert_called_once()
         dc.assert_called_once()
@@ -926,15 +1085,16 @@ class FormattingAndMainTests(unittest.TestCase):
     def test_main_no_delivery_does_not_save(self) -> None:
         paid = candidate()
         env = {"TELEGRAM_BOT_TOKEN": "tb", "TELEGRAM_CHAT_ID": "chat"}
-        with patch.dict(os.environ, env, clear=True), \
-             patch.object(bounty, "load_seen_bounties", return_value=set()), \
-             patch.object(scout, "discover_paid", return_value=([paid], {}, [])), \
-             patch.object(scout, "discover_strategic", return_value=([], {}, [])), \
-             patch.object(bounty, "send_telegram_notification", return_value=False), \
-             patch.object(bounty, "save_seen_bounties") as save:
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [])),
+            patch.object(bounty, "send_telegram_notification", return_value=False),
+            patch.object(bounty, "save_seen_bounties") as save,
+        ):
             scout.main()
             save.assert_not_called()
-
 
 
 class CoverageGapTests(unittest.TestCase):
@@ -982,9 +1142,7 @@ class CoverageGapTests(unittest.TestCase):
             "https://app.opire.dev/issues/B": (
                 "$50 bounty https://github.com/acme/widget/issues/2"
             ),
-            "https://app.opire.dev/issues/C": (
-                "funded https://github.com/acme/widget/issues/3"
-            ),
+            "https://app.opire.dev/issues/C": ("funded https://github.com/acme/widget/issues/3"),
         }
         with patch.object(scout, "fetch_text", side_effect=opire_pages.get):
             refs = scout.opire_platform_refs()
@@ -1081,20 +1239,24 @@ class CoverageGapTests(unittest.TestCase):
         fresh = issue(body="", title="Task", comments=1)
         repo_cache: dict[str, dict[str, Any]] = {"example/project": repo_meta()}
         guide_cache: dict[str, str | None] = {"example/project": "cached-guide"}
-        with patch.object(scout, "refresh_issue", return_value=(fresh, None)), \
-             patch.object(bounty, "payment_signal", return_value=None), \
-             patch.object(scout, "supplemental_payment_signal", return_value=None), \
-             patch.object(scout, "comment_payment_signal", return_value="explicit /reward comment: $50"), \
-             patch.object(
-                 bounty,
-                 "candidate_rejection_reason",
-                 return_value=("no explicit payment signal", None),
-             ), \
-             patch.object(bounty, "has_existing_implementation_pr", return_value=None), \
-             patch.object(bounty, "active_claim_reason", return_value=None), \
-             patch.object(bounty, "fetch_repo_metadata") as fetch_meta, \
-             patch.object(scout, "contribution_guide") as guide, \
-             patch.object(scout, "build_candidate", return_value={"ok": True}):
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                scout, "comment_payment_signal", return_value="explicit /reward comment: $50"
+            ),
+            patch.object(
+                bounty,
+                "candidate_rejection_reason",
+                return_value=("no explicit payment signal", None),
+            ),
+            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
+            patch.object(bounty, "active_claim_reason", return_value=None),
+            patch.object(bounty, "fetch_repo_metadata") as fetch_meta,
+            patch.object(scout, "contribution_guide") as guide,
+            patch.object(scout, "build_candidate", return_value={"ok": True}),
+        ):
             self.assertEqual(
                 scout.verify(fresh, "t", repo_cache, guide_cache, True),
                 ({"ok": True}, None),
@@ -1104,28 +1266,30 @@ class CoverageGapTests(unittest.TestCase):
 
     def test_verify_strategic_rejection_branch(self) -> None:
         fresh = issue(body="", title="Feature", comments=0)
-        with patch.object(scout, "refresh_issue", return_value=(fresh, None)), \
-             patch.object(bounty, "payment_signal", return_value=None), \
-             patch.object(scout, "supplemental_payment_signal", return_value=None), \
-             patch.object(scout, "strategic_rejection", return_value="support"):
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(scout, "strategic_rejection", return_value="support"),
+        ):
             self.assertEqual(scout.verify(fresh, "t", {}, {})[1], "support")
 
     def test_discover_paid_platform_seen_and_rejection_branches(self) -> None:
         source_seen = "https://github.com/a/a/issues/1"
         source_reject = "https://github.com/a/a/issues/2"
         item_reject = issue(html_url=source_reject)
-        with patch.object(bounty, "search_github", return_value={"items": []}), \
-             patch.object(
-                 scout,
-                 "platform_paid_refs",
-                 return_value={source_seen: "sig", source_reject: "sig"},
-             ), \
-             patch.object(scout, "issue_from_github_url", return_value=item_reject), \
-             patch.object(bounty, "is_clean_candidate", return_value=True), \
-             patch.object(scout, "verify", return_value=(None, "claimed")):
-            found, rejected, examples = scout.discover_paid(
-                "t", {source_seen}, {}, {}
-            )
+        with (
+            patch.object(bounty, "search_github", return_value={"items": []}),
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value={source_seen: "sig", source_reject: "sig"},
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=item_reject),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(scout, "verify", return_value=(None, "claimed")),
+        ):
+            found, rejected, examples = scout.discover_paid("t", {source_seen}, {}, {})
         self.assertEqual(found, [])
         self.assertEqual(rejected["claimed"], 1)
         self.assertEqual(examples[0]["url"], source_reject)
@@ -1135,31 +1299,31 @@ class CoverageGapTests(unittest.TestCase):
         dirty = issue(html_url="https://github.com/a/a/issues/2")
         cached = issue(html_url="https://github.com/a/a/issues/3", title="Feature")
         cache = {"a/a": repo_meta()}
-        with patch.object(scout, "target_repo_queries", return_value=["q"]), \
-             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []), \
-             patch.object(
-                 bounty,
-                 "search_github",
-                 return_value={"items": [seen_item, dirty, cached]},
-             ), \
-             patch.object(
-                 bounty,
-                 "is_clean_candidate",
-                 side_effect=lambda x: x["html_url"] != dirty["html_url"],
-             ), \
-             patch.object(bounty, "fetch_repo_metadata") as fetch_meta, \
-             patch.object(
-                 scout,
-                 "build_candidate",
-                 return_value=candidate(
-                     url=cached["html_url"], priority_score=70
-                 ),
-             ), \
-             patch.object(
-                 scout,
-                 "verify",
-                 return_value=(candidate(url=cached["html_url"]), None),
-             ):
+        with (
+            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(
+                bounty,
+                "search_github",
+                return_value={"items": [seen_item, dirty, cached]},
+            ),
+            patch.object(
+                bounty,
+                "is_clean_candidate",
+                side_effect=lambda x: x["html_url"] != dirty["html_url"],
+            ),
+            patch.object(bounty, "fetch_repo_metadata") as fetch_meta,
+            patch.object(
+                scout,
+                "build_candidate",
+                return_value=candidate(url=cached["html_url"], priority_score=70),
+            ),
+            patch.object(
+                scout,
+                "verify",
+                return_value=(candidate(url=cached["html_url"]), None),
+            ),
+        ):
             found, rejected, examples = scout.discover_strategic(
                 "t", {seen_item["html_url"]}, set(), cache, {}
             )
@@ -1172,12 +1336,14 @@ class CoverageGapTests(unittest.TestCase):
         high = candidate(priority_score=90)
         low = candidate(priority_score=40)
         env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/repo"}
-        with patch.dict(os.environ, env, clear=True), \
-             patch.object(bounty, "load_seen_bounties", return_value=set()), \
-             patch.object(scout, "discover_paid", return_value=([high, low], {}, [])), \
-             patch.object(scout, "discover_strategic", return_value=([], {}, [])), \
-             patch.object(bounty, "create_github_issue", return_value=True) as gh, \
-             patch.object(bounty, "save_seen_bounties", return_value=True):
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(scout, "discover_paid", return_value=([high, low], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [])),
+            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(bounty, "save_seen_bounties", return_value=True),
+        ):
             scout.main()
         body = gh.call_args.args[3]
         self.assertNotIn("Verification rejects", body)
@@ -1185,13 +1351,15 @@ class CoverageGapTests(unittest.TestCase):
     def test_main_short_circuit_conditions_with_no_delivery(self) -> None:
         item_ = candidate()
         env = {"TELEGRAM_BOT_TOKEN": "tb", "GITHUB_TOKEN": "tok"}
-        with patch.dict(os.environ, env, clear=True), \
-             patch.object(bounty, "load_seen_bounties", return_value=set()), \
-             patch.object(scout, "discover_paid", return_value=([item_], {}, [])), \
-             patch.object(scout, "discover_strategic", return_value=([], {}, [])), \
-             patch.object(bounty, "send_telegram_notification") as tg, \
-             patch.object(bounty, "create_github_issue") as gh, \
-             patch.object(bounty, "save_seen_bounties") as save:
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(scout, "discover_paid", return_value=([item_], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [])),
+            patch.object(bounty, "send_telegram_notification") as tg,
+            patch.object(bounty, "create_github_issue") as gh,
+            patch.object(bounty, "save_seen_bounties") as save,
+        ):
             scout.main()
         tg.assert_not_called()
         gh.assert_not_called()

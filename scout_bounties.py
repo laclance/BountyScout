@@ -14,8 +14,8 @@ MAX_COMMENTS = 25  # Filter out overcrowded threads
 
 # GitHub search queries for active bounty opportunities
 SEARCH_QUERIES = [
-    'is:issue is:open bounty in:title,body sort:updated-desc',
-    'is:issue is:open reward bounty sort:updated-desc',
+    "is:issue is:open bounty in:title,body sort:updated-desc",
+    "is:issue is:open reward bounty sort:updated-desc",
     'is:issue is:open "paid" "PR" "bounty" sort:updated-desc',
     'is:issue is:open "Opire" bounty sort:updated-desc',
 ]
@@ -23,7 +23,9 @@ SEARCH_QUERIES = [
 # Strong payment signals. A plain mention of "bounty", "paid", or "reward" is
 # deliberately not enough because those words appear in unrelated issues.
 PAYMENT_TERM_RE = r"(?:bounty|reward|payout|compensation|pay(?:ment|s|ing|s)?|paid)"
-AMOUNT_RE = r"(?:[$€£]\s*\d[\d,]*(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|xmr|sol|eth|btc)\b)"
+AMOUNT_RE = (
+    r"(?:[$€£]\s*\d[\d,]*(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|xmr|sol|eth|btc)\b)"
+)
 
 CLAIM_PATTERNS = [
     r"/attempt\b",
@@ -112,8 +114,7 @@ def payment_signal(item: Mapping[str, Any]) -> str | None:
     body = str(item.get("body", ""))
     labels = item.get("labels") or []
     label_names = [
-        str(label.get("name", "")) if isinstance(label, dict) else str(label)
-        for label in labels
+        str(label.get("name", "")) if isinstance(label, dict) else str(label) for label in labels
     ]
 
     text = f"{title}\n{body}"
@@ -144,9 +145,7 @@ def payment_signal(item: Mapping[str, Any]) -> str | None:
 
     # Some bounty systems put the amount in a label and "bounty" in another.
     amount = re.search(AMOUNT_RE, labels_text, re.IGNORECASE)
-    if amount and re.search(
-        r"\b(?:bounty|reward|payout)\b", labels_text, re.IGNORECASE
-    ):
+    if amount and re.search(r"\b(?:bounty|reward|payout)\b", labels_text, re.IGNORECASE):
         return f"bounty labels: {amount.group(0).strip()}"
 
     # Platform-backed language can be explicit even when the exact amount is
@@ -187,16 +186,20 @@ def has_existing_implementation_pr(repo: str, issue_number: int, token: str | No
     return None
 
 
-def active_claim_reason(repo: str, issue_number: int, comments_count: int, token: str | None) -> str | None:
+def active_claim_reason(
+    repo: str, issue_number: int, comments_count: int, token: str | None
+) -> str | None:
     """Return a reason when recent comments clearly claim or implement the task."""
     if not comments_count:
         return None
 
-    params = urllib.parse.urlencode({
-        "per_page": min(int(comments_count), 30),
-        "sort": "created",
-        "direction": "desc",
-    })
+    params = urllib.parse.urlencode(
+        {
+            "per_page": min(int(comments_count), 30),
+            "sort": "created",
+            "direction": "desc",
+        }
+    )
     url = f"https://api.github.com/repos/{repo}/issues/{issue_number}/comments?{params}"
     comments = github_get(url, token)
     if not isinstance(comments, list):
@@ -245,8 +248,15 @@ def is_clean_candidate(item: Mapping[str, Any]) -> bool:
 
     # Skip cryptocurrency/article writing/spam keywords.
     blocklist = [
-        "airdrop", "referral", "casino", "gambling", "trading bot",
-        "blog post", "article writing", "tutorial proposal", "content creator",
+        "airdrop",
+        "referral",
+        "casino",
+        "gambling",
+        "trading bot",
+        "blog post",
+        "article writing",
+        "tutorial proposal",
+        "content creator",
     ]
     if any(term in title or term in body for term in blocklist):
         return False
@@ -254,29 +264,24 @@ def is_clean_candidate(item: Mapping[str, Any]) -> bool:
     return True
 
 
-def candidate_rejection_reason(item: Mapping[str, Any], token: str | None) -> tuple[str | None, str | None]:
+def candidate_rejection_reason(
+    item: Mapping[str, Any], token: str | None
+) -> tuple[str | None, str | None]:
     """Apply strict money + competition checks and return a rejection reason."""
     title = str(item.get("title", ""))
     body = str(item.get("body", ""))
     labels = item.get("labels") or []
     label_names = [
-        str(label.get("name", "")) if isinstance(label, dict) else str(label)
-        for label in labels
+        str(label.get("name", "")) if isinstance(label, dict) else str(label) for label in labels
     ]
     combined = f"{title}\n{body}"
     lower_combined = combined.lower()
     lower_labels = " ".join(label_names).lower()
 
-    if any(
-        re.search(pattern, combined, re.IGNORECASE)
-        for pattern in UNFUNDED_PROPOSAL_PATTERNS
-    ):
+    if any(re.search(pattern, combined, re.IGNORECASE) for pattern in UNFUNDED_PROPOSAL_PATTERNS):
         return "unfunded bounty proposal, not an existing award", None
 
-    if any(
-        marker in lower_combined or marker in lower_labels
-        for marker in META_ALERT_MARKERS
-    ):
+    if any(marker in lower_combined or marker in lower_labels for marker in META_ALERT_MARKERS):
         return "meta/monitoring alert, not a contributor task", None
 
     signal = payment_signal(item)
@@ -339,7 +344,9 @@ def fetch_repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def score_candidate(item: Mapping[str, Any], signal: str, repo_meta: Mapping[str, Any]) -> tuple[int, str, list[str]]:
+def score_candidate(
+    item: Mapping[str, Any], signal: str, repo_meta: Mapping[str, Any]
+) -> tuple[int, str, list[str]]:
     """Return a transparent 0-100 triage score and short reasons."""
     score = 0
     reasons = []
@@ -427,8 +434,7 @@ def score_candidate(item: Mapping[str, Any], signal: str, repo_meta: Mapping[str
     text = f"{title}\n{body}".lower()
     labels = item.get("labels") or []
     label_names = " ".join(
-        str(label.get("name", "")) if isinstance(label, dict) else str(label)
-        for label in labels
+        str(label.get("name", "")) if isinstance(label, dict) else str(label) for label in labels
     ).lower()
 
     if any(term in label_names for term in ("good first issue", "help wanted")):
@@ -574,24 +580,24 @@ def main() -> None:
             repo_meta = repo_metadata_cache[repo]
 
             score, tier, score_reasons = score_candidate(item, signal, repo_meta)
-            new_bounties.append({
-                "title": item.get("title"),
-                "url": url,
-                "repo": repo,
-                "comments": item.get("comments"),
-                "updated_at": item.get("updated_at"),
-                "payment_signal": signal,
-                "score": score,
-                "tier": tier,
-                "score_reasons": score_reasons,
-                "stars": int(repo_meta.get("stargazers_count") or 0),
-            })
+            new_bounties.append(
+                {
+                    "title": item.get("title"),
+                    "url": url,
+                    "repo": repo,
+                    "comments": item.get("comments"),
+                    "updated_at": item.get("updated_at"),
+                    "payment_signal": signal,
+                    "score": score,
+                    "tier": tier,
+                    "score_reasons": score_reasons,
+                    "stars": int(repo_meta.get("stargazers_count") or 0),
+                }
+            )
             new_bounty_urls.add(url)
 
     if rejected:
-        summary = ", ".join(
-            f"{reason}={count}" for reason, count in sorted(rejected.items())
-        )
+        summary = ", ".join(f"{reason}={count}" for reason, count in sorted(rejected.items()))
         print(f"Filtered candidates: {summary}")
 
     new_bounties.sort(
@@ -614,14 +620,10 @@ def main() -> None:
     for idx, bounty in enumerate(new_bounties, start=1):
         notif_lines.append(f"{idx}. *{bounty['title']}*")
         notif_lines.append(f"   • Repository: `{bounty['repo']}`")
-        notif_lines.append(
-            f"   • Scout score: {bounty['score']}/100 ({bounty['tier']})"
-        )
+        notif_lines.append(f"   • Scout score: {bounty['score']}/100 ({bounty['tier']})")
         notif_lines.append(f"   • Payment signal: {bounty['payment_signal']}")
         notif_lines.append(f"   • Repo stars: {bounty['stars']}")
-        notif_lines.append(
-            f"   • Why: {', '.join(bounty['score_reasons'])}"
-        )
+        notif_lines.append(f"   • Why: {', '.join(bounty['score_reasons'])}")
         notif_lines.append(f"   • Comments: {bounty['comments']}")
         notif_lines.append(f"   • Link: {bounty['url']}\n")
 
@@ -647,8 +649,7 @@ def main() -> None:
         notification_attempted = True
         discord_msg = notification_msg.replace("•", "-")
         notification_succeeded = (
-            send_discord_notification(discord_webhook, discord_msg)
-            or notification_succeeded
+            send_discord_notification(discord_webhook, discord_msg) or notification_succeeded
         )
 
     if github_token and repo_fullname:
@@ -691,10 +692,7 @@ def main() -> None:
         if save_seen_bounties(seen_urls):
             print("State saved successfully.")
     else:
-        print(
-            "No notification was delivered; state not updated so these "
-            "bounties will be retried."
-        )
+        print("No notification was delivered; state not updated so these bounties will be retried.")
 
 
 if __name__ == "__main__":

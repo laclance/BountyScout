@@ -37,14 +37,17 @@ TARGET_REPO_QUERY_CHUNK = 3
 STRATEGIC_VERIFY_LIMIT = 12
 REPORT_LIMIT = 8
 
-PAID_DISCOVERY_QUERIES = list(dict.fromkeys(
-    bounty.SEARCH_QUERIES + [
-        'is:issue is:open "/reward" in:comments sort:updated-desc',
-        'is:issue is:open "/bounty" in:comments sort:updated-desc',
-        'is:issue is:open (opire.dev OR bountyhub.dev OR algora.io) in:comments sort:updated-desc',
-        'is:issue is:open (reward OR compensation OR payout OR "cash prize") "$" in:title,body sort:updated-desc',
-    ]
-))
+PAID_DISCOVERY_QUERIES = list(
+    dict.fromkeys(
+        bounty.SEARCH_QUERIES
+        + [
+            'is:issue is:open "/reward" in:comments sort:updated-desc',
+            'is:issue is:open "/bounty" in:comments sort:updated-desc',
+            "is:issue is:open (opire.dev OR bountyhub.dev OR algora.io) in:comments sort:updated-desc",
+            'is:issue is:open (reward OR compensation OR payout OR "cash prize") "$" in:title,body sort:updated-desc',
+        ]
+    )
+)
 EXTENDED_AMOUNT_RE = (
     r"(?:[$€£¥₹]\s*\d[\d,]*(?:\.\d+)?|"
     r"(?<![A-Za-z])R\s*\d[\d,]*(?:\.\d+)?|"
@@ -60,8 +63,7 @@ def target_repo_queries() -> list[str]:
     queries = []
     for start in range(0, len(TARGET_REPOS), TARGET_REPO_QUERY_CHUNK):
         repos = " ".join(
-            f"repo:{repo}"
-            for repo in TARGET_REPOS[start:start + TARGET_REPO_QUERY_CHUNK]
+            f"repo:{repo}" for repo in TARGET_REPOS[start : start + TARGET_REPO_QUERY_CHUNK]
         )
         queries.append(f"is:issue is:open no:assignee {repos} sort:updated-desc")
     return queries
@@ -93,15 +95,19 @@ def estimate_effort(item: Mapping[str, Any]) -> str:
         )
     ):
         return "1d+"
-    if re.search(
-        r"\b(?:typo|spelling|readme|documentation|docs-only)\b", text
-    ) and len(body) < 5000:
+    if (
+        re.search(r"\b(?:typo|spelling|readme|documentation|docs-only)\b", text)
+        and len(body) < 5000
+    ):
         return "<1h"
-    if re.search(
-        r"\b(?:regression|deterministic|panic|deadlock|race|leak|incorrect|"
-        r"failing test|unit test|single|small|narrow|fix)\b",
-        f"{title.lower()} {labels} {text[:3000]}",
-    ) and int(item.get("comments") or 0) <= 5:
+    if (
+        re.search(
+            r"\b(?:regression|deterministic|panic|deadlock|race|leak|incorrect|"
+            r"failing test|unit test|single|small|narrow|fix)\b",
+            f"{title.lower()} {labels} {text[:3000]}",
+        )
+        and int(item.get("comments") or 0) <= 5
+    ):
         return "1–3h"
     if len(body) > 12000 or int(item.get("comments") or 0) > 12:
         return "1d+"
@@ -217,7 +223,9 @@ TRIAGE_PENDING_LABELS = {"needs-triage"}
 TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
 
 
-def linked_open_pr_reason(item: Mapping[str, Any], token: str | None, comments: list[dict[str, Any]] | None = None) -> str | None:
+def linked_open_pr_reason(
+    item: Mapping[str, Any], token: str | None, comments: list[dict[str, Any]] | None = None
+) -> str | None:
     """Detect explicit implementation PR links in issue comments."""
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number or not int(item.get("comments") or 0):
@@ -257,7 +265,9 @@ def linked_open_pr_reason(item: Mapping[str, Any], token: str | None, comments: 
     return None
 
 
-def supplemental_claim_reason(item: Mapping[str, Any], token: str | None, comments: list[dict[str, Any]] | None = None) -> str | None:
+def supplemental_claim_reason(
+    item: Mapping[str, Any], token: str | None, comments: list[dict[str, Any]] | None = None
+) -> str | None:
     """Detect clear work claims not covered by the upstream scanner."""
     if not int(item.get("comments") or 0):
         return None
@@ -319,10 +329,7 @@ def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
         return f"explicit paid-work wording: {amount_near.group(1).strip()}"
 
     amount = re.search(EXTENDED_AMOUNT_RE, text, re.IGNORECASE)
-    if (
-        ("bountyhub.dev" in text.lower() or "bountyhub.dev" in labels)
-        and amount
-    ):
+    if ("bountyhub.dev" in text.lower() or "bountyhub.dev" in labels) and amount:
         return f"named bounty platform + amount (BountyHub): {amount.group(0).strip()}"
 
     return None
@@ -355,7 +362,9 @@ def comment_payment_signal(item: Mapping[str, Any], token: str | None) -> str | 
         if (
             amount
             and ("bountyhub" in login or "bountyhub.dev" in body.lower())
-            and re.search(r"\bbounty\b.*\bcreated\b|\bcreated\b.*\bbounty\b", body, re.IGNORECASE | re.DOTALL)
+            and re.search(
+                r"\bbounty\b.*\bcreated\b|\bcreated\b.*\bbounty\b", body, re.IGNORECASE | re.DOTALL
+            )
         ):
             return f"confirmed bounty platform comment (BountyHub): {amount.group(0).strip()}"
 
@@ -419,7 +428,7 @@ def issuehunt_platform_refs() -> dict[str, str]:
         for match in pattern.finditer(page_html):
             owner, repo, number = match.group(2), match.group(3), match.group(4)
             source_url = f"https://github.com/{owner}/{repo}/issues/{number}"
-            nearby = page_html[match.end():match.end() + 1200]
+            nearby = page_html[match.end() : match.end() + 1200]
             amount = re.search(r"\$\s*\d[\d,]*(?:\.\d+)?", nearby)
             signal = "confirmed bounty platform feed (IssueHunt)"
             if amount:
@@ -443,10 +452,14 @@ def opire_platform_refs() -> dict[str, str]:
     for source_url in direct[:PLATFORM_FETCH_LIMIT]:
         refs[source_url] = "confirmed bounty platform feed (Opire)"
 
-    detail_paths = list(dict.fromkeys(re.findall(
-        r'href=["\'](/issues/[A-Za-z0-9_-]+)["\']',
-        normalized,
-    )))[:PLATFORM_FETCH_LIMIT]
+    detail_paths = list(
+        dict.fromkeys(
+            re.findall(
+                r'href=["\'](/issues/[A-Za-z0-9_-]+)["\']',
+                normalized,
+            )
+        )
+    )[:PLATFORM_FETCH_LIMIT]
 
     for path in detail_paths:
         detail = fetch_text("https://app.opire.dev" + path)
@@ -487,10 +500,14 @@ def bountyhub_platform_refs() -> dict[str, str]:
     for source_url in direct[:PLATFORM_FETCH_LIMIT]:
         refs[source_url] = "confirmed bounty platform feed (BountyHub)"
 
-    detail_paths = list(dict.fromkeys(re.findall(
-        r'href=["\'](/en/bounty/view/[A-Za-z0-9_-]+)["\']',
-        normalized,
-    )))[:PLATFORM_FETCH_LIMIT]
+    detail_paths = list(
+        dict.fromkeys(
+            re.findall(
+                r'href=["\'](/en/bounty/view/[A-Za-z0-9_-]+)["\']',
+                normalized,
+            )
+        )
+    )[:PLATFORM_FETCH_LIMIT]
 
     for path in detail_paths:
         detail = fetch_text("https://www.bountyhub.dev" + path)
@@ -535,7 +552,13 @@ def contribution_guide(repo: str, token: str | None) -> str | None:
     return None
 
 
-def build_candidate(item: Mapping[str, Any], lane: str, signal: str | None, repo_meta: Mapping[str, Any], guide: str | None) -> dict[str, Any]:
+def build_candidate(
+    item: Mapping[str, Any],
+    lane: str,
+    signal: str | None,
+    repo_meta: Mapping[str, Any],
+    guide: str | None,
+) -> dict[str, Any]:
     repo, number = bounty.issue_repo_and_number(item)
     effort = estimate_effort(item)
     comp = competition(item)
@@ -553,9 +576,29 @@ def build_candidate(item: Mapping[str, Any], lane: str, signal: str | None, repo
         cash += round(confidence * 0.30)
         cash_reasons.append(f"payment confidence {confidence}/100")
         if amount is not None:
-            cash += 20 if amount >= 500 else 16 if amount >= 100 else 12 if amount >= 25 else 8 if amount >= 5 else 4
+            cash += (
+                20
+                if amount >= 500
+                else 16
+                if amount >= 100
+                else 12
+                if amount >= 25
+                else 8
+                if amount >= 5
+                else 4
+            )
             hourly = amount / effort_hours(effort)
-            cash += 25 if hourly >= 100 else 21 if hourly >= 50 else 16 if hourly >= 20 else 10 if hourly >= 10 else 4
+            cash += (
+                25
+                if hourly >= 100
+                else 21
+                if hourly >= 50
+                else 16
+                if hourly >= 20
+                else 10
+                if hourly >= 10
+                else 4
+            )
             cash_reasons.append(f"~${hourly:.0f}/h expected value")
         else:
             cash_reasons.append("reward not USD-comparable")
@@ -590,13 +633,36 @@ def build_candidate(item: Mapping[str, Any], lane: str, signal: str | None, repo
 
     language = str(repo_meta.get("language") or "Unknown")
     lang = language.lower()
-    skill = 14 if lang == "go" else 13 if lang in ("typescript", "javascript") else 11 if lang in ("ruby", "php") else 10 if lang == "hcl" else 0
+    skill = (
+        14
+        if lang == "go"
+        else 13
+        if lang in ("typescript", "javascript")
+        else 11
+        if lang in ("ruby", "php")
+        else 10
+        if lang == "hcl"
+        else 0
+    )
     if skill:
         career_reasons.append(f"{language} codebase")
     infra_terms = (
-        "kubernetes", "aws", "network", "dns", "proxy", "routing",
-        "observability", "prometheus", "otel", "distributed", "controller",
-        "terraform", "gitops", "backend", "api", "concurrency",
+        "kubernetes",
+        "aws",
+        "network",
+        "dns",
+        "proxy",
+        "routing",
+        "observability",
+        "prometheus",
+        "otel",
+        "distributed",
+        "controller",
+        "terraform",
+        "gitops",
+        "backend",
+        "api",
+        "concurrency",
     )
     if any(term in text for term in infra_terms):
         skill += 6
@@ -604,11 +670,29 @@ def build_candidate(item: Mapping[str, Any], lane: str, signal: str | None, repo
     career += min(20, skill)
 
     depth_terms = (
-        "race", "deadlock", "concurrency", "network", "protocol", "controller",
-        "distributed", "storage", "performance", "memory", "leak", "api",
+        "race",
+        "deadlock",
+        "concurrency",
+        "network",
+        "protocol",
+        "controller",
+        "distributed",
+        "storage",
+        "performance",
+        "memory",
+        "leak",
+        "api",
     )
     depth = sum(term in text for term in depth_terms)
-    career += 15 if depth >= 3 else 9 if depth >= 1 else 5 if re.search(r"\b(?:test|regression|bug|fix)\b", text) else 0
+    career += (
+        15
+        if depth >= 3
+        else 9
+        if depth >= 1
+        else 5
+        if re.search(r"\b(?:test|regression|bug|fix)\b", text)
+        else 0
+    )
     if depth:
         career_reasons.append("meaningful technical depth")
 
@@ -634,8 +718,10 @@ def build_candidate(item: Mapping[str, Any], lane: str, signal: str | None, repo
         career_reasons.append("large-scope penalty")
     career = max(0, min(100, career))
 
-    priority = career if lane == "strategic" else min(
-        100, max(cash, career) + (5 if cash >= 70 and career >= 70 else 0)
+    priority = (
+        career
+        if lane == "strategic"
+        else min(100, max(cash, career) + (5 if cash >= 70 and career >= 70 else 0))
     )
     labels = [
         str(x.get("name", "")) if isinstance(x, dict) else str(x)
@@ -668,7 +754,9 @@ def build_candidate(item: Mapping[str, Any], lane: str, signal: str | None, repo
     }
 
 
-def refresh_issue(item: Mapping[str, Any], token: str | None) -> tuple[dict[str, Any] | None, str | None]:
+def refresh_issue(
+    item: Mapping[str, Any], token: str | None
+) -> tuple[dict[str, Any] | None, str | None]:
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number:
         return None, "could not identify repository/issue number"
@@ -688,29 +776,27 @@ def strategic_rejection(item: Mapping[str, Any], token: str | None) -> str | Non
     _, _, labels, text = issue_text(item)
     if "oss opportunity queue" in text:
         return "generated opportunity-scout report"
-    if any(x in labels for x in (
-        "question", "support", "needs info", "needs-info", "needs-information",
-        "waiting for info", "waiting-for-info", "invalid",
-    )):
+    if any(
+        x in labels
+        for x in (
+            "question",
+            "support",
+            "needs info",
+            "needs-info",
+            "needs-information",
+            "waiting for info",
+            "waiting-for-info",
+            "invalid",
+        )
+    ):
         return "support/triage issue rather than a contributor task"
 
     label_set = {
-        (
-            str(label.get("name", ""))
-            if isinstance(label, dict)
-            else str(label)
-        ).strip().lower()
+        (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip().lower()
         for label in (item.get("labels") or [])
-        if (
-            str(label.get("name", ""))
-            if isinstance(label, dict)
-            else str(label)
-        ).strip()
+        if (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip()
     }
-    if (
-        TRIAGE_PENDING_LABELS & label_set
-        and not TRIAGE_ACCEPTED_LABELS & label_set
-    ):
+    if TRIAGE_PENDING_LABELS & label_set and not TRIAGE_ACCEPTED_LABELS & label_set:
         return "awaiting maintainer triage"
 
     return extended_competition_reason(item, token)
@@ -782,7 +868,9 @@ def verify(
     return build_candidate(fresh, lane, signal, repo_meta, guide_cache[repo]), None
 
 
-def add_reject(counts: dict[str, int], examples: list[dict[str, Any]], item: Mapping[str, Any], reason: str) -> None:
+def add_reject(
+    counts: dict[str, int], examples: list[dict[str, Any]], item: Mapping[str, Any], reason: str
+) -> None:
     counts[reason] = counts.get(reason, 0) + 1
     if len(examples) < 12:
         examples.append({"url": item.get("html_url"), "title": item.get("title"), "reason": reason})
@@ -881,7 +969,9 @@ def discover_strategic(
             signal = bounty.payment_signal(item)
             lane = "paid" if signal else "strategic"
             preview = build_candidate(item, lane, signal, meta, None)
-            provisional.append((preview["priority_score"], preview["career_score"], preview["cash_score"], item))
+            provisional.append(
+                (preview["priority_score"], preview["career_score"], preview["cash_score"], item)
+            )
 
     provisional.sort(key=lambda row: row[:3], reverse=True)
     found: list[dict[str, Any]] = []
@@ -902,8 +992,7 @@ def github_report_ref(text: Any) -> str:
     return re.sub(
         r"https://github\.com/([^/\s]+)/([^/\s]+)/(issues|pull)/(\d+)",
         lambda m: (
-            f"https://redirect.github.com/{m.group(1)}/{m.group(2)}/"
-            f"{m.group(3)}/{m.group(4)}"
+            f"https://redirect.github.com/{m.group(1)}/{m.group(2)}/{m.group(3)}/{m.group(4)}"
         ),
         value,
         flags=re.IGNORECASE,
@@ -912,8 +1001,16 @@ def github_report_ref(text: Any) -> str:
 
 def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
     lane = "Paid" if candidate["paid"] else "Strategic OSS"
-    hourly = f"~${candidate['expected_hourly']:.0f}/h" if candidate["expected_hourly"] is not None else "unknown / not USD-comparable"
-    guide = f"[contribution guide]({candidate['contribution_guide']})" if candidate["contribution_guide"] else "not found at common paths"
+    hourly = (
+        f"~${candidate['expected_hourly']:.0f}/h"
+        if candidate["expected_hourly"] is not None
+        else "unknown / not USD-comparable"
+    )
+    guide = (
+        f"[contribution guide]({candidate['contribution_guide']})"
+        if candidate["contribution_guide"]
+        else "not found at common paths"
+    )
     return (
         f"#### {idx}. [{candidate['repo']} #{candidate['issue_number']}: "
         f"{github_report_ref(candidate['title'])}]({github_report_ref(candidate['url'])})\n"
@@ -989,10 +1086,16 @@ def main() -> None:
     discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     if telegram_token and telegram_chat_id:
         attempted = True
-        delivered = bounty.send_telegram_notification(telegram_token, telegram_chat_id, message) or delivered
+        delivered = (
+            bounty.send_telegram_notification(telegram_token, telegram_chat_id, message)
+            or delivered
+        )
     if discord_webhook:
         attempted = True
-        delivered = bounty.send_discord_notification(discord_webhook, message.replace("•", "-")) or delivered
+        delivered = (
+            bounty.send_discord_notification(discord_webhook, message.replace("•", "-"))
+            or delivered
+        )
 
     if token and repo_fullname:
         attempted = True
@@ -1012,18 +1115,24 @@ def main() -> None:
                 title = github_report_ref(item["title"] or source)
                 reason = github_report_ref(item["reason"])
                 body += f"- [{title}]({source}): {reason}\n"
-        delivered = bounty.create_github_issue(
-            repo_fullname,
-            token,
-            f"🎯 OSS Opportunity Queue: {len(queue)} new verified candidate{'s' if len(queue) != 1 else ''}",
-            body,
-        ) or delivered
+        delivered = (
+            bounty.create_github_issue(
+                repo_fullname,
+                token,
+                f"🎯 OSS Opportunity Queue: {len(queue)} new verified candidate{'s' if len(queue) != 1 else ''}",
+                body,
+            )
+            or delivered
+        )
 
     rejects = dict(paid_rejects)
     for reason, count in strategic_rejects.items():
         rejects[reason] = rejects.get(reason, 0) + count
     if rejects:
-        print("Filtered verified candidates: " + ", ".join(f"{k}={v}" for k, v in sorted(rejects.items())))
+        print(
+            "Filtered verified candidates: "
+            + ", ".join(f"{k}={v}" for k, v in sorted(rejects.items()))
+        )
 
     if attempted and delivered:
         seen.update(x["url"] for x in queue)
