@@ -192,6 +192,37 @@ def issue_comments(item, token):
     return comments if isinstance(comments, list) else []
 
 
+def supplemental_payment_signal(item):
+    """Recognize explicit paid-work wording outside the upstream vocabulary."""
+    title, body, labels, _ = issue_text(item)
+    text = f"{title}\n{body}"
+    term = r"(?:cash\s+prize|stipend|sponsored(?:\s+work)?|funded\s+task)"
+    near_amount = re.search(
+        term + r".{0,80}?(" + EXTENDED_AMOUNT_RE + r")",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if near_amount:
+        return f"explicit paid-work wording: {near_amount.group(1).strip()}"
+
+    amount_near = re.search(
+        r"(" + EXTENDED_AMOUNT_RE + r").{0,80}?" + term,
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if amount_near:
+        return f"explicit paid-work wording: {amount_near.group(1).strip()}"
+
+    if (
+        ("bountyhub.dev" in text.lower() or "bountyhub.dev" in labels)
+        and re.search(EXTENDED_AMOUNT_RE, text, re.IGNORECASE)
+    ):
+        amount = re.search(EXTENDED_AMOUNT_RE, text, re.IGNORECASE)
+        return f"named bounty platform + amount (BountyHub): {amount.group(0).strip()}"
+
+    return None
+
+
 def comment_payment_signal(item, token):
     """Recognize confirmed platform comments and trusted bounty commands."""
     comments = issue_comments(item, token)
@@ -229,7 +260,7 @@ def comment_payment_signal(item, token):
             re.IGNORECASE,
         )
         if reward:
-            return f"explicit /reward comment: $\{reward.group(1)}"
+            return f"explicit /reward comment: ${reward.group(1)}"
 
         algora = re.search(
             r"/bounty\s+(" + EXTENDED_AMOUNT_RE + r")",
@@ -529,7 +560,7 @@ def verify(
     if not bounty.is_clean_candidate(fresh):
         return None, "failed basic eligibility filter after source refresh"
 
-    issue_signal = bounty.payment_signal(fresh)
+    issue_signal = bounty.payment_signal(fresh) or supplemental_payment_signal(fresh)
     comment_signal = None
     if not issue_signal and int(fresh.get("comments") or 0):
         comment_signal = comment_payment_signal(fresh, token)
