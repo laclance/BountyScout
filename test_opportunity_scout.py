@@ -630,6 +630,41 @@ class FormattingAndMainTests(unittest.TestCase):
 
 
 class CoverageGapTests(unittest.TestCase):
+    def test_trusted_non_command_comment_falls_through_to_next_comment(self):
+        comments = [
+            {
+                "body": "I support funding this",
+                "author_association": "OWNER",
+                "user": {"login": "owner"},
+            },
+            {
+                "body": "/reward 7",
+                "author_association": "MEMBER",
+                "user": {"login": "member"},
+            },
+        ]
+        with patch.object(scout, "issue_comments", return_value=comments):
+            self.assertEqual(
+                scout.comment_payment_signal(issue(), "t"),
+                "explicit /reward comment: $7",
+            )
+
+    def test_paid_candidate_under_100_stars(self):
+        result = scout.build_candidate(
+            issue(title="Feature", body="plain", comments=4),
+            "paid",
+            "payment term + amount: $25",
+            repo_meta(
+                stargazers_count=50,
+                pushed_at=(datetime.now(timezone.utc) - timedelta(days=120)).isoformat(),
+                language="Rust",
+            ),
+            None,
+        )
+        self.assertTrue(result["paid"])
+        self.assertEqual(result["stars"], 50)
+        self.assertGreater(result["cash_score"], 0)
+
     def test_platform_detail_empty_amount_and_no_amount_branches(self):
         opire_pages = {
             "https://app.opire.dev/home": (
