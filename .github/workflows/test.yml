@@ -6,6 +6,8 @@ on:
       - "scout_bounties.py"
       - "opportunity_scout.py"
       - "test_opportunity_scout.py"
+      - "test_scout_bounties.py"
+      - ".coveragerc"
       - ".github/workflows/test.yml"
   push:
     branches: [main]
@@ -13,6 +15,9 @@ on:
       - "scout_bounties.py"
       - "opportunity_scout.py"
       - "test_opportunity_scout.py"
+      - "test_scout_bounties.py"
+      - ".coveragerc"
+      - ".github/workflows/test.yml"
 
 jobs:
   test:
@@ -22,5 +27,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - run: python -m py_compile scout_bounties.py opportunity_scout.py test_opportunity_scout.py
-      - run: python -m unittest -v test_opportunity_scout.py
+      - run: python -m pip install coverage
+      - run: python -m py_compile scout_bounties.py opportunity_scout.py test_scout_bounties.py test_opportunity_scout.py
+      - run: coverage run --branch -m unittest -v
+      - run: coverage report
