@@ -827,8 +827,311 @@ def create_github_issue(repo_fullname, token, title, body):
         return False
 
 
+def refresh_issue_source(item, token):
+    """Refresh the source issue before recommending it."""
+    repo, issue_number = issue_repo_and_number(item)
+    if not repo or not issue_number:
+        return None, "could not identify repository/issue number"
+
+    fresh = github_get(
+        f"https://api.github.com/repos/{repo}/issues/{issue_number}",
+        token,
+    )
+    if not isinstance(fresh, dict):
+        return None, "could not refresh source issue"
+    if fresh.get("state") != "open":
+        return None, "issue is no longer open"
+    if "pull_request" in fresh:
+        return None, "source is a pull request, not an issue"
+    return fresh, None
+
+
+def strategic_rejection_reason(item, token):
+    """Apply strategic-lane quality and competition filters."""
+    if not is_clean_candidate(item):
+        return "failed basic eligibility filter"
+
+    _, _, labels_text, _ = issue_text_and_labels(item)
+    support_markers = (
+        "question",
+        "support",
+        "needs info",
+        "needs-info",
+        "needs-information",
+        "waiting for info",
+        "waiting-for-info",
+        "invalid",
+    )
+    if any(marker in labels_text for marker in support_markers):
+        return "support/triage issue rather than a bounded contributor task"
+
+    repo, issue_number = issue_repo_and_number(item)
+    if not repo or not issue_number:
+        return "could not identify repository/issue number"
+
+    pr_reason = has_existing_implementation_pr(repo, issue_number, token)
+    if pr_reason:
+        return pr_reason
+
+    claim_reason = active_claim_reason(
+        repo,
+        issue_number,
+        int(item.get("comments", 0)),
+        token,
+    )
+    if claim_reason:
+        return claim_reason
+
+    return None
+
+
+def verify_candidate(
+    item,
+    token,
+    repo_metadata_cache,
+    contribution_guide_cache,
+    require_paid=False,
+):
+    """Verify source authority, competition, repo legitimacy, and process."""
+    fresh, refresh_error = refresh_issue_source(item, token)
+    if refresh_error:
+        return None, refresh_error
+
+    if not is_clean_candidate(fresh):
+        return None, "failed basic eligibility filter after source refresh"
+
+    signal = payment_signal(fresh)
+    if require_paid or signal:
+        rejection, verified_signal = candidate_rejection_reason(fresh, token)
+        if rejection:
+            return None, rejection
+        signal = verified_signal
+        lane = "paid"
+    else:
+        rejection = strategic_rejection_reason(fresh, token)
+        if rejection:
+            return None, rejection
+        lane = "strategic"
+
+    repo, _ = issue_repo_and_number(fresh)
+    if repo not in repo_metadata_cache:
+        repo_metadata_cache[repo] = fetch_repo_metadata(repo, token)
+    repo_meta = repo_metadata_cache[repo]
+    if not repo_meta:
+        return None, "repository metadata unavailable"
+    if repo_meta.get("archived"):
+        return None, "repository is archived"
+
+    if repo not in contribution_guide_cache:
+        contribution_guide_cache[repo] = find_contribution_guide(repo, token)
+
+    return (
+        build_candidate(
+            fresh,
+            lane,
+            signal,
+            repo_meta,
+            contribution_guide_cache[repo],
+        ),
+        None,
+    )
+
+
+def add_rejection(rejected, rejected_examples, item, reason):
+    """Track rejection counts plus a few auditable source examples."""
+    rejected[reason] = rejected.get(reason, 0) + 1
+    if len(rejected_examples) < 12:
+        rejected_examples.append({
+            "url": item.get("html_url"),
+            "title": item.get("title"),
+            "reason": reason,
+        })
+
+
+def discover_paid_candidates(
+    token,
+    seen_urls,
+    repo_metadata_cache,
+    contribution_guide_cache,
+):
+    """Discover and fully verify the explicit paid lane."""
+    candidates = []
+    discovered_urls = set()
+    rejected = {}
+    rejected_examples = []
+
+    for query in PAID_SEARCH_QUERIES:
+        results = search_github(query, token)
+        for item in results.get("items", []):
+            url = item.get("html_url")
+            if not url or url in seen_urls or url in discovered_urls:
+                continue
+            discovered_urls.add(url)
+
+            if not is_clean_candidate(item):
+                continue
+
+            candidate, rejection = verify_candidate(
+                item,
+                token,
+                repo_metadata_cache,
+                contribution_guide_cache,
+                require_paid=True,
+            )
+            if rejection:
+                add_rejection(rejected, rejected_examples, item, rejection)
+                print(f"Skipping paid candidate {url}: {rejection}")
+                continue
+            candidates.append(candidate)
+
+    return candidates, rejected, rejected_examples
+
+
+def discover_strategic_candidates(
+    token,
+    seen_urls,
+    already_found_urls,
+    repo_metadata_cache,
+    contribution_guide_cache,
+):
+    """Discover broadly, then spend expensive verification on the best few."""
+    provisional = []
+    discovered_urls = set()
+    rejected = {}
+    rejected_examples = []
+
+    queries = target_repo_search_queries() + STRATEGIC_GLOBAL_QUERIES
+    for query in queries:
+        results = search_github(query, token, per_page=12)
+        for item in results.get("items", []):
+            url = item.get("html_url")
+            if (
+                not url
+                or url in seen_urls
+                or url in already_found_urls
+                or url in discovered_urls
+            ):
+                continue
+            discovered_urls.add(url)
+
+            if not is_clean_candidate(item):
+                continue
+
+            repo, _ = issue_repo_and_number(item)
+            if not repo:
+                continue
+            if repo not in repo_metadata_cache:
+                repo_metadata_cache[repo] = fetch_repo_metadata(repo, token)
+            repo_meta = repo_metadata_cache[repo]
+            if not repo_meta or repo_meta.get("archived"):
+                continue
+
+            signal = payment_signal(item)
+            lane = "paid" if signal else "strategic"
+            provisional_candidate = build_candidate(
+                item,
+                lane,
+                signal,
+                repo_meta,
+                None,
+            )
+            provisional.append((
+                provisional_candidate["priority_score"],
+                provisional_candidate["career_score"],
+                provisional_candidate["cash_score"],
+                item,
+            ))
+
+    provisional.sort(
+        key=lambda row: (row[0], row[1], row[2]),
+        reverse=True,
+    )
+
+    verified = []
+    for _, _, _, item in provisional[:STRATEGIC_VERIFY_LIMIT]:
+        candidate, rejection = verify_candidate(
+            item,
+            token,
+            repo_metadata_cache,
+            contribution_guide_cache,
+            require_paid=False,
+        )
+        if rejection:
+            add_rejection(rejected, rejected_examples, item, rejection)
+            print(
+                f"Skipping strategic candidate {item.get('html_url')}: "
+                f"{rejection}"
+            )
+            continue
+        verified.append(candidate)
+
+    return verified, rejected, rejected_examples
+
+
+def merge_counts(target, source):
+    for key, count in source.items():
+        target[key] = target.get(key, 0) + count
+
+
+def candidate_notification_lines(candidate, idx):
+    """Compact cross-channel summary that stays below chat message limits."""
+    lane = "paid" if candidate["paid"] else "strategic OSS"
+    reward = candidate["reward"] or "none"
+    title = str(candidate["title"] or "")
+    if len(title) > 110:
+        title = title[:107] + "..."
+
+    return [
+        f"{idx}. *{candidate['repo']} #{candidate['issue_number']}* — {title}",
+        f"   • Lane: {lane} | Reward: {reward}",
+        (
+            f"   • Cash: {candidate['cash_score']}/100 | "
+            f"Career: {candidate['career_score']}/100"
+        ),
+        (
+            f"   • Effort: {candidate['effort']} | "
+            f"Competition: {candidate['competition']}"
+        ),
+        f"   • Link: {candidate['url']}",
+    ]
+
+
+def candidate_issue_markdown(candidate, idx):
+    """Full GitHub issue rendering for a ranked opportunity."""
+    lane = "Paid" if candidate["paid"] else "Strategic OSS"
+    reward = candidate["reward"] or "none"
+    guide = (
+        f"[contribution guide]({candidate['contribution_guide']})"
+        if candidate["contribution_guide"]
+        else "not found at common paths"
+    )
+    labels = ", ".join(candidate["labels"]) or "none"
+    cash_why = ", ".join(candidate["cash_reasons"]) or "unpaid lane"
+    career_why = ", ".join(candidate["career_reasons"]) or "no career signals"
+
+    return (
+        f"#### {idx}. [{candidate['repo']} #{candidate['issue_number']}: "
+        f"{candidate['title']}]({candidate['url']})\n"
+        f"- **Paid / unpaid:** {lane}\n"
+        f"- **Reward:** {reward}\n"
+        f"- **Payment confidence:** {candidate['payment_confidence']}/100\n"
+        f"- **Cash score:** {candidate['cash_score']}/100\n"
+        f"- **Career score:** {candidate['career_score']}/100\n"
+        f"- **Effort:** {candidate['effort']}\n"
+        f"- **Competition:** {candidate['competition']}\n"
+        f"- **Repo stars:** {candidate['stars']}\n"
+        f"- **Repo recent activity:** {candidate['recent_activity']}\n"
+        f"- **Language:** {candidate['language']}\n"
+        f"- **Labels:** {labels}\n"
+        f"- **Contribution process:** {guide}\n"
+        f"- **Cash reasons:** {cash_why}\n"
+        f"- **Career reasons:** {career_why}\n"
+        f"- **Rejection reason:** none\n"
+        f"- **Last updated:** {candidate['updated_at']}\n\n"
+    )
+
+
 def main():
-    # Load credentials/secrets from environment variables.
     github_token = os.environ.get("GITHUB_TOKEN")
     repo_fullname = os.environ.get("GITHUB_REPOSITORY")
 
@@ -837,88 +1140,86 @@ def main():
     discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
 
     seen_urls = load_seen_bounties()
-    new_bounties = []
-    new_bounty_urls = set()
-    rejected = {}
     repo_metadata_cache = {}
+    contribution_guide_cache = {}
 
-    print("Scouting GitHub for active bounties...")
-    for query in SEARCH_QUERIES:
-        results = search_github(query, github_token)
-        for item in results.get("items", []):
-            url = item.get("html_url")
-            if not url or url in seen_urls or url in new_bounty_urls:
-                continue
-            if not is_clean_candidate(item):
-                continue
+    print("Scouting GitHub for paid + strategic OSS opportunities...")
 
-            rejection, signal = candidate_rejection_reason(item, github_token)
-            if rejection:
-                rejected[rejection] = rejected.get(rejection, 0) + 1
-                print(f"Skipping {url}: {rejection}")
-                continue
+    paid, paid_rejected, paid_rejected_examples = discover_paid_candidates(
+        github_token,
+        seen_urls,
+        repo_metadata_cache,
+        contribution_guide_cache,
+    )
+    paid_urls = {candidate["url"] for candidate in paid}
 
-            repo, _ = issue_repo_and_number(item)
-            if repo not in repo_metadata_cache:
-                repo_metadata_cache[repo] = fetch_repo_metadata(repo, github_token)
-            repo_meta = repo_metadata_cache[repo]
+    strategic, strategic_rejected, strategic_rejected_examples = (
+        discover_strategic_candidates(
+            github_token,
+            seen_urls,
+            paid_urls,
+            repo_metadata_cache,
+            contribution_guide_cache,
+        )
+    )
 
-            score, tier, score_reasons = score_candidate(item, signal, repo_meta)
-            new_bounties.append({
-                "title": item.get("title"),
-                "url": url,
-                "repo": repo,
-                "comments": item.get("comments"),
-                "updated_at": item.get("updated_at"),
-                "payment_signal": signal,
-                "score": score,
-                "tier": tier,
-                "score_reasons": score_reasons,
-                "stars": int(repo_meta.get("stargazers_count") or 0),
-            })
-            new_bounty_urls.add(url)
+    rejected = {}
+    merge_counts(rejected, paid_rejected)
+    merge_counts(rejected, strategic_rejected)
+    rejected_examples = (
+        paid_rejected_examples + strategic_rejected_examples
+    )[:12]
+
+    by_url = {}
+    for candidate in paid + strategic:
+        existing = by_url.get(candidate["url"])
+        if (
+            not existing
+            or candidate["priority_score"] > existing["priority_score"]
+        ):
+            by_url[candidate["url"]] = candidate
+
+    ranked = sorted(
+        by_url.values(),
+        key=lambda candidate: (
+            candidate["priority_score"],
+            candidate["career_score"],
+            candidate["cash_score"],
+            -candidate["comments"],
+        ),
+        reverse=True,
+    )
+    queue = ranked[:REPORT_LIMIT]
 
     if rejected:
         summary = ", ".join(
             f"{reason}={count}" for reason, count in sorted(rejected.items())
         )
-        print(f"Filtered candidates: {summary}")
+        print(f"Filtered verified candidates: {summary}")
 
-    new_bounties.sort(
-        key=lambda bounty: (bounty["score"], -int(bounty["comments"] or 0)),
-        reverse=True,
-    )
-
-    if not new_bounties:
-        print("No new clean paid bounty opportunities found.")
+    if not queue:
+        print("No new verified OSS opportunities found.")
         return
 
-    print(f"Discovered {len(new_bounties)} NEW clean paid bounty opportunities!")
+    print(
+        f"Discovered {len(queue)} ranked OSS opportunities "
+        f"({len(paid)} paid, {len(strategic)} strategic before report cap)."
+    )
 
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
     notif_lines = [
-        f"🎯 *New Bounty Alert* ({now_str})",
-        f"Found {len(new_bounties)} clean paid opportunity{'ies' if len(new_bounties) > 1 else ''}:\n",
+        f"🎯 *OSS Opportunity Queue* ({now_str})",
+        (
+            f"Top {len(queue)} verified candidate"
+            f"{'s' if len(queue) != 1 else ''}:\n"
+        ),
     ]
-    for idx, bounty in enumerate(new_bounties, start=1):
-        notif_lines.append(f"{idx}. *{bounty['title']}*")
-        notif_lines.append(f"   • Repository: `{bounty['repo']}`")
-        notif_lines.append(
-            f"   • Scout score: {bounty['score']}/100 ({bounty['tier']})"
-        )
-        notif_lines.append(f"   • Payment signal: {bounty['payment_signal']}")
-        notif_lines.append(f"   • Repo stars: {bounty['stars']}")
-        notif_lines.append(
-            f"   • Why: {', '.join(bounty['score_reasons'])}"
-        )
-        notif_lines.append(f"   • Comments: {bounty['comments']}")
-        notif_lines.append(f"   • Link: {bounty['url']}\n")
+    for idx, candidate in enumerate(queue, start=1):
+        notif_lines.extend(candidate_notification_lines(candidate, idx))
+        notif_lines.append("")
 
     notification_msg = "\n".join(notif_lines)
 
-    # Only mark bounties as seen after at least one configured notification
-    # channel confirms delivery.
     notification_attempted = False
     notification_succeeded = False
 
@@ -944,27 +1245,29 @@ def main():
     if github_token and repo_fullname:
         notification_attempted = True
         issue_title = (
-            f"🎯 Bounty Alert: {len(new_bounties)} Clean Paid "
-            f"Opportunity{'ies' if len(new_bounties) > 1 else ''} found"
+            f"🎯 OSS Opportunity Queue: {len(queue)} new verified "
+            f"candidate{'s' if len(queue) != 1 else ''}"
         )
         issue_body = (
-            f"### Clean Paid Bounty Scan Results\n\n"
+            f"### Ranked OSS Opportunity Queue\n\n"
             f"**Scan Time:** {now_str}\n\n"
-            "Filtered for explicit payment, no current assignee, no obvious "
-            "active claim, and no open implementation PR found. Results are "
-            "sorted by a transparent triage score.\n\n"
+            "Two lanes are combined here: explicit paid work and strategically "
+            "valuable OSS work. Every reported issue was refreshed from its "
+            "source, checked for assignees, obvious claim comments, and open "
+            "implementation PRs. Target repos receive a career-score bonus.\n\n"
         )
-        for idx, bounty in enumerate(new_bounties, start=1):
-            issue_body += (
-                f"#### {idx}. [{bounty['title']}]({bounty['url']})\n"
-                f"- **Repository:** [{bounty['repo']}](https://github.com/{bounty['repo']})\n"
-                f"- **Scout score:** {bounty['score']}/100 ({bounty['tier']})\n"
-                f"- **Payment signal:** {bounty['payment_signal']}\n"
-                f"- **Repo stars:** {bounty['stars']}\n"
-                f"- **Why:** {', '.join(bounty['score_reasons'])}\n"
-                f"- **Comments:** {bounty['comments']}\n"
-                f"- **Last Updated:** {bounty['updated_at']}\n\n"
-            )
+
+        for idx, candidate in enumerate(queue, start=1):
+            issue_body += candidate_issue_markdown(candidate, idx)
+
+        if rejected_examples:
+            issue_body += "### Verification rejects\n\n"
+            for rejected_item in rejected_examples:
+                title = rejected_item["title"] or rejected_item["url"]
+                issue_body += (
+                    f"- [{title}]({rejected_item['url']}): "
+                    f"{rejected_item['reason']}\n"
+                )
 
         notification_succeeded = (
             create_github_issue(
@@ -977,13 +1280,14 @@ def main():
         )
 
     if notification_attempted and notification_succeeded:
-        seen_urls.update(new_bounty_urls)
+        reported_urls = {candidate["url"] for candidate in queue}
+        seen_urls.update(reported_urls)
         if save_seen_bounties(seen_urls):
             print("State saved successfully.")
     else:
         print(
             "No notification was delivered; state not updated so these "
-            "bounties will be retried."
+            "opportunities will be retried."
         )
 
 
