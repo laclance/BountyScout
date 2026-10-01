@@ -917,12 +917,26 @@ def strategic_inspection_items(
     )
 
 
+def strategic_global_search_results(
+    token: str | None,
+) -> list[tuple[str, dict[str, Any]]]:
+    """Reserve the strategic global Search calls before heavier API work begins."""
+    return [
+        (
+            query,
+            bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE),
+        )
+        for query in STRATEGIC_GLOBAL_QUERIES
+    ]
+
+
 def discover_strategic(
     token: str | None,
     seen: set[str],
     paid_urls: set[str],
     repo_cache: dict[str, dict[str, Any]],
     guide_cache: dict[str, str | None],
+    global_search_results: list[tuple[str, dict[str, Any]]] | None = None,
 ) -> tuple[
     list[dict[str, Any]],
     dict[str, int],
@@ -958,8 +972,10 @@ def discover_strategic(
                 )
             source_batches.append(items)
 
-    for query in STRATEGIC_GLOBAL_QUERIES:
-        result = bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE)
+    if global_search_results is None:
+        global_search_results = strategic_global_search_results(token)
+
+    for query, result in global_search_results:
         global_items = result.get("items")
         if not isinstance(global_items, list):
             add_audit(
@@ -1218,13 +1234,21 @@ def main() -> None:
     guide_cache: dict[str, str | None] = {}
 
     started = monotonic()
+    prefetched_global_searches = (
+        strategic_global_search_results(token) if token and repo_fullname else None
+    )
     paid_started = monotonic()
     paid, paid_rejects, paid_examples = discover_paid(token, seen, repo_cache, guide_cache)
     paid_seconds = monotonic() - paid_started
 
     strategic_started = monotonic()
     strategic, strategic_rejects, strategic_examples, strategic_audit = discover_strategic(
-        token, seen, {x["url"] for x in paid}, repo_cache, guide_cache
+        token,
+        seen,
+        {x["url"] for x in paid},
+        repo_cache,
+        guide_cache,
+        prefetched_global_searches,
     )
     strategic_seconds = monotonic() - strategic_started
     print(

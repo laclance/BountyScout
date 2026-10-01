@@ -3365,13 +3365,31 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(audit[0]["url"], "https://github.com/a/a/issues")
         self.assertIn("coverage incomplete", audit[0]["reason"])
 
+    def test_strategic_global_search_results_reserves_queries_in_order(self) -> None:
+        with (
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", ["q1", "q2"]),
+            patch.object(
+                bounty,
+                "search_github",
+                side_effect=[{"items": [{"id": 1}]}, {"items": [{"id": 2}]}],
+            ) as search,
+        ):
+            results = scout.strategic_global_search_results("t")
+
+        self.assertEqual([query for query, _ in results], ["q1", "q2"])
+        self.assertEqual(search.call_count, 2)
+        self.assertEqual(search.call_args_list[0].args[:2], ("q1", "t"))
+        self.assertEqual(search.call_args_list[1].args[:2], ("q2", "t"))
+
     def test_discover_strategic_audits_global_search_failure(self) -> None:
         with (
             patch.object(scout, "TARGET_REPOS", []),
-            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", ["global-q"]),
-            patch.object(bounty, "search_github", return_value={}),
+            patch.object(bounty, "search_github") as search,
         ):
-            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
+            found, rejected, examples, audit = scout.discover_strategic(
+                "t", set(), set(), {}, {}, [("global-q", {})]
+            )
+        search.assert_not_called()
 
         self.assertEqual(found, [])
         self.assertEqual(rejected, {})
@@ -3574,6 +3592,34 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertNotIn("reward:", "\n".join(strategic_lines))
         self.assertNotIn("cash:", "\n".join(strategic_lines))
 
+    def test_main_prefetches_strategic_search_before_paid_discovery(self) -> None:
+        order: list[str] = []
+        prefetched = [("global-q", {"items": []})]
+        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/repo"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(
+                scout,
+                "strategic_global_search_results",
+                side_effect=lambda token: order.append("strategic-search") or prefetched,
+            ),
+            patch.object(
+                scout,
+                "discover_paid",
+                side_effect=lambda *args: order.append("paid") or ([], {}, []),
+            ),
+            patch.object(
+                scout,
+                "discover_strategic",
+                side_effect=lambda *args: order.append("strategic") or ([], {}, [], []),
+            ) as strategic,
+        ):
+            scout.main()
+
+        self.assertEqual(order, ["strategic-search", "paid", "strategic"])
+        self.assertIs(strategic.call_args.args[5], prefetched)
+
     def test_main_no_queue(self) -> None:
         with (
             patch.dict(os.environ, {}, clear=True),
@@ -3614,6 +3660,7 @@ class FormattingAndMainTests(unittest.TestCase):
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(scout, "strategic_global_search_results", return_value=[]),
             patch.object(scout, "discover_paid", return_value=([low, high], {"r1": 1}, [reject])),
             patch.object(
                 scout,
@@ -3674,6 +3721,7 @@ class FormattingAndMainTests(unittest.TestCase):
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(scout, "strategic_global_search_results", return_value=[]),
             patch.object(scout, "discover_paid", return_value=([], {}, [])),
             patch.object(
                 scout,
@@ -3721,6 +3769,7 @@ class FormattingAndMainTests(unittest.TestCase):
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(scout, "strategic_global_search_results", return_value=[]),
             patch.object(scout, "discover_paid", return_value=([], {}, [])),
             patch.object(
                 scout,
@@ -3999,6 +4048,7 @@ class CoverageGapTests(unittest.TestCase):
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(scout, "strategic_global_search_results", return_value=[]),
             patch.object(scout, "discover_paid", return_value=([high, low], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
