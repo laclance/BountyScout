@@ -87,7 +87,7 @@ class FakeResponse:
 class BasicHeuristicTests(unittest.TestCase):
     def test_target_repo_pool_uses_core_api_and_search_budget_is_small(self) -> None:
         with patch.object(
-            bounty,
+            github,
             "github_get",
             return_value=[issue(), "not-an-issue"],
         ) as getter:
@@ -118,7 +118,7 @@ class BasicHeuristicTests(unittest.TestCase):
             patch.object(scout, "STRATEGIC_SEARCH_PER_PAGE", 3),
             patch.object(scout, "TARGET_REPO_FETCH_PAGES", 3),
             patch.object(
-                bounty,
+                github,
                 "github_get",
                 side_effect=[
                     [i1, pr_item, "not-an-issue", pr_item],
@@ -143,7 +143,7 @@ class BasicHeuristicTests(unittest.TestCase):
             patch.object(scout, "TARGET_REPO_FETCH_PER_PAGE", 2),
             patch.object(scout, "STRATEGIC_SEARCH_PER_PAGE", 3),
             patch.object(
-                bounty,
+                github,
                 "github_get",
                 side_effect=[[i1, pr_item], None],
             ),
@@ -157,7 +157,7 @@ class BasicHeuristicTests(unittest.TestCase):
             patch.object(scout, "STRATEGIC_SEARCH_PER_PAGE", 5),
             patch.object(scout, "TARGET_REPO_FETCH_PAGES", 2),
             patch.object(
-                bounty,
+                github,
                 "github_get",
                 side_effect=[[pr_item, pr_item], [pr_item, pr_item]],
             ),
@@ -550,7 +550,7 @@ class CalibrationTests(unittest.TestCase):
         with (
             patch.object(scout, "issue_comments", return_value=direct_comments),
             patch.object(
-                bounty,
+                github,
                 "github_get",
                 return_value={"state": "open"},
             ),
@@ -565,7 +565,7 @@ class CalibrationTests(unittest.TestCase):
             {"body": "implementation pull request #11"},
         ]
         with patch.object(
-            bounty,
+            github,
             "github_get",
             side_effect=[
                 {"state": "closed", "html_url": "https://github.com/example/project/pull/10"},
@@ -587,7 +587,7 @@ class CalibrationTests(unittest.TestCase):
             )
 
         with patch.object(
-            bounty,
+            github,
             "github_get",
             return_value={
                 "state": "open",
