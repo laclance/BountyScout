@@ -95,11 +95,11 @@
 - **function** `strategic_inspection_items()` — line 920
 - **function** `strategic_global_search_results()` — line 932
 - **function** `prefetch_discovery_searches()` — line 945
-- **function** `discover_strategic()` — line 969
-- **function** `github_report_ref()` — line 1250
-- **function** `markdown_candidate()` — line 1255
-- **function** `notification_candidate()` — line 1260
-- **function** `main()` — line 1265
+- **function** `discover_strategic()` — line 966
+- **function** `github_report_ref()` — line 1247
+- **function** `markdown_candidate()` — line 1252
+- **function** `notification_candidate()` — line 1257
+- **function** `main()` — line 1262
 
 ## `opportunity_sources.py`
 
