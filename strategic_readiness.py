@@ -483,6 +483,7 @@ def release_tracking_reason(
             r"\b(?:is|was)\s+resolved\s+by\b",
             r"\b(?:fixed|implemented|resolved)\s+(?:on|in)\s+(?:the\s+)?(?:main|master)\b",
             r"\b(?:fix|implementation)\s+(?:is|has\s+been)\s+(?:already\s+)?(?:on|in)\s+(?:main|master)\b",
+            r"\b(?:version|release)\s+update\s+was\s+merged\b",
         )
     )
     release_only = any(
@@ -497,6 +498,8 @@ def release_tracking_reason(
             r"\b(?:awaiting|waiting\s+for)\s+(?:the\s+)?next\s+release\b",
             r"\b(?:will|should)\s+be\s+(?:good\s+)?(?:in|with)\s+(?:the\s+)?next\s+release\b",
             r"\b(?:will|should)\s+be\s+included\s+in\s+(?:the\s+)?next\s+release\b",
+            r"\brelease\s+step.{0,120}\bnever\s+triggered\b",
+            r"\btag,?\s+but\s+no\s+release\b",
         )
     )
     if implementation_done and release_only:
