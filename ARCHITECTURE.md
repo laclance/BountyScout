@@ -43,7 +43,8 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | Module | Responsibility | Boundary |
 | --- | --- | --- |
 | `scout_bounties.py` | Upstream-compatible paid discovery, payment signals, basic competition checks, notifications | Keep changes conservative to reduce upstream merge conflicts |
-| `opportunity_scout.py` | Application orchestration plus strategic discovery, verification, reporting, and transitional legacy logic | Shrink over time by extracting cohesive strategic domains |
+| `opportunity_scout.py` | Application orchestration plus strategic discovery, verification, delivery, and transitional legacy logic | Shrink over time by extracting cohesive strategic domains |
+| `opportunity_reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
 | `opportunity_scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration |
 | `opportunity_sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
 | `strategic_claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
@@ -58,12 +59,14 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 ```text
 opportunity_scout.py
     |-- scout_bounties.py
+    |-- opportunity_reporting.py
     |-- opportunity_scoring.py
     |-- opportunity_sources.py
     |-- strategic_claims.py
     |-- strategic_competition.py
     |-- strategic_readiness.py
 
+opportunity_reporting.py  -X-> opportunity_scout.py
 opportunity_sources.py --> scout_bounties.py
 opportunity_sources.py  -X-> opportunity_scout.py
 opportunity_scoring.py --> scout_bounties.py
@@ -86,7 +89,6 @@ Do not perform a big-bang package rewrite. Extract one stable responsibility at 
 
 Likely future boundaries, when the code pressure justifies them:
 
-- reporting/notification formatting
 - GitHub HTTP access and cache behavior
 
 These are direction markers, not a requirement to create empty abstractions early.

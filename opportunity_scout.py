@@ -9,6 +9,7 @@ from time import monotonic
 from typing import Any, Mapping
 
 import scout_bounties as bounty
+import opportunity_reporting as reporting
 import opportunity_scoring as scoring
 import opportunity_sources as sources
 import strategic_competition as competition_policy
@@ -1071,99 +1072,18 @@ def discover_strategic(
 
 
 def github_report_ref(text: Any) -> str:
-    """Make GitHub issue/PR URLs clickable without creating backlinks."""
-    value = str(text or "")
-    return re.sub(
-        r"https://github\.com/([^/\s]+)/([^/\s]+)/(issues|pull)/(\d+)",
-        lambda m: (
-            f"https://redirect.github.com/{m.group(1)}/{m.group(2)}/{m.group(3)}/{m.group(4)}"
-        ),
-        value,
-        flags=re.IGNORECASE,
-    )
+    """Compatibility wrapper for GitHub report URL redirection."""
+    return reporting.github_report_ref(text)
 
 
 def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
-    hourly = (
-        f"~${candidate['expected_hourly']:.0f}/h"
-        if candidate["expected_hourly"] is not None
-        else "unknown / not USD-comparable"
-    )
-    guide = (
-        f"[contribution guide]({candidate['contribution_guide']})"
-        if candidate["contribution_guide"]
-        else "not found at common paths"
-    )
-    lines = [
-        f"#### {idx}. [{candidate['repo']} #{candidate['issue_number']}]({github_report_ref(candidate['url'])}): "
-        f"{github_report_ref(candidate['title'])}",
-    ]
-    if candidate["paid"]:
-        lines.extend(
-            [
-                f"- **Reward:** {candidate['reward'] or 'unknown'}",
-                f"- **Payment confidence:** {candidate['payment_confidence']}/100",
-                f"- **Cash score:** {candidate['cash_score']}/100",
-                f"- **Effort:** {candidate['effort']}",
-                f"- **Expected hourly value:** {hourly}",
-            ]
-        )
-    else:
-        lines.extend(
-            [
-                f"- **Career score:** {candidate['career_score']}/100",
-                f"- **Priority score:** {candidate['priority_score']}/100",
-                f"- **Effort:** {candidate['effort']}",
-            ]
-        )
-
-    effort_reasons = candidate.get("effort_reasons") or []
-    if effort_reasons:
-        lines.append(f"- **Effort basis:** {', '.join(effort_reasons)}")
-
-    priority_reasons = candidate.get("priority_reasons") or []
-    if priority_reasons and not candidate["paid"]:
-        lines.append(f"- **Priority basis:** {', '.join(priority_reasons)}")
-
-    lines.extend(
-        [
-            f"- **Competition:** {candidate['competition']}",
-            f"- **Repo stars:** {candidate['stars']}",
-            f"- **Repo recent activity:** {candidate['recent_activity']}",
-            f"- **Language:** {candidate['language']}",
-            f"- **Labels:** {', '.join(candidate['labels']) or 'none'}",
-            f"- **Contribution process:** {guide}",
-        ]
-    )
-    if candidate["paid"]:
-        lines.append(f"- **Cash reasons:** {', '.join(candidate['cash_reasons'])}")
-    else:
-        lines.append(f"- **Career reasons:** {', '.join(candidate['career_reasons'])}")
-    return "\n".join(lines) + "\n\n"
+    """Compatibility wrapper for GitHub candidate rendering."""
+    return reporting.markdown_candidate(candidate, idx)
 
 
 def notification_candidate(candidate: Mapping[str, Any], idx: int) -> list[str]:
-    title = str(candidate["title"] or "")
-    if len(title) > 100:
-        title = title[:97] + "..."
-    lines = [f"{idx}. *{candidate['repo']} #{candidate['issue_number']}* — {title}"]
-    if candidate["paid"]:
-        lines.append(
-            f"   • paid bounty | reward: {candidate['reward'] or 'unknown'} | "
-            f"cash: {candidate['cash_score']}/100"
-        )
-    else:
-        lines.append(
-            f"   • strategic OSS | career: {candidate['career_score']}/100 | "
-            f"priority: {candidate['priority_score']}/100"
-        )
-    lines.extend(
-        [
-            f"   • {candidate['effort']} | competition: {candidate['competition']}",
-            f"   • {candidate['url']}",
-        ]
-    )
-    return lines
+    """Compatibility wrapper for concise notification candidate rendering."""
+    return reporting.notification_candidate(candidate, idx)
 
 
 def main() -> None:
@@ -1209,11 +1129,8 @@ def main() -> None:
         return
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    lines = [f"🎯 *OSS Opportunity Queue* ({now})", ""]
-    for idx, candidate in enumerate(queue, 1):
-        lines.extend(notification_candidate(candidate, idx))
-        lines.append("")
-    message = "\n".join(lines)
+    message = reporting.notification_message(queue, now)
+    rejects = reporting.rejection_summary(paid_rejects, strategic_rejects)
 
     attempted = False
     delivered = False
@@ -1235,42 +1152,23 @@ def main() -> None:
 
     if token and repo_fullname:
         attempted = True
-        body = (
-            f"### Ranked OSS Opportunity Queue\n\n**Scan Time:** {now}\n\n"
-            "Paid candidates reuse BountyScout's existing payment/competition filters unchanged. "
-            "Strategic candidates are pre-ranked, then source-refreshed and checked for assignees, "
-            "claim comments, open implementation PRs, repository legitimacy, and contribution guidance.\n\n"
+        body = reporting.github_report_body(
+            queue,
+            now,
+            verification_examples=paid_examples + strategic_examples,
+            strategic_audit=strategic_audit,
+            reject_counts=rejects,
         )
-        for idx, candidate in enumerate(queue, 1):
-            body += markdown_candidate(candidate, idx)
-        examples = (paid_examples + strategic_examples)[:12]
-        if examples:
-            body += "### Verification rejects\n\n"
-            for item in examples:
-                source = github_report_ref(item["url"])
-                title = github_report_ref(item["title"] or source)
-                reason = github_report_ref(item["reason"])
-                body += f"- [{title}]({source}): {reason}\n"
-        if strategic_audit:
-            body += "\n### Potential scanner misses / tuning candidates\n\n"
-            for item in strategic_audit[:12]:
-                source = github_report_ref(item["url"])
-                title = github_report_ref(item["title"] or source)
-                reason = github_report_ref(item["reason"])
-                body += f"- [{title}]({source}): {reason}\n"
         delivered = (
             bounty.create_github_issue(
                 repo_fullname,
                 token,
-                f"🎯 OSS Opportunity Queue: {len(queue)} new verified candidate{'s' if len(queue) != 1 else ''}",
+                reporting.github_report_title(len(queue)),
                 body,
             )
             or delivered
         )
 
-    rejects = dict(paid_rejects)
-    for reason, count in strategic_rejects.items():
-        rejects[reason] = rejects.get(reason, 0) + count
     if rejects:
         print(
             "Filtered verified candidates: "
