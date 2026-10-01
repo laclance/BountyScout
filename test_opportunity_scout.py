@@ -483,6 +483,151 @@ class CalibrationTests(unittest.TestCase):
             )
         )
 
+    def test_supplemental_claim_reason_take_phrases(self) -> None:
+        for body in ("I can take this one.", "I'll take a look at this one."):
+            with self.subTest(body=body):
+                self.assertEqual(
+                    scout.supplemental_claim_reason(
+                        issue(comments=1),
+                        "t",
+                        [{"body": body, "user": {"login": "dev"}}],
+                    ),
+                    "active claim by @dev",
+                )
+
+    def test_timeline_open_pr_reason(self) -> None:
+        self.assertIsNone(scout.timeline_open_pr_reason({"html_url": "bad"}, "t"))
+
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {"url": "x"},
+                        "state": "closed",
+                        "html_url": "https://github.com/example/project/pull/9",
+                    }
+                },
+            },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {"url": "y"},
+                        "state": "open",
+                        "html_url": "https://github.com/example/project/pull/10",
+                    }
+                },
+            },
+        ]
+        with patch.object(bounty, "github_get", return_value=timeline):
+            self.assertEqual(
+                scout.timeline_open_pr_reason(issue(), "t"),
+                "existing open implementation PR: https://github.com/example/project/pull/10",
+            )
+
+        with patch.object(bounty, "github_get", return_value={}):
+            self.assertIsNone(scout.timeline_open_pr_reason(issue(), "t"))
+
+        no_match_timeline = [
+            {"event": "commented"},
+            {"event": "cross-referenced", "source": "invalid"},
+            {"event": "cross-referenced", "source": {"issue": "invalid"}},
+            {"event": "cross-referenced", "source": {"issue": {"state": "open"}}},
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {"url": "x"},
+                        "state": "closed",
+                        "html_url": "https://github.com/example/project/pull/11",
+                    }
+                },
+            },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {"url": "y"},
+                        "state": "open",
+                    }
+                },
+            },
+        ]
+        with patch.object(bounty, "github_get", return_value=no_match_timeline):
+            self.assertIsNone(scout.timeline_open_pr_reason(issue(), "t"))
+
+    def test_wrapper_and_non_actionable_diagnostic_detection(self) -> None:
+        wrapper = issue(
+            title="[READY FOR ENGINEERING] upstream task",
+            body=(
+                "## TARGET_REPOSITORY\nhttps://github.com/acme/upstream\n\n"
+                "## ORIGINAL_ISSUE_URL\nhttps://github.com/acme/upstream/issues/123\n"
+            ),
+        )
+        self.assertEqual(
+            scout.upstream_wrapper_issue_url(wrapper),
+            "https://github.com/acme/upstream/issues/123",
+        )
+        self.assertIsNone(
+            scout.upstream_wrapper_issue_url(
+                issue(body="See https://github.com/acme/upstream/issues/123")
+            )
+        )
+        self.assertIsNone(
+            scout.upstream_wrapper_issue_url(
+                issue(body="ORIGINAL_ISSUE_URL https://github.com/acme/upstream/issues/123")
+            )
+        )
+        self.assertIsNone(
+            scout.upstream_wrapper_issue_url(
+                issue(body="TARGET_REPOSITORY x\nORIGINAL_ISSUE_URL not-a-url")
+            )
+        )
+        self.assertEqual(
+            scout.upstream_wrapper_issue_url(
+                issue(
+                    title="[READY FOR ENGINEERING] task",
+                    body="ORIGINAL_ISSUE_URL https://github.com/acme/upstream/issues/124",
+                )
+            ),
+            "https://github.com/acme/upstream/issues/124",
+        )
+
+        diagnostic = issue(
+            title="macOS M5 hard hang / black screen under tunnel throughput",
+            body=(
+                "macOS 27 on an M5 MacBook. The system needs a force reset. "
+                "There is no Tailscale.app userspace crash; collect sysdiagnose after repro."
+            ),
+            labels=[],
+        )
+        self.assertEqual(
+            scout.non_actionable_diagnostic_reason(diagnostic),
+            "hardware/kernel diagnostic report without actionable contributor scope",
+        )
+        self.assertIsNone(
+            scout.non_actionable_diagnostic_reason(
+                {**diagnostic, "labels": [{"name": "help wanted"}]}
+            )
+        )
+        self.assertIsNone(
+            scout.non_actionable_diagnostic_reason(
+                issue(body="Investigate pkg/network.go on macOS M5 hard hang")
+            )
+        )
+        self.assertIsNone(scout.non_actionable_diagnostic_reason(issue(body="normal bug")))
+        self.assertIsNone(
+            scout.non_actionable_diagnostic_reason(
+                issue(body="macOS hard hang with sysdiagnose but no hardware model")
+            )
+        )
+        self.assertIsNone(
+            scout.non_actionable_diagnostic_reason(
+                issue(body="macOS M5 hard hang with a deterministic userspace repro")
+            )
+        )
+
     def test_extended_competition_reason_all_sources(self) -> None:
         self.assertEqual(
             scout.extended_competition_reason(
@@ -590,6 +735,11 @@ class CalibrationTests(unittest.TestCase):
                 "linked_open_pr_reason",
                 return_value=None,
             ),
+            patch.object(
+                scout,
+                "timeline_open_pr_reason",
+                return_value=None,
+            ),
         ):
             self.assertIsNone(scout.extended_competition_reason(issue(), "t"))
 
@@ -644,6 +794,49 @@ class CalibrationTests(unittest.TestCase):
             body="dual SIM + Wi-Fi reproduction on a physical phone",
         )
         self.assertEqual(scout.estimate_effort(tailscale), "1d+")
+
+    def test_verify_resolves_aggregator_wrapper_to_upstream(self) -> None:
+        wrapper = issue(
+            html_url="https://github.com/aggregator/jobs/issues/4",
+            title="[READY FOR ENGINEERING] upstream task",
+            body=(
+                "## TARGET_REPOSITORY\nhttps://github.com/example/project\n\n"
+                "## ORIGINAL_ISSUE_URL\nhttps://github.com/example/project/issues/42\n"
+            ),
+            comments=0,
+        )
+        upstream = issue(comments=1)
+        with (
+            patch.object(
+                scout,
+                "refresh_issue",
+                side_effect=[(wrapper, None), (upstream, None)],
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=upstream),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                scout,
+                "comment_payment_signal",
+                return_value="confirmed bounty platform comment (Algora): $50",
+            ),
+            patch.object(
+                bounty,
+                "candidate_rejection_reason",
+                return_value=("no explicit payment signal", None),
+            ),
+            patch.object(scout, "extended_competition_reason", return_value=None),
+            patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(scout, "contribution_guide", return_value=None),
+            patch.object(
+                scout,
+                "build_candidate",
+                return_value={"url": upstream["html_url"]},
+            ),
+        ):
+            result, reason = scout.verify(wrapper, "t", {}, {}, require_paid=True)
+        self.assertIsNone(reason)
+        self.assertEqual(result, {"url": upstream["html_url"]})
 
 
 class CandidateTests(unittest.TestCase):
@@ -803,6 +996,12 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "pr")
         with patch.object(scout, "extended_competition_reason", return_value="claim"):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "claim")
+        with patch.object(
+            scout,
+            "non_actionable_diagnostic_reason",
+            return_value="diagnostic",
+        ):
+            self.assertEqual(scout.strategic_rejection(issue(), "t"), "diagnostic")
 
         self.assertEqual(
             scout.strategic_rejection(issue(labels=["needs-triage"]), "t"),
@@ -844,6 +1043,66 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(
                 scout.verify(bad_repo, "t", {}, {})[1],
                 "could not identify repository/issue number",
+            )
+
+    def test_verify_aggregator_wrapper_failure_paths(self) -> None:
+        wrapper = issue(
+            html_url="https://github.com/aggregator/jobs/issues/4",
+            title="[READY FOR ENGINEERING] upstream task",
+            body=(
+                "TARGET_REPOSITORY https://github.com/example/project\n"
+                "ORIGINAL_ISSUE_URL https://github.com/example/project/issues/42"
+            ),
+        )
+        upstream = issue()
+
+        with (
+            patch.object(scout, "refresh_issue", return_value=(wrapper, None)),
+            patch.object(scout, "issue_from_github_url", return_value=None),
+        ):
+            self.assertEqual(
+                scout.verify(wrapper, "t", {}, {})[1],
+                "could not refresh upstream issue from aggregator wrapper",
+            )
+
+        with (
+            patch.object(
+                scout,
+                "refresh_issue",
+                side_effect=[(wrapper, None), (None, "issue is no longer open")],
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=upstream),
+        ):
+            self.assertEqual(
+                scout.verify(wrapper, "t", {}, {})[1],
+                "upstream source: issue is no longer open",
+            )
+
+        with (
+            patch.object(
+                scout,
+                "refresh_issue",
+                side_effect=[(wrapper, None), (None, None)],
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=upstream),
+        ):
+            self.assertEqual(
+                scout.verify(wrapper, "t", {}, {})[1],
+                "could not refresh upstream issue from aggregator wrapper",
+            )
+
+        with (
+            patch.object(
+                scout,
+                "refresh_issue",
+                side_effect=[(wrapper, None), (upstream, None)],
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=upstream),
+            patch.object(bounty, "is_clean_candidate", return_value=False),
+        ):
+            self.assertEqual(
+                scout.verify(wrapper, "t", {}, {})[1],
+                "failed basic eligibility filter after source refresh",
             )
 
     def test_verify_paid_issue_signal_success_and_repo_failures(self) -> None:
