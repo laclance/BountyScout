@@ -1263,6 +1263,7 @@ def main() -> None:
         if "scan coverage incomplete" in str(item.get("reason", "")).lower()
     )
     coverage_failures = verification_failures + discovery_failures
+    # A failed discovery batch can hide an entire source, so even one marks the run incomplete.
     coverage_warning = None
     if discovery_failures or verification_failures >= STRATEGIC_COVERAGE_WARNING_THRESHOLD:
         coverage_warning = (
