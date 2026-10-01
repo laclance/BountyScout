@@ -626,9 +626,7 @@ def build_candidate(
             and (latest_human_comment is None or latest_human_comment < latest_bot_comment)
         ):
             effective_updated = latest_human_comment or created
-        updated_days = (
-            max(0, (now - effective_updated).days) if effective_updated else None
-        )
+        updated_days = max(0, (now - effective_updated).days) if effective_updated else None
 
         if updated_days is not None:
             if updated_days <= 14:
