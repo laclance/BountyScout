@@ -158,6 +158,37 @@ class ClaimCompetitionTests(unittest.TestCase):
             )
         )
 
+    def test_taking_this_one_is_active_ownership(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        self.assertEqual(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [
+                    {
+                        "body": (
+                            "Taking this one — I'll trace why the file input reads nothing "
+                            "and fix the parsing."
+                        ),
+                        "updated_at": recent,
+                        "user": {"login": "vaputa"},
+                    }
+                ],
+            ),
+            "active claim by @vaputa",
+        )
+        self.assertIsNone(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [
+                    {
+                        "body": "Someone else is taking this one.",
+                        "updated_at": recent,
+                        "user": {"login": "observer"},
+                    }
+                ],
+            )
+        )
+
     def test_working_branch_with_test_is_active_implementation_claim(self) -> None:
         recent = datetime.now(timezone.utc).isoformat()
         self.assertEqual(
@@ -516,63 +547,61 @@ class TimelinePullRequestTests(unittest.TestCase):
             )
 
         with patch.object(github, "github_get", return_value={}):
-            self.assertIsNone(competition.timeline_open_pr_reason(issue(), "t"))
-        self.assertIsNone(competition.timeline_open_pr_reason({"html_url": "bad"}, "t"))
+            self.assertEqual(
+                competition.timeline_open_pr_reason(issue(), "t"),
+                "could not verify open implementation PR timeline",
+            )
+        self.assertEqual(
+            competition.timeline_open_pr_reason({"html_url": "bad"}, "t"),
+            "could not identify repository/issue number",
+        )
 
 
 class CompetitionOrchestrationTests(unittest.TestCase):
-    def test_strategic_competition_precedence_is_pr_then_claim_then_search(self) -> None:
-        with patch.object(
-            bounty,
-            "has_existing_implementation_pr",
-            return_value="timeline/search pr",
-        ):
-            self.assertEqual(
-                competition.strategic_competition_reason(
-                    issue(),
-                    "t",
-                    [],
-                    linked_pr_checker=lambda *_: "linked pr",
-                    strategic_claim_checker=lambda *_: "claim",
-                    search_pr_checker=lambda *_: "searched pr",
-                ),
-                "timeline/search pr",
+    def test_strategic_competition_precedence_is_timeline_then_link_then_claim(self) -> None:
+        self.assertEqual(
+            competition.strategic_competition_reason(
+                issue(),
+                "t",
+                [],
+                timeline_pr_checker=lambda *_: "timeline pr",
+                linked_pr_checker=lambda *_: "linked pr",
+                strategic_claim_checker=lambda *_: "claim",
+            ),
+            "timeline pr",
+        )
+        self.assertEqual(
+            competition.strategic_competition_reason(
+                issue(),
+                "t",
+                [],
+                timeline_pr_checker=lambda *_: None,
+                linked_pr_checker=lambda *_: "linked pr",
+                strategic_claim_checker=lambda *_: "claim",
+            ),
+            "linked pr",
+        )
+        self.assertEqual(
+            competition.strategic_competition_reason(
+                issue(),
+                "t",
+                [],
+                timeline_pr_checker=lambda *_: None,
+                linked_pr_checker=lambda *_: None,
+                strategic_claim_checker=lambda *_: "claim",
+            ),
+            "claim",
+        )
+        self.assertIsNone(
+            competition.strategic_competition_reason(
+                issue(),
+                "t",
+                [],
+                timeline_pr_checker=lambda *_: None,
+                linked_pr_checker=lambda *_: None,
+                strategic_claim_checker=lambda *_: None,
             )
-
-        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
-            self.assertEqual(
-                competition.strategic_competition_reason(
-                    issue(),
-                    "t",
-                    [],
-                    linked_pr_checker=lambda *_: "linked pr",
-                    strategic_claim_checker=lambda *_: "claim",
-                    search_pr_checker=lambda *_: "searched pr",
-                ),
-                "linked pr",
-            )
-            self.assertEqual(
-                competition.strategic_competition_reason(
-                    issue(),
-                    "t",
-                    [],
-                    linked_pr_checker=lambda *_: None,
-                    strategic_claim_checker=lambda *_: "claim",
-                    search_pr_checker=lambda *_: "searched pr",
-                ),
-                "claim",
-            )
-            self.assertEqual(
-                competition.strategic_competition_reason(
-                    issue(),
-                    "t",
-                    [],
-                    linked_pr_checker=lambda *_: None,
-                    strategic_claim_checker=lambda *_: None,
-                    search_pr_checker=lambda *_: "searched pr",
-                ),
-                "searched pr",
-            )
+        )
 
     def test_extended_competition_preserves_paid_claim_rules_then_supplemental(self) -> None:
         with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
