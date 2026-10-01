@@ -3129,8 +3129,8 @@ class DiscoveryTests(unittest.TestCase):
                 return_value=candidate(
                     url=low["html_url"],
                     paid=False,
-                    priority_score=40,
-                    career_score=40,
+                    priority_score=50,
+                    career_score=50,
                 ),
             ),
             patch.object(
@@ -3226,6 +3226,131 @@ class DiscoveryTests(unittest.TestCase):
         self.assertTrue(any("adaptive repo inspection pool" in item["reason"] for item in audit))
         self.assertFalse(any(item["url"] == dirty_weak["html_url"] for item in audit))
         self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
+
+    def test_strategic_preflight_rejects_only_source_visible_states(self) -> None:
+        with patch.object(bounty, "is_clean_candidate", return_value=False):
+            self.assertEqual(
+                scout.strategic_preflight_rejection(issue(comments=0)),
+                "failed basic eligibility filter",
+            )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(title="OSS Opportunity Queue: generated report", comments=0)
+            ),
+            "generated opportunity-scout report",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(issue(labels=[{"name": "support"}], comments=0)),
+            "support/triage issue rather than a contributor task",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "lifecycle/rotten"}], comments=0)
+            ),
+            "issue is in an abandoned/rotten lifecycle state",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "needs reproduction"}], comments=0)
+            ),
+            "awaiting reproduction confirmation",
+        )
+        self.assertIsNone(scout.strategic_preflight_rejection(issue(comments=0)))
+        self.assertEqual(
+            scout.strategic_preflight_rejection(issue(labels=[{"name": "claimed"}], comments=2)),
+            "issue is marked claimed by the project",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(issue(title="Plan to release v1.2.3", comments=1)),
+            "release planning/tracking issue, not implementation work",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "needs-triage"}], comments=0)
+            ),
+            "awaiting maintainer triage",
+        )
+        self.assertIsNone(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "needs-triage"}], comments=1)
+            )
+        )
+
+    # Keep score-pruned rows report-compatible while proving they never hit the network.
+    def test_discover_strategic_prunes_preflight_and_impossible_score_before_network(self) -> None:
+        winner = issue(
+            html_url="https://github.com/g/g/issues/1",
+            title="Proxy regression",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        claimed = issue(
+            html_url="https://github.com/g/g/issues/2",
+            title="Claimed regression",
+            labels=[{"name": "claimed"}, {"name": "bug"}],
+        )
+        impossible = issue(
+            html_url="https://github.com/g/g/issues/3",
+            title="Low-value regression",
+            labels=[{"name": "bug"}],
+        )
+        scores = {
+            winner["html_url"]: 90,
+            claimed["html_url"]: 80,
+            impossible["html_url"]: 40,
+        }
+
+        def preview(
+            item_: dict[str, Any],
+            lane: str,
+            signal: str | None,
+            meta_: dict[str, Any],
+            guide: str | None,
+            *rest: Any,
+        ) -> dict[str, Any]:
+            score = scores[item_["html_url"]]
+            return candidate(
+                url=item_["html_url"],
+                paid=False,
+                priority_score=score,
+                career_score=score,
+            )
+
+        buf = io.StringIO()
+        with (
+            patch.object(scout, "TARGET_REPOS", ["g/g"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(
+                scout,
+                "target_repo_issue_pool",
+                return_value=([winner, claimed, impossible], None),
+            ),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(scout, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(scout, "build_candidate", side_effect=preview),
+            patch.object(
+                scout,
+                "verify",
+                return_value=(
+                    candidate(
+                        url=winner["html_url"],
+                        paid=False,
+                        priority_score=90,
+                        career_score=90,
+                    ),
+                    None,
+                ),
+            ) as verify_mock,
+            redirect_stdout(buf),
+        ):
+            found, rejected, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual([item["url"] for item in found], [winner["html_url"]])
+        self.assertEqual(verify_mock.call_count, 1)
+        self.assertEqual(rejected["issue is marked claimed by the project"], 1)
+        bound_reason = "career score 40/100 below strategic threshold 55/100"
+        self.assertEqual(rejected[bound_reason], 1)
+        self.assertTrue(any(bound_reason in item["reason"] for item in audit))
+        self.assertIn("Strategic deep verification: 1/3", buf.getvalue())
 
     def test_discover_strategic_stops_when_remaining_cannot_displace_kept_slot(self) -> None:
         winner = issue(
