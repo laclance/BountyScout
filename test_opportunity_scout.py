@@ -105,13 +105,16 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertTrue(
             any('label:"good first issue" bug' in q for q in scout.STRATEGIC_GLOBAL_QUERIES)
         )
-        for label in (
-            'label:"help wanted" bug',
-            'label:"Status: Help Wanted" bug',
-            'label:"Help-Wanted" bug',
-            'label:"contributor/help-wanted" bug',
+        for query_fragment in (
+            'label:"help wanted" label:"bug"',
+            'label:"help wanted" label:"type/bug"',
+            'label:"Status: Help Wanted" label:"Type: Bug"',
+            'label:"Help-Wanted"',
+            'label:"contributor/help-wanted"',
         ):
-            self.assertTrue(any(label in q for q in scout.STRATEGIC_GLOBAL_QUERIES))
+            self.assertTrue(
+                any(query_fragment in q for q in scout.STRATEGIC_GLOBAL_QUERIES)
+            )
 
     def test_issue_text_handles_dict_and_string_labels(self) -> None:
         title, body, labels, text = scout.issue_text(
