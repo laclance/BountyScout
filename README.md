@@ -49,7 +49,7 @@ For each curated repository, the scout activity-inspects the top 15 plausible is
 - repository is available and not archived
 - contribution guide at common repository locations
 
-Career score considers repository reputation/activity, target-repo bonus, language/domain fit, technical depth, tests/contributor signals, scope, effort, competition, issue freshness, and recent maintainer/discussion activity. Old issues are penalized only when they are actually inactive rather than merely old.
+Career score considers repository reputation/activity, target-repo bonus, language/domain fit, technical depth, tests/contributor signals, scope, effort, competition, issue freshness, and recent maintainer/discussion activity. Old issues are penalized only when they are actually inactive rather than merely old. Strategic priority is then derived separately from career score with a stronger execution-fit adjustment: lower effort and lower visible competition receive bonuses, while broad work and crowded issues receive penalties. Active implementation claims remain hard rejections rather than merely high competition.
 
 The scout also emits potential scanner misses: strong-looking items that were filtered early, fell just outside a repo's inspection pool, or narrowly missed the quality floor. These are intended as feedback for tuning false-negative and false-positive behavior over time.
 
@@ -62,6 +62,7 @@ Each reported candidate includes:
 - payment confidence
 - cash score /100
 - career score /100
+- strategic priority score /100 (career value adjusted for execution friction)
 - effort: `<1h`, `1–3h`, `3–6h`, `6–12h`, or `1d+`, with a short effort basis
 - competition: `none`, `low`, `medium`, or `high`
 - stars, recent activity, language, and labels
