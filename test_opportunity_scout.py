@@ -1901,6 +1901,69 @@ class VerificationTests(unittest.TestCase):
         )
         self.assertFalse(scout.possible_miss_signal(cmux))
 
+    def test_fresh_1140_run_claim_and_tracker_regressions(self) -> None:
+        grpc_umbrella = issue(
+            title=(
+                "xds/clients: API refinements and cleanup before externalizing "
+                "generic xDS and LRS clients"
+            ),
+            body=(
+                "Track and resolve the following API refinements and bug fixes:\n\n"
+                "- [ ] #8314\n"
+                "- [ ] #9456\n"
+                "- [ ] #9457\n"
+                "- [ ] #9458\n"
+                "- [ ] #9459\n"
+            ),
+            comments=0,
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self.assertEqual(
+            scout.strategic_rejection(grpc_umbrella, "t", []),
+            "umbrella tracking issue, not a single implementation task",
+        )
+        self.assertFalse(scout.possible_miss_signal(grpc_umbrella))
+
+        client_golang = issue(
+            title="api: no way to get query stats",
+            comments=1,
+        )
+        client_golang_comments = [
+            {
+                "body": (
+                    "I'd like to pick this up. On current main, WithStats sends stats=all, "
+                    "but queryResult does not retain data.stats. I'll wait for direction on "
+                    "the public interface before publishing an implementation."
+                ),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "user": {"login": "fzlzjerry"},
+            }
+        ]
+        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
+            self.assertEqual(
+                scout.strategic_rejection(client_golang, "t", client_golang_comments),
+                "active claim by @fzlzjerry",
+            )
+
+        aws_lbc = issue(
+            title=(
+                "Helm chart: support additional IngressClass / "
+                "IngressClassParams pairs for a single controller"
+            ),
+            body=(
+                "Contribution Intention (Optional)\n\n"
+                "- [x] Yes, I am willing to contribute a PR to implement this feature\n"
+                "- [ ] No, I cannot work on a PR at this time"
+            ),
+            created_at=datetime.now(timezone.utc).isoformat(),
+            comments=0,
+        )
+        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
+            self.assertEqual(
+                scout.strategic_rejection(aws_lbc, "t", []),
+                "issue author already has an implementation/fix in progress",
+            )
+
     def test_readiness_gate_targeted_live_refinements(self) -> None:
         profile_request = [
             {
