@@ -1240,7 +1240,7 @@ def add_audit(
 def strategic_inspection_items(
     provisional: list[tuple[int, int, int, dict[str, Any]]],
 ) -> dict[str, list[dict[str, Any]]]:
-    """Keep up to 15 plausible results per repo for activity inspection."""
+    """Keep the best configured result pool per repo for activity inspection."""
     by_repo: dict[str, list[tuple[int, int, int, dict[str, Any]]]] = {}
     for row in provisional:
         repo, _ = bounty.issue_repo_and_number(row[3])
