@@ -2940,7 +2940,7 @@ class VerificationTests(unittest.TestCase):
             )
         rejection.assert_called_once_with(fresh, "t", supplied)
 
-    def test_verify_strategic_reuses_fetched_comments_for_final_scoring(self) -> None:
+    def test_verify_strategic_reuses_one_checked_comment_fetch(self) -> None:
         fresh = issue(body="", title="Parser task", comments=2)
         comments = [
             {
@@ -2953,12 +2953,12 @@ class VerificationTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(bounty, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
-            patch.object(scout, "comment_payment_signal", return_value=None),
             patch.object(
                 github,
                 "issue_comments_checked",
                 return_value=(comments, None),
             ) as comments_fetch,
+            patch.object(scout, "issue_comments") as unchecked_fetch,
             patch.object(scout, "strategic_rejection", return_value=None) as rejection,
             patch.object(scout, "fetch_repo_metadata", return_value=meta),
             patch.object(scout, "contribution_guide", return_value=None),
@@ -2974,6 +2974,7 @@ class VerificationTests(unittest.TestCase):
             )
 
         comments_fetch.assert_called_once_with(fresh, "t")
+        unchecked_fetch.assert_not_called()
         rejection.assert_called_once_with(fresh, "t", comments)
         build.assert_called_once_with(
             fresh,
@@ -2982,6 +2983,57 @@ class VerificationTests(unittest.TestCase):
             meta,
             None,
             comments,
+        )
+
+    def test_strategic_comment_payment_signal_reuses_checked_comments(self) -> None:
+        fresh = issue(body="", title="Task", comments=1)
+        comments = [
+            {
+                "body": "/reward 50",
+                "author_association": "MEMBER",
+                "user": {"login": "maintainer"},
+            }
+        ]
+        meta = repo_meta()
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=(comments, None),
+            ) as comments_fetch,
+            patch.object(scout, "issue_comments") as unchecked_fetch,
+            patch.object(
+                bounty,
+                "candidate_rejection_reason",
+                return_value=("no explicit payment signal", None),
+            ),
+            patch.object(scout, "extended_competition_reason", return_value=None) as competition,
+            patch.object(scout, "fetch_repo_metadata", return_value=meta),
+            patch.object(scout, "contribution_guide", return_value=None),
+            patch.object(
+                scout,
+                "build_candidate",
+                return_value={"lane": "paid"},
+            ) as build,
+        ):
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {}),
+                ({"lane": "paid"}, None),
+            )
+
+        comments_fetch.assert_called_once_with(fresh, "t")
+        unchecked_fetch.assert_not_called()
+        competition.assert_called_once_with(fresh, "t", comments)
+        build.assert_called_once_with(
+            fresh,
+            "paid",
+            "explicit /reward comment: $50",
+            meta,
+            None,
+            None,
         )
 
     def test_verify_non_payment_rejection_and_strategic_success(self) -> None:
@@ -4190,6 +4242,21 @@ class FormattingAndMainTests(unittest.TestCase):
 
 
 class CoverageGapTests(unittest.TestCase):
+    def test_comment_payment_signal_can_reuse_supplied_comments(self) -> None:
+        comments = [
+            {
+                "body": "/reward 9",
+                "author_association": "OWNER",
+                "user": {"login": "owner"},
+            }
+        ]
+        with patch.object(scout, "issue_comments") as fetch:
+            self.assertEqual(
+                scout.comment_payment_signal(issue(), "t", comments),
+                "explicit /reward comment: $9",
+            )
+        fetch.assert_not_called()
+
     def test_trusted_non_command_comment_falls_through_to_next_comment(self) -> None:
         comments = [
             {
