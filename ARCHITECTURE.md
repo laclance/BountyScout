@@ -45,6 +45,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `scout_bounties.py` | Upstream-compatible paid discovery, payment signals, basic competition checks, notifications | Keep changes conservative to reduce upstream merge conflicts |
 | `opportunity_scout.py` | Application orchestration plus strategic discovery, verification, scoring, reporting, and transitional legacy logic | Shrink over time by extracting cohesive strategic domains |
 | `strategic_claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
+| `strategic_competition.py` | Active-claim, linked/search/timeline implementation-PR detection, and competition precedence | May call upstream GitHub helpers; never imports `opportunity_scout.py` |
 | `strategic_readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` | Notification state | Only mark items seen after a notification path succeeds |
 | `.github/workflows/bounty-scout.yml` | Scheduled scanner execution | Runtime workflow, not the quality gate |
@@ -56,8 +57,12 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 opportunity_scout.py
     |-- scout_bounties.py
     |-- strategic_claims.py
+    |-- strategic_competition.py
     |-- strategic_readiness.py
 
+strategic_competition.py --> scout_bounties.py
+strategic_competition.py --> strategic_claims.py
+strategic_competition.py  -X-> opportunity_scout.py
 strategic_readiness.py --> strategic_claims.py
 strategic_readiness.py  -X-> opportunity_scout.py
 strategic_claims.py     -X-> opportunity_scout.py
@@ -72,7 +77,6 @@ Do not perform a big-bang package rewrite. Extract one stable responsibility at 
 
 Likely future boundaries, when the code pressure justifies them:
 
-- strategic competition and PR detection
 - discovery/source adapters
 - scoring and effort estimation
 - reporting/notification formatting
