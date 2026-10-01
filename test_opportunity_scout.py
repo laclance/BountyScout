@@ -3388,6 +3388,7 @@ class FormattingAndMainTests(unittest.TestCase):
             "GITHUB_TOKEN": "tok",
             "GITHUB_REPOSITORY": "me/BountyScout",
         }
+        buf = io.StringIO()
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value={"old"}),
@@ -3407,7 +3408,6 @@ class FormattingAndMainTests(unittest.TestCase):
             ),
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
             patch.object(bounty, "save_seen_bounties") as save,
-            io.StringIO() as buf,
             redirect_stdout(buf),
         ):
             scout.main()
