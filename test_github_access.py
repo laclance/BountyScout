@@ -175,9 +175,7 @@ class GitHubResourceTests(unittest.TestCase):
         self.assertIsNone(github.issue_from_github_url("bad", "t"))
 
         with patch.object(github, "github_get", return_value=[]):
-            self.assertIsNone(
-                github.issue_from_github_url("https://github.com/a/b/issues/12", "t")
-            )
+            self.assertIsNone(github.issue_from_github_url("https://github.com/a/b/issues/12", "t"))
 
         with patch.object(github, "github_get", return_value={"state": "open"}) as getter:
             self.assertEqual(
