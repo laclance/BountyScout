@@ -558,7 +558,7 @@ class TimelinePullRequestTests(unittest.TestCase):
 
 
 class CompetitionOrchestrationTests(unittest.TestCase):
-    def test_strategic_competition_precedence_is_timeline_then_link_then_claim(self) -> None:
+    def test_strategic_competition_short_circuits_claim_then_link_then_timeline(self) -> None:
         self.assertEqual(
             competition.strategic_competition_reason(
                 issue(),
@@ -568,16 +568,16 @@ class CompetitionOrchestrationTests(unittest.TestCase):
                 linked_pr_checker=lambda *_: "linked pr",
                 strategic_claim_checker=lambda *_: "claim",
             ),
-            "timeline pr",
+            "claim",
         )
         self.assertEqual(
             competition.strategic_competition_reason(
                 issue(),
                 "t",
                 [],
-                timeline_pr_checker=lambda *_: None,
+                timeline_pr_checker=lambda *_: "timeline pr",
                 linked_pr_checker=lambda *_: "linked pr",
-                strategic_claim_checker=lambda *_: "claim",
+                strategic_claim_checker=lambda *_: None,
             ),
             "linked pr",
         )
@@ -586,11 +586,11 @@ class CompetitionOrchestrationTests(unittest.TestCase):
                 issue(),
                 "t",
                 [],
-                timeline_pr_checker=lambda *_: None,
+                timeline_pr_checker=lambda *_: "timeline pr",
                 linked_pr_checker=lambda *_: None,
-                strategic_claim_checker=lambda *_: "claim",
+                strategic_claim_checker=lambda *_: None,
             ),
-            "claim",
+            "timeline pr",
         )
         self.assertIsNone(
             competition.strategic_competition_reason(
