@@ -175,12 +175,19 @@ class BasicHeuristicTests(unittest.TestCase):
             "nodejs/undici",
         ):
             self.assertIn(repo, scout.TARGET_REPOS)
-        for query_fragment in (
-            'label:"help wanted" label:"bug"',
-            'label:"good first issue" label:"bug"',
-            'label:"help wanted" regression',
-        ):
-            self.assertTrue(any(query_fragment in q for q in scout.STRATEGIC_GLOBAL_QUERIES))
+        self.assertTrue(
+            any(
+                'label:"help wanted"' in query
+                and 'label:"bug" OR regression' in query
+                for query in scout.STRATEGIC_GLOBAL_QUERIES
+            )
+        )
+        self.assertTrue(
+            any(
+                'label:"good first issue" label:"bug"' in query
+                for query in scout.STRATEGIC_GLOBAL_QUERIES
+            )
+        )
         self.assertLessEqual(
             len(scout.PAID_DISCOVERY_QUERIES) + len(scout.STRATEGIC_GLOBAL_QUERIES),
             10,
