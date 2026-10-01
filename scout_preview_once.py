@@ -1,0 +1,46 @@
+import os
+
+import opportunity_scout as scout
+import scout_bounties as bounty
+
+token = os.environ.get("GITHUB_TOKEN")
+seen = bounty.load_seen_bounties()
+repo_cache = {}
+guide_cache = {}
+
+paid, paid_rejects, paid_examples = scout.discover_paid(
+    token, seen, repo_cache, guide_cache
+)
+strategic, strategic_rejects, strategic_examples = scout.discover_strategic(
+    token, seen, {candidate["url"] for candidate in paid}, repo_cache, guide_cache
+)
+
+by_url = {}
+for candidate in paid + strategic:
+    old = by_url.get(candidate["url"])
+    if not old or candidate["priority_score"] > old["priority_score"]:
+        by_url[candidate["url"]] = candidate
+
+queue = sorted(
+    by_url.values(),
+    key=lambda item: (
+        item["priority_score"],
+        item["career_score"],
+        item["cash_score"],
+        -item["comments"],
+    ),
+    reverse=True,
+)[: scout.REPORT_LIMIT]
+
+print("=== VERIFIED QUEUE ===")
+if not queue:
+    print("No new verified OSS opportunities found.")
+for index, candidate in enumerate(queue, 1):
+    print(scout.markdown_candidate(candidate, index))
+
+print("=== VERIFICATION REJECTS ===")
+for item in (paid_examples + strategic_examples)[:30]:
+    print(f"- {item['url']}: {item['reason']}")
+
+print("=== REJECT COUNTS ===")
+print({**paid_rejects, **strategic_rejects})
