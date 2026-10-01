@@ -3144,9 +3144,7 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(scout, "build_candidate", return_value=preview),
             patch.object(scout, "verify", return_value=(None, reason)),
         ):
-            found, rejected, examples, audit = scout.discover_strategic(
-                "t", set(), set(), {}, {}
-            )
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
         self.assertEqual(found, [])
         self.assertEqual(rejected[reason], 1)
