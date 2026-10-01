@@ -464,7 +464,9 @@ def reporter_resolution_reason(
             )
         ) or (
             "don't see it" in body
-            and any(marker in body for marker in ("latest version", "latest release", "current version"))
+            and any(
+                marker in body for marker in ("latest version", "latest release", "current version")
+            )
         ):
             latest_state = True
 
