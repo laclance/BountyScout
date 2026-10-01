@@ -229,7 +229,12 @@ class ScoringRegressionTests(unittest.TestCase):
             amount_pattern=AMOUNT_RE,
         )
         rendered = scout.markdown_candidate(result, 1)
+        self.assertIn("**Priority score:**", rendered)
         self.assertIn("**Effort basis:** bounded deterministic bug signal", rendered)
+        self.assertIn(
+            "**Priority basis:** 1–3h execution bonus, no visible competition bonus",
+            rendered,
+        )
 
     def test_candidate_exposes_effort_reasons(self) -> None:
         result = scoring.build_candidate(
