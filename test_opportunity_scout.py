@@ -3415,7 +3415,7 @@ class DiscoveryTests(unittest.TestCase):
             len(scout.STRATEGIC_GLOBAL_QUERIES) * scout.STRATEGIC_GLOBAL_SEARCH_PER_PAGE,
             60,
         )
-        self.assertIn("label:\"bug\" OR regression", scout.STRATEGIC_GLOBAL_QUERIES[0])
+        self.assertIn('label:"bug" OR regression', scout.STRATEGIC_GLOBAL_QUERIES[0])
 
     def test_prefetch_discovery_searches_paces_all_queries_in_order(self) -> None:
         with (
@@ -3440,7 +3440,9 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in search.call_args_list], ["p1", "p2", "s1", "s2"])
         self.assertEqual(sleeper.call_count, 3)
         sleeper.assert_called_with(scout.DISCOVERY_SEARCH_INTERVAL_SECONDS)
-        self.assertEqual(search.call_args_list[-1].kwargs["per_page"], scout.STRATEGIC_GLOBAL_SEARCH_PER_PAGE)
+        self.assertEqual(
+            search.call_args_list[-1].kwargs["per_page"], scout.STRATEGIC_GLOBAL_SEARCH_PER_PAGE
+        )
 
     def test_discover_strategic_audits_global_search_failure(self) -> None:
         with (
