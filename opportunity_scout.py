@@ -289,9 +289,9 @@ def strategic_competition_reason(
         item,
         token,
         loaded_comments,
+        timeline_pr_checker=timeline_open_pr_reason,
         linked_pr_checker=linked_open_pr_reason,
         strategic_claim_checker=strategic_claim_reason,
-        search_pr_checker=search_open_implementation_pr_reason,
     )
 
 
@@ -1050,7 +1050,7 @@ def discover_strategic(
     source_failure_reasons = {
         "could not refresh source issue",
         "could not refresh issue comments",
-        "could not verify open implementation PR search",
+        "could not verify open implementation PR timeline",
     }
 
     def verify_repo(
@@ -1243,7 +1243,7 @@ def main() -> None:
         for reason in (
             "could not refresh source issue",
             "could not refresh issue comments",
-            "could not verify open implementation PR search",
+            "could not verify open implementation PR timeline",
         )
     )
     coverage_warning = None
