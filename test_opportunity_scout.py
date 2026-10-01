@@ -86,10 +86,25 @@ class FakeResponse:
 class BasicHeuristicTests(unittest.TestCase):
     def test_target_repo_queries_chunk_all_targets(self) -> None:
         queries = scout.target_repo_queries()
-        self.assertEqual(len(queries), 5)
+        expected = (
+            len(scout.TARGET_REPOS) + scout.TARGET_REPO_QUERY_CHUNK - 1
+        ) // scout.TARGET_REPO_QUERY_CHUNK
+        self.assertEqual(len(queries), expected)
         joined = " ".join(queries)
         for repo in scout.TARGET_REPOS:
             self.assertIn(f"repo:{repo}", joined)
+        for repo in (
+            "grpc/grpc-go",
+            "etcd-io/etcd",
+            "containerd/containerd",
+            "cloudflare/cloudflared",
+            "open-telemetry/opentelemetry-js",
+            "nodejs/undici",
+        ):
+            self.assertIn(repo, scout.TARGET_REPOS)
+        self.assertTrue(
+            any('label:"good first issue" bug' in q for q in scout.STRATEGIC_GLOBAL_QUERIES)
+        )
 
     def test_issue_text_handles_dict_and_string_labels(self) -> None:
         title, body, labels, text = scout.issue_text(

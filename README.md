@@ -34,9 +34,9 @@ Cash score considers payment confidence, stated reward, rough expected hourly va
 
 ## Strategic OSS lane
 
-Strategic discovery starts with a small target list covering AWS/Kubernetes, networking, observability, Go tooling, Terraform, and GitOps, plus a few narrow global searches.
+Strategic discovery starts with a curated target list covering AWS/Kubernetes, container runtimes, networking, RPC/storage, observability, Go tooling, Terraform, GitOps, and selected JS/TS infrastructure projects, plus narrow global searches for contributor-ready bugs.
 
-Candidates are provisionally ranked first. Only the best few get the expensive verification pass, which refreshes the source issue and checks:
+Candidates are provisionally ranked first. Search depth is intentionally broader than the final queue, and only the strongest candidates get the expensive verification pass, which refreshes the source issue and checks:
 
 - issue is still open and unassigned
 - no obvious active claim

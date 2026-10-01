@@ -26,15 +26,27 @@ TARGET_REPOS = [
     "fluxcd/flux2",
     "argoproj/argo-cd",
     "golangci/golangci-lint",
+    "containerd/containerd",
+    "moby/moby",
+    "grpc/grpc-go",
+    "etcd-io/etcd",
+    "cloudflare/cloudflared",
+    "traefik/traefik",
+    "open-telemetry/opentelemetry-js",
+    "nodejs/undici",
 ]
 STRATEGIC_GLOBAL_QUERIES = [
     'is:issue is:open no:assignee label:"help wanted" regression sort:updated-desc',
     'is:issue is:open no:assignee label:"help wanted" tests sort:updated-desc',
+    'is:issue is:open no:assignee label:"help wanted" panic sort:updated-desc',
+    'is:issue is:open no:assignee label:"help wanted" deadlock sort:updated-desc',
+    'is:issue is:open no:assignee label:"good first issue" bug sort:updated-desc',
     'is:issue is:open no:assignee label:"bug" kubernetes sort:updated-desc',
     'is:issue is:open no:assignee label:"bug" networking sort:updated-desc',
 ]
 TARGET_REPO_QUERY_CHUNK = 3
-STRATEGIC_VERIFY_LIMIT = 12
+STRATEGIC_SEARCH_PER_PAGE = 20
+STRATEGIC_VERIFY_LIMIT = 20
 REPORT_LIMIT = 8
 
 PAID_DISCOVERY_QUERIES = list(
@@ -1121,7 +1133,9 @@ def discover_strategic(
     rejected: dict[str, int] = {}
     examples: list[dict[str, Any]] = []
     for query in target_repo_queries() + STRATEGIC_GLOBAL_QUERIES:
-        for item in bounty.search_github(query, token, per_page=12).get("items", []):
+        for item in bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE).get(
+            "items", []
+        ):
             url = item.get("html_url")
             if not url or url in seen or url in paid_urls or url in touched:
                 continue
