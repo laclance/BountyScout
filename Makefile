@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: setup format lint typecheck test map map-check quality
+.PHONY: setup format format-check lint compile typecheck test map map-check quality
 
 setup:
 	$(PYTHON) -m pip install -r requirements-dev.txt
@@ -8,8 +8,14 @@ setup:
 format:
 	$(PYTHON) -m ruff format .
 
+format-check:
+	$(PYTHON) -m ruff format --check .
+
 lint:
 	$(PYTHON) -m ruff check .
+
+compile:
+	$(PYTHON) -m py_compile scout_bounties.py opportunity_scout.py strategic_claims.py scripts/generate_codebase_map.py test_scout_bounties.py test_opportunity_scout.py
 
 typecheck:
 	$(PYTHON) -m mypy
@@ -24,5 +30,4 @@ map:
 map-check:
 	$(PYTHON) scripts/generate_codebase_map.py --check
 
-quality: lint map-check typecheck test
-	$(PYTHON) -m ruff format --check .
+quality: format-check lint compile map-check typecheck test
