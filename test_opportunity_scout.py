@@ -112,9 +112,7 @@ class BasicHeuristicTests(unittest.TestCase):
             'label:"Help-Wanted"',
             'label:"contributor/help-wanted"',
         ):
-            self.assertTrue(
-                any(query_fragment in q for q in scout.STRATEGIC_GLOBAL_QUERIES)
-            )
+            self.assertTrue(any(query_fragment in q for q in scout.STRATEGIC_GLOBAL_QUERIES))
 
     def test_issue_text_handles_dict_and_string_labels(self) -> None:
         title, body, labels, text = scout.issue_text(
