@@ -252,6 +252,9 @@ SUPPLEMENTAL_CLAIM_PATTERNS = [
     r"\bplan to (?:fix|work on|implement|handle)\b",
     r"\bstarting (?:work on|a fix for)\b",
     r"\bi(?:'ll| will) (?:fix|work on|implement|handle)\b",
+    r"\bi can take (?:this|it|this one)\b",
+    r"\bi(?:'ll| will) take (?:this|it|this one)\b",
+    r"\bi(?:'ll| will) take a look at (?:this|it|this one)\b",
     r"\bimplementing (?:this|a fix)\b",
     r"\bworking on (?:a |the )?fix\b",
 ]
@@ -301,6 +304,35 @@ def linked_open_pr_reason(
     return None
 
 
+def timeline_open_pr_reason(item: Mapping[str, Any], token: str | None) -> str | None:
+    """Detect open PRs that GitHub has cross-referenced on the issue timeline."""
+    repo, number = bounty.issue_repo_and_number(item)
+    if not repo or not number:
+        return None
+
+    timeline = bounty.github_get(
+        f"https://api.github.com/repos/{repo}/issues/{number}/timeline?per_page=100",
+        token,
+    )
+    if not isinstance(timeline, list):
+        return None
+
+    for event in timeline:
+        if event.get("event") != "cross-referenced":
+            continue
+        source = event.get("source") or {}
+        source_issue = source.get("issue") if isinstance(source, dict) else None
+        if not isinstance(source_issue, dict) or not source_issue.get("pull_request"):
+            continue
+        if source_issue.get("state") != "open":
+            continue
+        url = source_issue.get("html_url")
+        if url:
+            return f"existing open implementation PR: {url}"
+
+    return None
+
+
 def supplemental_claim_reason(
     item: Mapping[str, Any], token: str | None, comments: list[dict[str, Any]] | None = None
 ) -> str | None:
@@ -325,6 +357,10 @@ def extended_competition_reason(item: Mapping[str, Any], token: str | None) -> s
         return "could not identify repository/issue number"
 
     reason = bounty.has_existing_implementation_pr(repo, number, token)
+    if reason:
+        return reason
+
+    reason = timeline_open_pr_reason(item, token)
     if reason:
         return reason
 
@@ -841,6 +877,53 @@ def refresh_issue(
     return fresh, None
 
 
+def upstream_wrapper_issue_url(item: Mapping[str, Any]) -> str | None:
+    """Return the real GitHub source issue for explicit aggregator/handoff wrappers."""
+    title = str(item.get("title", ""))
+    body = str(item.get("body", ""))
+    if "ORIGINAL_ISSUE_URL" not in body:
+        return None
+    if "TARGET_REPOSITORY" not in body and "READY FOR ENGINEERING" not in title.upper():
+        return None
+
+    match = re.search(
+        r"\bORIGINAL_ISSUE_URL\b.{0,240}?"
+        r"(https://github\.com/[^/\s]+/[^/\s]+/issues/\d+)",
+        body,
+        re.IGNORECASE | re.DOTALL,
+    )
+    return match.group(1) if match else None
+
+
+def non_actionable_diagnostic_reason(item: Mapping[str, Any]) -> str | None:
+    """Reject machine/OS crash diagnostics that lack an actionable contributor path."""
+    _, body, labels, text = issue_text(item)
+    maintainer_ready = any(label in labels for label in TRIAGE_ACCEPTED_LABELS)
+    if maintainer_ready or code_reference_count(body):
+        return None
+
+    system_failure = re.search(
+        r"\b(?:hard hang|black screen|kernel panic|force power|force-reset|force reset)\b",
+        text,
+    )
+    hardware_specific = re.search(
+        r"\bmacos\b.*\b(?:m[1-9]|apple silicon)\b|"
+        r"\b(?:m[1-9]|apple silicon)\b.*\bmacos\b",
+        text,
+        re.DOTALL,
+    )
+    diagnostic_only = re.search(
+        r"\b(?:no deterministic repro|no .{0,30}(?:app|userspace) crash|"
+        r"not in the panic backtrace|sysdiagnose|panic logs?|filed with apple|"
+        r"force-reset reports?)\b",
+        text,
+        re.DOTALL,
+    )
+    if system_failure and hardware_specific and diagnostic_only:
+        return "hardware/kernel diagnostic report without actionable contributor scope"
+    return None
+
+
 def strategic_rejection(item: Mapping[str, Any], token: str | None) -> str | None:
     if not bounty.is_clean_candidate(item):
         return "failed basic eligibility filter"
@@ -870,6 +953,10 @@ def strategic_rejection(item: Mapping[str, Any], token: str | None) -> str | Non
     if TRIAGE_PENDING_LABELS & label_set and not TRIAGE_ACCEPTED_LABELS & label_set:
         return "awaiting maintainer triage"
 
+    diagnostic_reason = non_actionable_diagnostic_reason(item)
+    if diagnostic_reason:
+        return diagnostic_reason
+
     return extended_competition_reason(item, token)
 
 
@@ -886,6 +973,18 @@ def verify(
         return None, reason
     if fresh is None:
         return None, "could not refresh source issue"
+
+    upstream_url = upstream_wrapper_issue_url(fresh)
+    if upstream_url:
+        upstream = issue_from_github_url(upstream_url, token)
+        if upstream is None:
+            return None, "could not refresh upstream issue from aggregator wrapper"
+        fresh, reason = refresh_issue(upstream, token)
+        if reason:
+            return None, f"upstream source: {reason}"
+        if fresh is None:
+            return None, "could not refresh upstream issue from aggregator wrapper"
+
     if not bounty.is_clean_candidate(fresh):
         return None, "failed basic eligibility filter after source refresh"
 
