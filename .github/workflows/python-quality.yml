@@ -133,8 +133,7 @@ jobs:
           )
           for branch in "${branches[@]}"; do
             echo "Deleting branch $branch"
-            encoded_ref="$(python -c 'import sys, urllib.parse; print(urllib.parse.quote("heads/" + sys.argv[1], safe=""))' "$branch")"
-            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/$encoded_ref" || {
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" || {
               echo "Branch $branch was already absent or could not be deleted."
             }
           done
@@ -145,6 +144,5 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           gh api --method PATCH "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" -f state=closed >/dev/null
-          encoded_ref="$(python -c 'import urllib.parse; print(urllib.parse.quote("heads/ops/repository-cleanup-20261001", safe=""))')"
-          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/$encoded_ref"
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/ops/repository-cleanup-20261001"
 
