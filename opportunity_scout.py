@@ -26,6 +26,7 @@ from strategic_readiness import (
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
     proposal_stage_signal as proposal_stage_signal,
     reporter_resolution_reason as reporter_resolution_reason,
+    reward_history_reason as reward_history_reason,
     security_disclosure_reason as security_disclosure_reason,
     readiness_pending_label_reason as readiness_pending_label_reason,
     release_tracking_reason as release_tracking_reason,
@@ -68,6 +69,9 @@ TARGET_REPO_FETCH_PAGES = 3
 STRATEGIC_INSPECT_PER_REPO = 15
 STRATEGIC_ADAPTIVE_INSPECT_BUDGET = 24
 STRATEGIC_KEEP_PER_REPO = 3
+STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND = 11
+STRATEGIC_REFRESH_FAILURE_LIMIT = 2
+STRATEGIC_COVERAGE_WARNING_THRESHOLD = 5
 STRATEGIC_MIN_CAREER_SCORE = 55
 STRATEGIC_AUDIT_LIMIT = 20
 PAID_MIN_CASH_SCORE = 55
@@ -627,6 +631,10 @@ def verify(
     if not clean:
         return None, "failed basic eligibility filter after source refresh"
 
+    reward_history = reward_history_reason(fresh)
+    if reward_history:
+        return None, reward_history
+
     issue_signal = bounty.payment_signal(fresh) or supplemental_payment_signal(fresh)
     comment_signal = None
     if not issue_signal and int(fresh.get("comments") or 0):
@@ -661,7 +669,12 @@ def verify(
 
         lane = "paid"
     else:
-        comments = issue_comments(fresh, token) if activity_comments is None else activity_comments
+        if activity_comments is None:
+            comments, comments_reason = github.issue_comments_checked(fresh, token)
+            if comments_reason:
+                return None, comments_reason
+        else:
+            comments = activity_comments
         reason = strategic_rejection(fresh, token, comments)
         if reason:
             return None, reason
@@ -803,6 +816,7 @@ def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     """Flag strong raw results that deserve scrutiny when filters discard them."""
     if (
         security_disclosure_reason(item)
+        or reward_history_reason(item)
         or manual_tracking_issue_reason(item)
         or automated_tracking_issue_reason(item)
         or release_tracking_reason(item)
@@ -1004,106 +1018,148 @@ def discover_strategic(
                 "strong-looking result fell outside the adaptive repo inspection pool",
             )
 
-    inspection_rows = [(repo, item) for repo, items in inspected.items() for item in items]
-    with ThreadPoolExecutor(
-        max_workers=min(NETWORK_WORKERS, max(1, len(inspection_rows)))
-    ) as executor:
-        comment_batches = list(
-            executor.map(
-                lambda row: issue_comments(row[1], token),
-                inspection_rows,
-            )
-        )
-
-    ranked_by_repo: dict[
-        str,
-        list[tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]],
-    ] = {}
-    for (repo, item), comments in zip(inspection_rows, comment_batches, strict=True):
-        signal = bounty.payment_signal(item)
-        lane = "paid" if signal else "strategic"
-        preview = build_candidate(
-            item,
-            lane,
-            signal,
-            repo_cache[repo],
-            None,
-            comments,
-        )
-        ranked_by_repo.setdefault(repo, []).append(
-            (
-                preview["priority_score"],
-                preview["career_score"],
-                preview["cash_score"],
+    ranked_by_repo: dict[str, list[sources.IssueRow]] = {}
+    for repo, items in inspected.items():
+        ranked: list[sources.IssueRow] = []
+        for item in items:
+            signal = bounty.payment_signal(item)
+            lane = "paid" if signal else "strategic"
+            preview = build_candidate(
                 item,
-                comments,
+                lane,
+                signal,
+                repo_cache[repo],
+                None,
             )
-        )
-
-    verification_rows: list[
-        tuple[str, tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]]
-    ] = []
-    for repo in inspected:
-        ranked = ranked_by_repo.get(repo, [])
+            ranked.append(
+                (
+                    preview["priority_score"],
+                    preview["career_score"],
+                    preview["cash_score"],
+                    item,
+                )
+            )
         ranked.sort(key=lambda row: row[:3], reverse=True)
-        verification_rows.extend((repo, row) for row in ranked)
+        ranked_by_repo[repo] = ranked
 
-    def verify_row(
-        entry: tuple[
-            str,
-            tuple[int, int, int, dict[str, Any], list[dict[str, Any]]],
-        ],
+    source_failure_reasons = {
+        "could not refresh source issue",
+        "could not refresh issue comments",
+    }
+
+    def verify_repo(
+        entry: tuple[str, list[sources.IssueRow]],
     ) -> tuple[
-        tuple[
-            str,
-            tuple[int, int, int, dict[str, Any], list[dict[str, Any]]],
+        str,
+        list[
+            tuple[
+                sources.IssueRow,
+                dict[str, Any] | None,
+                str | None,
+            ]
         ],
-        tuple[dict[str, Any] | None, str | None],
+        bool,
     ]:
-        repo, row = entry
-        item = row[3]
-        comments = row[4]
-        return (
-            (repo, row),
-            verify(
+        repo, ranked = entry
+        outcomes: list[
+            tuple[
+                sources.IssueRow,
+                dict[str, Any] | None,
+                str | None,
+            ]
+        ] = []
+        accepted: list[dict[str, Any]] = []
+        consecutive_source_failures = 0
+
+        for index, row in enumerate(ranked):
+            item = row[3]
+            candidate, reason = verify(
                 item,
                 token,
                 repo_cache,
                 guide_cache,
-                activity_comments=comments,
-            ),
-        )
+            )
+            outcomes.append((row, candidate, reason))
 
+            if reason in source_failure_reasons:
+                consecutive_source_failures += 1
+            else:
+                consecutive_source_failures = 0
+
+            if (
+                candidate is not None
+                and reason is None
+                and candidate["career_score"] >= STRATEGIC_MIN_CAREER_SCORE
+            ):
+                accepted.append(candidate)
+
+            if consecutive_source_failures >= STRATEGIC_REFRESH_FAILURE_LIMIT:
+                return repo, outcomes, True
+
+            remaining = ranked[index + 1 :]
+            if sources.strategic_repo_slots_settled(
+                accepted,
+                remaining,
+                keep_per_repo=STRATEGIC_KEEP_PER_REPO,
+                score_uplift_bound=STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND,
+            ):
+                return repo, outcomes, False
+
+        return repo, outcomes, False
+
+    verification_inputs = list(ranked_by_repo.items())
     with ThreadPoolExecutor(
-        max_workers=min(NETWORK_WORKERS, max(1, len(verification_rows)))
+        max_workers=min(NETWORK_WORKERS, max(1, len(verification_inputs)))
     ) as executor:
-        verification_results = list(executor.map(verify_row, verification_rows))
+        repo_verification_results = list(executor.map(verify_repo, verification_inputs))
 
     verified_by_repo: dict[str, list[dict[str, Any]]] = {repo: [] for repo in inspected}
-    for (repo, row), (candidate, reason) in verification_results:
-        item = row[3]
-        if reason:
-            add_reject(rejected, examples, item, reason)
-            print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
-            continue
+    verified_rows = 0
+    selected_rows = sum(len(rows) for rows in ranked_by_repo.values())
+    for repo, outcomes, coverage_incomplete in repo_verification_results:
+        verified_rows += len(outcomes)
+        for row, candidate, reason in outcomes:
+            item = row[3]
+            if reason:
+                add_reject(rejected, examples, item, reason)
+                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+                continue
 
-        assert candidate is not None
-        if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
-            reason = (
-                f"career score {candidate['career_score']}/100 below strategic threshold "
-                f"{STRATEGIC_MIN_CAREER_SCORE}/100"
-            )
-            add_reject(rejected, examples, item, reason)
-            if possible_miss_signal(item):
+            assert candidate is not None
+            if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
+                reason = (
+                    f"career score {candidate['career_score']}/100 below strategic threshold "
+                    f"{STRATEGIC_MIN_CAREER_SCORE}/100"
+                )
+                add_reject(rejected, examples, item, reason)
+                if possible_miss_signal(item):
+                    add_audit(
+                        audit,
+                        item,
+                        f"strong-looking near miss: {reason}",
+                    )
+                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+                continue
+
+            verified_by_repo[repo].append(candidate)
+
+        if coverage_incomplete:
+            remaining = ranked_by_repo[repo][len(outcomes) :]
+            if remaining:
                 add_audit(
                     audit,
-                    item,
-                    f"strong-looking near miss: {reason}",
+                    remaining[0][3],
+                    f"verification coverage incomplete for {repo} after repeated source failures",
                 )
-            print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
-            continue
+            print(
+                "Strategic verification coverage incomplete for "
+                f"{repo}; stopped after {len(outcomes)} deep checks"
+            )
 
-        verified_by_repo[repo].append(candidate)
+    print(
+        "Strategic deep verification: "
+        f"{verified_rows}/{selected_rows} inspected rows required network checks"
+    )
 
     found: list[dict[str, Any]] = []
     for repo in inspected:
@@ -1175,13 +1231,29 @@ def main() -> None:
         for item in strategic_audit:
             print(f"- {item['url']}: {item['reason']}")
 
-    if not queue:
+    rejects = reporting.rejection_summary(paid_rejects, strategic_rejects)
+    source_failures = sum(
+        strategic_rejects.get(reason, 0)
+        for reason in (
+            "could not refresh source issue",
+            "could not refresh issue comments",
+        )
+    )
+    coverage_warning = None
+    if source_failures >= STRATEGIC_COVERAGE_WARNING_THRESHOLD:
+        coverage_warning = (
+            "Strategic verification coverage is incomplete: "
+            f"{source_failures} source/comment refreshes failed, so this ranking may omit "
+            "stronger candidates. Seen-state will not be advanced for this run."
+        )
+        print(f"WARNING: {coverage_warning}")
+
+    if not queue and coverage_warning is None:
         print("No new verified OSS opportunities found.")
         return
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    message = reporting.notification_message(queue, now)
-    rejects = reporting.rejection_summary(paid_rejects, strategic_rejects)
+    message = reporting.notification_message(queue, now, warning=coverage_warning)
 
     attempted = False
     delivered = False
@@ -1209,6 +1281,7 @@ def main() -> None:
             verification_examples=paid_examples + strategic_examples,
             strategic_audit=strategic_audit,
             reject_counts=rejects,
+            coverage_warning=coverage_warning,
         )
         delivered = (
             bounty.create_github_issue(
@@ -1226,9 +1299,11 @@ def main() -> None:
             + ", ".join(f"{k}={v}" for k, v in sorted(rejects.items()))
         )
 
-    if attempted and delivered:
+    if attempted and delivered and coverage_warning is None:
         seen.update(x["url"] for x in queue)
         bounty.save_seen_bounties(seen)
+    elif attempted and delivered:
+        print("Verification coverage incomplete; state was not updated.")
     else:
         print("No notification was delivered; state was not updated.")
 

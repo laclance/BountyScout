@@ -312,5 +312,96 @@ class AdaptiveInspectionTests(unittest.TestCase):
         self.assertEqual(selected, {})
 
 
+class VerificationSettlementTests(unittest.TestCase):
+    def test_candidate_rank_key_matches_queue_order(self) -> None:
+        self.assertEqual(
+            sources.candidate_rank_key(
+                {
+                    "priority_score": 80,
+                    "career_score": 70,
+                    "cash_score": 0,
+                    "comments": 2,
+                }
+            ),
+            (80, 70, 0, -2),
+        )
+
+    def test_verification_upper_bound_accounts_for_score_uplift(self) -> None:
+        row: sources.IssueRow = (70, 60, 0, issue(1, comments=3))
+        self.assertEqual(
+            sources.strategic_verification_upper_bound(
+                row,
+                score_uplift_bound=11,
+            ),
+            (81, 71, 0, -3),
+        )
+        capped: sources.IssueRow = (95, 96, 0, issue(2, comments=0))
+        self.assertEqual(
+            sources.strategic_verification_upper_bound(
+                capped,
+                score_uplift_bound=11,
+            ),
+            (100, 100, 0, 0),
+        )
+
+    def test_repo_slots_settle_only_when_remaining_cannot_displace_cutoff(self) -> None:
+        verified = [
+            {
+                "priority_score": 90,
+                "career_score": 90,
+                "cash_score": 0,
+                "comments": 0,
+            },
+            {
+                "priority_score": 85,
+                "career_score": 85,
+                "cash_score": 0,
+                "comments": 1,
+            },
+            {
+                "priority_score": 80,
+                "career_score": 80,
+                "cash_score": 0,
+                "comments": 2,
+            },
+        ]
+        self.assertFalse(
+            sources.strategic_repo_slots_settled(
+                verified[:2],
+                [],
+                keep_per_repo=3,
+                score_uplift_bound=11,
+            )
+        )
+        self.assertTrue(
+            sources.strategic_repo_slots_settled(
+                verified,
+                [],
+                keep_per_repo=3,
+                score_uplift_bound=11,
+            )
+        )
+
+        competitive: list[sources.IssueRow] = [(75, 75, 0, issue(3))]
+        self.assertFalse(
+            sources.strategic_repo_slots_settled(
+                verified,
+                competitive,
+                keep_per_repo=3,
+                score_uplift_bound=11,
+            )
+        )
+
+        safely_below: list[sources.IssueRow] = [(68, 68, 0, issue(4))]
+        self.assertTrue(
+            sources.strategic_repo_slots_settled(
+                verified,
+                safely_below,
+                keep_per_repo=3,
+                score_uplift_bound=11,
+            )
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -422,6 +422,33 @@ class SecurityDisclosureTests(unittest.TestCase):
         )
 
 
+class RewardHistoryTests(unittest.TestCase):
+    def test_hall_of_fame_payout_summary_is_not_open_paid_work(self) -> None:
+        hall = issue(
+            title="🏆 Hall of Fame — October 2026",
+            labels=[{"name": "hall-of-fame"}],
+            body=(
+                "## 🥇 Top Contributors\n"
+                "## ⚡ Fastest Fixes\n"
+                "## 📊 Monthly Stats\n"
+                "Total Bounty Distributed | **$4770**"
+            ),
+        )
+        self.assertEqual(
+            readiness.reward_history_reason(hall),
+            "bounty history/leaderboard, not an open paid task",
+        )
+        self.assertIsNone(
+            readiness.reward_history_reason(
+                issue(
+                    title="Implement leaderboard pagination",
+                    labels=[{"name": "bounty"}],
+                    body="Open task with a $50 reward.",
+                )
+            )
+        )
+
+
 class ManualTrackingIssueTests(unittest.TestCase):
     def test_multi_child_umbrella_tracker_is_not_single_implementation_task(self) -> None:
         tracker = issue(

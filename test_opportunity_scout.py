@@ -2542,6 +2542,25 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True), ({"ok": True}, None))
 
+    def test_verify_rejects_hall_of_fame_before_paid_scoring(self) -> None:
+        fresh = issue(
+            title="🏆 Hall of Fame — October 2026",
+            body=(
+                "## 🥇 Top Contributors\n## 📊 Monthly Stats\nTotal Bounty Distributed | **$4770**"
+            ),
+            labels=[{"name": "hall-of-fame"}],
+            comments=0,
+        )
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(bounty, "candidate_rejection_reason") as upstream,
+        ):
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {}, require_paid=True)[1],
+                "bounty history/leaderboard, not an open paid task",
+            )
+        upstream.assert_not_called()
+
     def test_verify_paid_rejects_recent_issue_author_prepared_patch(self) -> None:
         fresh = issue(
             body=(
@@ -2594,6 +2613,48 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(
                 scout.verify(fresh, "t", {}, {}, True)[1], "no explicit payment signal"
             )
+
+    def test_verify_strategic_fails_closed_when_comments_cannot_refresh(self) -> None:
+        fresh = issue(body="", title="Feature", comments=2)
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([], "could not refresh issue comments"),
+            ),
+            patch.object(scout, "strategic_rejection") as rejection,
+        ):
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {})[1],
+                "could not refresh issue comments",
+            )
+        rejection.assert_not_called()
+
+    def test_verify_strategic_uses_supplied_comments_and_handles_missing_repo(self) -> None:
+        fresh = issue(body="", title="Feature", comments=1)
+        supplied = [{"body": "Maintainer context"}]
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(scout, "strategic_basic_candidate", return_value=True),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(scout, "strategic_rejection", return_value=None) as rejection,
+            patch.object(bounty, "issue_repo_and_number", return_value=(None, None)),
+        ):
+            self.assertEqual(
+                scout.verify(
+                    fresh,
+                    "t",
+                    {},
+                    {},
+                    activity_comments=supplied,
+                )[1],
+                "could not identify repository/issue number",
+            )
+        rejection.assert_called_once_with(fresh, "t", supplied)
 
     def test_verify_non_payment_rejection_and_strategic_success(self) -> None:
         paid = issue(body="bounty $100", comments=0)
@@ -2728,6 +2789,15 @@ class DiscoveryTests(unittest.TestCase):
         )
         self.assertTrue(scout.possible_miss_signal(strong))
         self.assertFalse(scout.possible_miss_signal(stale))
+        self.assertFalse(
+            scout.possible_miss_signal(
+                issue(
+                    title="🏆 Hall of Fame — October 2026",
+                    labels=[{"name": "hall-of-fame"}],
+                    body="Top Contributors\nMonthly Stats\nTotal Bounty Distributed: $4770",
+                )
+            )
+        )
 
         audit: list[dict[str, Any]] = []
         with patch.object(scout, "STRATEGIC_AUDIT_LIMIT", 2):
@@ -2903,7 +2973,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertFalse(any(item["url"] == dirty_weak["html_url"] for item in audit))
         self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
 
-    def test_discover_strategic_verifies_all_then_keeps_best(self) -> None:
+    def test_discover_strategic_stops_when_remaining_cannot_displace_kept_slot(self) -> None:
         winner = issue(
             html_url="https://github.com/g/g/issues/1",
             title="Proxy regression",
@@ -2976,7 +3046,97 @@ class DiscoveryTests(unittest.TestCase):
             found, _, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
         self.assertEqual([item["url"] for item in found], [winner["html_url"]])
-        self.assertEqual(verify_mock.call_count, 3)
+        self.assertEqual(verify_mock.call_count, 2)
+        self.assertEqual(audit, [])
+
+    def test_discover_strategic_stops_repo_after_repeated_source_failures(self) -> None:
+        items = [
+            issue(
+                html_url=f"https://github.com/g/g/issues/{index}",
+                title=f"Regression {index}",
+                labels=[{"name": "bug"}, {"name": "help wanted"}],
+            )
+            for index in range(1, 6)
+        ]
+
+        def preview(
+            item_: dict[str, Any],
+            lane: str,
+            signal: str | None,
+            meta_: dict[str, Any],
+            guide: str | None,
+            *rest: Any,
+        ) -> dict[str, Any]:
+            score = 90 - int(str(item_["html_url"]).rsplit("/", 1)[-1])
+            return candidate(
+                url=item_["html_url"],
+                paid=False,
+                priority_score=score,
+                career_score=score,
+            )
+
+        with (
+            patch.object(scout, "TARGET_REPOS", ["g/g"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(scout, "target_repo_issue_pool", return_value=(items, None)),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(scout, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(scout, "build_candidate", side_effect=preview),
+            patch.object(
+                scout,
+                "verify",
+                side_effect=[
+                    (None, "could not refresh issue comments"),
+                    (None, "could not refresh source issue"),
+                ],
+            ) as verify_mock,
+            patch.object(scout, "STRATEGIC_REFRESH_FAILURE_LIMIT", 2),
+        ):
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual(found, [])
+        self.assertEqual(verify_mock.call_count, 2)
+        self.assertEqual(rejected["could not refresh issue comments"], 1)
+        self.assertEqual(rejected["could not refresh source issue"], 1)
+        self.assertEqual(len(examples), 2)
+        self.assertTrue(
+            any("verification coverage incomplete for g/g" in item["reason"] for item in audit)
+        )
+
+    def test_discover_strategic_coverage_breaker_can_trip_on_last_row(self) -> None:
+        only = issue(
+            html_url="https://github.com/g/g/issues/1",
+            title="Regression",
+            labels=[{"name": "bug"}, {"name": "help wanted"}],
+        )
+        with (
+            patch.object(scout, "TARGET_REPOS", ["g/g"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(scout, "target_repo_issue_pool", return_value=([only], None)),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(scout, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(
+                scout,
+                "build_candidate",
+                return_value=candidate(
+                    url=only["html_url"],
+                    paid=False,
+                    priority_score=90,
+                    career_score=90,
+                ),
+            ),
+            patch.object(
+                scout,
+                "verify",
+                return_value=(None, "could not refresh source issue"),
+            ),
+            patch.object(scout, "STRATEGIC_REFRESH_FAILURE_LIMIT", 1),
+        ):
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual(found, [])
+        self.assertEqual(rejected["could not refresh source issue"], 1)
+        self.assertEqual(len(examples), 1)
         self.assertEqual(audit, [])
 
     def test_discover_strategic_audits_target_source_failure(self) -> None:
@@ -3281,6 +3441,41 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertIn("old", saved)
         self.assertIn(high["url"], saved)
         self.assertIn(strategic["url"], saved)
+
+    def test_main_incomplete_coverage_reports_and_preserves_seen_state(self) -> None:
+        env = {
+            "GITHUB_TOKEN": "tok",
+            "GITHUB_REPOSITORY": "me/BountyScout",
+        }
+        buf = io.StringIO()
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(
+                scout,
+                "discover_strategic",
+                return_value=(
+                    [],
+                    {
+                        "could not refresh source issue": 3,
+                        "could not refresh issue comments": 2,
+                    },
+                    [],
+                    [],
+                ),
+            ),
+            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(bounty, "save_seen_bounties") as save,
+            redirect_stdout(buf),
+        ):
+            scout.main()
+
+        gh.assert_called_once()
+        self.assertIn("0 new verified candidates", gh.call_args.args[2])
+        self.assertIn("Strategic verification coverage is incomplete", gh.call_args.args[3])
+        save.assert_not_called()
+        self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
 
     def test_main_no_delivery_does_not_save(self) -> None:
         paid = candidate()

@@ -140,6 +140,15 @@ class NotificationFormattingTests(unittest.TestCase):
         self.assertLessEqual(len(message), 650)
         self.assertIn("more ranked candidate(s) in the GitHub report", message)
 
+    def test_notification_message_surfaces_coverage_warning(self) -> None:
+        message = reporting.notification_message(
+            [candidate()],
+            "now",
+            warning="Strategic verification coverage is incomplete.",
+        )
+        self.assertIn("⚠️ Strategic verification coverage is incomplete.", message)
+        self.assertIn("#42", message)
+
     def test_notification_message_keeps_all_entries_when_they_fit(self) -> None:
         queue = [candidate(issue_number=1), candidate(issue_number=2)]
         message = reporting.notification_message(queue, "now", max_chars=1900)
@@ -218,6 +227,17 @@ class ReportAssemblyTests(unittest.TestCase):
         self.assertIn("### Potential scanner misses / tuning candidates", body)
         self.assertIn("**Audit summary:** outside adaptive pool ×2", body)
         self.assertIn("**Execution adjustment:** +13", body)
+
+    def test_report_surfaces_coverage_warning_before_candidates(self) -> None:
+        warning = "Strategic verification coverage is incomplete."
+        body = reporting.github_report_body(
+            [candidate()],
+            "now",
+            coverage_warning=warning,
+        )
+        self.assertIn("> [!WARNING]", body)
+        self.assertIn(warning, body)
+        self.assertLess(body.index(warning), body.index("#### 1."))
 
     def test_report_without_rejects_or_audit_has_no_empty_sections(self) -> None:
         body = reporting.github_report_body([candidate()], "now")

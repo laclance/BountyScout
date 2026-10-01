@@ -136,10 +136,13 @@ def notification_message(
     queue: Sequence[Mapping[str, Any]],
     now: str,
     *,
+    warning: str | None = None,
     max_chars: int = 1900,
 ) -> str:
     """Render a notification that stays within the stricter Discord text budget."""
     header = f"🎯 *OSS Opportunity Queue* ({now})\n\n"
+    if warning:
+        header += f"⚠️ {warning}\n\n"
     parts: list[str] = []
     omitted = 0
 
@@ -210,6 +213,7 @@ def github_report_body(
     verification_examples: Sequence[Mapping[str, Any]] = (),
     strategic_audit: Sequence[Mapping[str, Any]] = (),
     reject_counts: Mapping[str, int] | None = None,
+    coverage_warning: str | None = None,
 ) -> str:
     """Render the full GitHub queue report."""
     body = (
@@ -220,6 +224,9 @@ def github_report_body(
         "For strategic work, career score measures long-term value while priority score applies "
         "execution friction from effort and visible competition.\n\n"
     )
+    if coverage_warning:
+        body += f"> [!WARNING]\n> {coverage_warning}\n\n"
+
     for idx, candidate in enumerate(queue, 1):
         body += markdown_candidate(candidate, idx)
 
