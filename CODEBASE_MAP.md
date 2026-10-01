@@ -93,11 +93,12 @@
 - **function** `basic_rejection_audit_reason()` — line 854
 - **function** `add_audit()` — line 894
 - **function** `strategic_inspection_items()` — line 910
-- **function** `discover_strategic()` — line 922
-- **function** `github_report_ref()` — line 1200
-- **function** `markdown_candidate()` — line 1205
-- **function** `notification_candidate()` — line 1210
-- **function** `main()` — line 1215
+- **function** `strategic_global_search_results()` — line 922
+- **function** `discover_strategic()` — line 935
+- **function** `github_report_ref()` — line 1216
+- **function** `markdown_candidate()` — line 1221
+- **function** `notification_candidate()` — line 1226
+- **function** `main()` — line 1231
 
 ## `opportunity_sources.py`
 
