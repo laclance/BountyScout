@@ -92,6 +92,202 @@ def maintainer_comment_authority(comment: Mapping[str, Any]) -> bool:
     )
 
 
+def _diagnostic_evidence_supplied(body: str) -> bool:
+    """Return whether a commenter supplied evidence previously requested by maintainers."""
+    return bool(
+        re.search(
+            r"\b(?:attached|provided|uploaded|included|here(?:'s| is)|see)\b"
+            r".{0,160}\b(?:cpu profile|memory profile|heap profile|profile|stack trace|"
+            r"minimal reproducer|reproducer|logs?|benchmark|trace|dump)\b",
+            body,
+            re.DOTALL,
+        )
+    )
+
+
+def _diagnostic_requested(body: str) -> bool:
+    """Return whether a maintainer explicitly requested concrete diagnostic evidence."""
+    request = re.search(
+        r"\b(?:could|can|would)\s+you\s+(?:please\s+)?"
+        r"(?:provide|share|attach|capture|collect|send)\b|"
+        r"\bwould\s+it\s+be\s+possible\s+to\s+(?:provide|share|attach)\b|"
+        r"\bplease\s+(?:provide|share|attach|capture|collect|send)\b|"
+        r"\bwe\s+need\s+(?:a|the)\b",
+        body,
+    )
+    evidence = re.search(
+        r"\b(?:cpu|memory|heap)\s+profiles?\b|"
+        r"\bprofiles?\s+from\b|"
+        r"\bstack traces?\b|"
+        r"\bminimal reproduc(?:er|tion)\b|"
+        r"\breproducers?\b|"
+        r"\blogs?\s+(?:from|required|showing)\b|"
+        r"\bbenchmarks?\b|"
+        r"\btraces?\b|"
+        r"\bdumps?\b",
+        body,
+    )
+    return bool(request and evidence)
+
+
+def _redirects_to_other_project(body: str) -> bool:
+    """Return whether the maintainer redirects the actual change to another project."""
+    redirect_target = bool(
+        re.search(
+            r"https://github\.com/[\w.-]+/[\w.-]+|"
+            r"(?<![\w.-])[\w.-]+/[\w.-]+(?![\w.-])|"
+            r"\b(?:specification|upstream|another repository|another project|"
+            r"canonical repository)\b",
+            body,
+        )
+    )
+    if not redirect_target:
+        return False
+    return bool(
+        re.search(
+            r"\brequires?\s+(?:a\s+)?(?:change|fix)\s+in\b|"
+            r"\bneeds?\s+to\s+be\s+(?:fixed|changed|implemented)\s+in\b|"
+            r"\bplease\s+open\s+(?:a\s+)?(?:ticket|issue)\s+(?:there|against)\b|"
+            r"\bbest\s+to\s+open\s+(?:a\s+)?(?:ticket|issue)\s+there\b|"
+            r"\b(?:implementation|change|fix)\s+belongs\s+in\b|"
+            r"\bthis\s+is\s+an?\s+upstream\s+issue\b",
+            body,
+        )
+    )
+
+
+def _canonical_duplicate(body: str) -> bool:
+    """Return whether a maintainer points to another issue as the canonical tracker."""
+    canonical_reference = bool(
+        re.search(
+            r"(?<!\w)#\d+\b|https://github\.com/[\w.-]+/[\w.-]+/issues/\d+",
+            body,
+        )
+    )
+    if not canonical_reference or "not a duplicate" in body:
+        return False
+    return bool(
+        re.search(
+            r"\blooks?\s+like\s+(?:a\s+)?(?:\(?possible\)?\s+)?"
+            r"duplicate\s+of\b|"
+            r"\bpossible\s+duplicate\s+of\b|"
+            r"\btracked\s+in\s+(?:issue\s+)?"
+            r"(?:#|https://github\.com/)|"
+            r"\bdiscussion\s+is\s+(?:being\s+)?tracked\s+there\b|"
+            r"\bplease\s+continue\s+(?:this|the discussion)\s+in\b",
+            body,
+        )
+    )
+
+
+def _explicit_ready_signal(body: str) -> bool:
+    """Return whether a maintainer explicitly says implementation may proceed."""
+    return any(
+        marker in body
+        for marker in (
+            "ready for implementation",
+            "ready to implement",
+            "feel free to work on this",
+            "contributions welcome",
+            "prs welcome",
+            "pull requests welcome",
+            "go ahead and implement",
+            "you can start implementation",
+            "happy to accept a pr",
+            "happy to accept a pull request",
+            "pr in this repository is welcome",
+            "pull request in this repository is welcome",
+            "implementation is wanted here",
+            "reviving this issue",
+            "revive this issue",
+            "this issue is active again",
+            "reopening this for implementation",
+        )
+    )
+
+
+def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None, bool]:
+    """Return a not-ready reason and whether it represents pending diagnostics."""
+    diagnostic_requested = _diagnostic_requested(body)
+    if diagnostic_requested:
+        return "maintainer is waiting for requested diagnostic evidence", True
+    if _redirects_to_other_project(body):
+        return "maintainer redirected implementation/discussion to another project", False
+    if _canonical_duplicate(body):
+        return "maintainer indicates this is probably tracked by another canonical issue", False
+    if any(
+        marker in body
+        for marker in (
+            "needs discussion",
+            "need more discussion",
+            "need to discuss this first",
+            "should discuss this first",
+        )
+    ):
+        return "maintainer says issue still needs discussion", False
+    if any(
+        marker in body
+        for marker in (
+            "needs investigation",
+            "need more investigation",
+            "need to investigate",
+            "needs engineering investigation",
+        )
+    ):
+        return "maintainer says issue still needs investigation", False
+    if any(
+        marker in body
+        for marker in (
+            "needs reproduction",
+            "need a reproduction",
+            "need reproduction",
+            "please reproduce",
+            "can you reproduce",
+        )
+    ) or ("are you sure" in body and "reproduc" in body):
+        return "maintainer says reproduction is still required", False
+    if any(
+        marker in body
+        for marker in (
+            "not ready for implementation",
+            "not ready to implement",
+            "please wait before implementing",
+            "please wait to implement",
+            "hold off on implementation",
+            "hold off implementing",
+            "do not start implementation",
+            "don't start implementation",
+        )
+    ):
+        return "maintainer asked contributors to wait before implementation", False
+    if any(
+        marker in body
+        for marker in (
+            "needs clarification",
+            "need clarification",
+            "need to clarify",
+            "please clarify before",
+        )
+    ):
+        return "maintainer says issue still needs clarification", False
+    if proposal_stage and any(
+        marker in body
+        for marker in (
+            "gauge community interest",
+            "gather feedback",
+            "collect feedback",
+            "community time to weigh in",
+            "reevaluate based on the feedback",
+            "re-evaluate based on the feedback",
+            "before committing",
+        )
+    ):
+        return "proposal is still gathering feedback", False
+    if proposal_stage and "time-boxed" in body and "discussion" in body:
+        return "proposal is still gathering feedback", False
+    return None, False
+
+
 def maintainer_readiness_comment_state(
     item: Mapping[str, Any],
     comments: list[dict[str, Any]] | None,
@@ -105,16 +301,7 @@ def maintainer_readiness_comment_state(
     for comment in comments or []:
         body = normalized_claim_text(str(comment.get("body", ""))).lower()
 
-        supplied_diagnostic = bool(
-            re.search(
-                r"\b(?:attached|provided|uploaded|included|here(?:'s| is)|see)\b"
-                r".{0,160}\b(?:cpu profile|memory profile|heap profile|profile|stack trace|"
-                r"minimal reproducer|reproducer|logs?|benchmark|trace|dump)\b",
-                body,
-                re.DOTALL,
-            )
-        )
-        if diagnostic_pending and supplied_diagnostic:
+        if diagnostic_pending and _diagnostic_evidence_supplied(body):
             state = None
             reason = None
             diagnostic_pending = False
@@ -122,181 +309,17 @@ def maintainer_readiness_comment_state(
         if not maintainer_comment_authority(comment):
             continue
 
-        ready = any(
-            marker in body
-            for marker in (
-                "ready for implementation",
-                "ready to implement",
-                "feel free to work on this",
-                "contributions welcome",
-                "prs welcome",
-                "pull requests welcome",
-                "go ahead and implement",
-                "you can start implementation",
-                "happy to accept a pr",
-                "happy to accept a pull request",
-                "pr in this repository is welcome",
-                "pull request in this repository is welcome",
-                "implementation is wanted here",
-                "reviving this issue",
-                "revive this issue",
-                "this issue is active again",
-                "reopening this for implementation",
-            )
-        )
-        if ready:
+        if _explicit_ready_signal(body):
             state = True
             reason = None
             diagnostic_pending = False
             continue
 
-        requested_diagnostic = bool(
-            re.search(
-                r"\b(?:could|can|would)\s+you\s+(?:please\s+)?"
-                r"(?:provide|share|attach|capture|collect|send)\b|"
-                r"\bwould\s+it\s+be\s+possible\s+to\s+(?:provide|share|attach)\b|"
-                r"\bplease\s+(?:provide|share|attach|capture|collect|send)\b|"
-                r"\bwe\s+need\s+(?:a|the)\b",
-                body,
-            )
-            and re.search(
-                r"\b(?:cpu|memory|heap)\s+profiles?\b|"
-                r"\bprofiles?\s+from\b|"
-                r"\bstack traces?\b|"
-                r"\bminimal reproduc(?:er|tion)\b|"
-                r"\breproducers?\b|"
-                r"\blogs?\s+(?:from|required|showing)\b|"
-                r"\bbenchmarks?\b|"
-                r"\btraces?\b|"
-                r"\bdumps?\b",
-                body,
-            )
-        )
-        redirect_target = bool(
-            re.search(
-                r"https://github\.com/[\w.-]+/[\w.-]+|"
-                r"(?<![\w.-])[\w.-]+/[\w.-]+(?![\w.-])|"
-                r"\b(?:specification|upstream|another repository|another project|"
-                r"canonical repository)\b",
-                body,
-            )
-        )
-        cross_project_redirect = redirect_target and bool(
-            re.search(
-                r"\brequires?\s+(?:a\s+)?(?:change|fix)\s+in\b|"
-                r"\bneeds?\s+to\s+be\s+(?:fixed|changed|implemented)\s+in\b|"
-                r"\bplease\s+open\s+(?:a\s+)?(?:ticket|issue)\s+(?:there|against)\b|"
-                r"\bbest\s+to\s+open\s+(?:a\s+)?(?:ticket|issue)\s+there\b|"
-                r"\b(?:implementation|change|fix)\s+belongs\s+in\b|"
-                r"\bthis\s+is\s+an?\s+upstream\s+issue\b",
-                body,
-            )
-        )
-        canonical_reference = bool(
-            re.search(
-                r"(?<!\w)#\d+\b|https://github\.com/[\w.-]+/[\w.-]+/issues/\d+",
-                body,
-            )
-        )
-        canonical_duplicate = (
-            canonical_reference
-            and "not a duplicate" not in body
-            and bool(
-                re.search(
-                    r"\blooks?\s+like\s+(?:a\s+)?(?:\(?possible\)?\s+)?"
-                    r"duplicate\s+of\b|"
-                    r"\bpossible\s+duplicate\s+of\b|"
-                    r"\btracked\s+in\s+(?:issue\s+)?"
-                    r"(?:#|https://github\.com/)|"
-                    r"\bdiscussion\s+is\s+(?:being\s+)?tracked\s+there\b|"
-                    r"\bplease\s+continue\s+(?:this|the discussion)\s+in\b",
-                    body,
-                )
-            )
-        )
-
-        hold_reason: str | None = None
-        if requested_diagnostic:
-            hold_reason = "maintainer is waiting for requested diagnostic evidence"
-        elif cross_project_redirect:
-            hold_reason = "maintainer redirected implementation/discussion to another project"
-        elif canonical_duplicate:
-            hold_reason = "maintainer indicates this is probably tracked by another canonical issue"
-        elif any(
-            marker in body
-            for marker in (
-                "needs discussion",
-                "need more discussion",
-                "need to discuss this first",
-                "should discuss this first",
-            )
-        ):
-            hold_reason = "maintainer says issue still needs discussion"
-        elif any(
-            marker in body
-            for marker in (
-                "needs investigation",
-                "need more investigation",
-                "need to investigate",
-                "needs engineering investigation",
-            )
-        ):
-            hold_reason = "maintainer says issue still needs investigation"
-        elif any(
-            marker in body
-            for marker in (
-                "needs reproduction",
-                "need a reproduction",
-                "need reproduction",
-                "please reproduce",
-                "can you reproduce",
-            )
-        ) or ("are you sure" in body and "reproduc" in body):
-            hold_reason = "maintainer says reproduction is still required"
-        elif any(
-            marker in body
-            for marker in (
-                "not ready for implementation",
-                "not ready to implement",
-                "please wait before implementing",
-                "please wait to implement",
-                "hold off on implementation",
-                "hold off implementing",
-                "do not start implementation",
-                "don't start implementation",
-            )
-        ):
-            hold_reason = "maintainer asked contributors to wait before implementation"
-        elif any(
-            marker in body
-            for marker in (
-                "needs clarification",
-                "need clarification",
-                "need to clarify",
-                "please clarify before",
-            )
-        ):
-            hold_reason = "maintainer says issue still needs clarification"
-        elif proposal_stage and any(
-            marker in body
-            for marker in (
-                "gauge community interest",
-                "gather feedback",
-                "collect feedback",
-                "community time to weigh in",
-                "reevaluate based on the feedback",
-                "re-evaluate based on the feedback",
-                "before committing",
-            )
-        ):
-            hold_reason = "proposal is still gathering feedback"
-        elif proposal_stage and "time-boxed" in body and "discussion" in body:
-            hold_reason = "proposal is still gathering feedback"
-
+        hold_reason, diagnostic_requested = _maintainer_hold_reason(body, proposal_stage)
         if hold_reason:
             state = False
             reason = hold_reason
-            diagnostic_pending = requested_diagnostic
+            diagnostic_pending = diagnostic_requested
 
     return state, reason
 
