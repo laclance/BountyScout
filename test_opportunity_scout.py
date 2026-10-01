@@ -496,6 +496,8 @@ class CalibrationTests(unittest.TestCase):
                 )
 
     def test_timeline_open_pr_reason(self) -> None:
+        self.assertIsNone(scout.timeline_open_pr_reason({"html_url": "bad"}, "t"))
+
         timeline = [
             {
                 "event": "cross-referenced",
