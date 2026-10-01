@@ -86,18 +86,18 @@
 - **function** `upstream_wrapper_issue_url()` — line 473
 - **function** `non_actionable_diagnostic_reason()` — line 491
 - **function** `strategic_rejection()` — line 520
-- **function** `verify()` — line 609
-- **function** `add_reject()` — line 722
-- **function** `discover_paid()` — line 730
-- **function** `possible_miss_signal()` — line 820
-- **function** `basic_rejection_audit_reason()` — line 852
-- **function** `add_audit()` — line 892
-- **function** `strategic_inspection_items()` — line 908
-- **function** `discover_strategic()` — line 920
-- **function** `github_report_ref()` — line 1198
-- **function** `markdown_candidate()` — line 1203
-- **function** `notification_candidate()` — line 1208
-- **function** `main()` — line 1213
+- **function** `verify()` — line 611
+- **function** `add_reject()` — line 724
+- **function** `discover_paid()` — line 732
+- **function** `possible_miss_signal()` — line 822
+- **function** `basic_rejection_audit_reason()` — line 854
+- **function** `add_audit()` — line 894
+- **function** `strategic_inspection_items()` — line 910
+- **function** `discover_strategic()` — line 922
+- **function** `github_report_ref()` — line 1200
+- **function** `markdown_candidate()` — line 1205
+- **function** `notification_candidate()` — line 1210
+- **function** `main()` — line 1215
 
 ## `opportunity_sources.py`
 
@@ -173,5 +173,5 @@
 - **function** `reward_history_reason()` — line 513
 - **function** `reporter_support_triage_reason()` — line 534
 - **function** `manual_tracking_issue_reason()` — line 555
-- **function** `automated_tracking_issue_reason()` — line 602
-- **function** `release_tracking_reason()` — line 646
+- **function** `automated_tracking_issue_reason()` — line 607
+- **function** `release_tracking_reason()` — line 651

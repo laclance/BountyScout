@@ -2225,6 +2225,47 @@ class VerificationTests(unittest.TestCase):
             "umbrella tracking issue, not a single implementation task",
         )
 
+    def test_fresh_1525_run_false_positive_regressions(self) -> None:
+        controller_runtime = issue(
+            html_url="https://github.com/kubernetes-sigs/controller-runtime/issues/3054",
+            title="Metrics improvements",
+            body=(
+                "This is an umbrella issue to (try) to keep an overview over current "
+                "feature requests and limitations around metrics."
+            ),
+            author_association="MEMBER",
+            labels=[{"name": "lifecycle/frozen"}],
+            comments=2,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(controller_runtime, "t", []),
+            "umbrella tracking issue, not a single implementation task",
+        )
+
+        etcd_release = issue(
+            html_url="https://github.com/etcd-io/etcd/issues/22449",
+            title="Plan to release v3.5.34",
+            body="The patch release criteria has been met, so we should release v3.5.34.",
+            author_association="MEMBER",
+            labels=[{"name": "area/security"}, {"name": "type/feature"}],
+            comments=2,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(etcd_release, "t", []),
+            "release planning/tracking issue, not implementation work",
+        )
+
+        claimed = issue(
+            html_url="https://github.com/lacs-project/sysknife/issues/474",
+            title="The plan summary an operator approves is never sanitised",
+            labels=[{"name": "bug"}, {"name": "help wanted"}, {"name": "claimed"}],
+            comments=3,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(claimed, "t", []),
+            "issue is marked claimed by the project",
+        )
+
     def test_fresh_1414_run_false_positive_regressions(self) -> None:
         undici_tracker = issue(
             html_url="https://github.com/nodejs/undici/issues/5177",

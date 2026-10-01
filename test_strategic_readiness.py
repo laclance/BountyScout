@@ -539,6 +539,24 @@ class ManualTrackingIssueTests(unittest.TestCase):
             "umbrella tracking issue, not a single implementation task",
         )
 
+    def test_trusted_issue_author_can_declare_an_umbrella_tracker(self) -> None:
+        tracker = issue(
+            author_association="MEMBER",
+            body=(
+                "This is an umbrella issue to keep an overview over current feature "
+                "requests and limitations around metrics."
+            ),
+        )
+        self.assertEqual(
+            readiness.manual_tracking_issue_reason(tracker),
+            "umbrella tracking issue, not a single implementation task",
+        )
+        self.assertIsNone(
+            readiness.manual_tracking_issue_reason(
+                issue(author_association="NONE", body="This is an umbrella issue for related ideas.")
+            )
+        )
+
     def test_tracking_container_that_delegates_work_to_subissues_is_umbrella(self) -> None:
         tracker = issue(
             title="[2026] Tracking issue for flaky tests",
@@ -644,6 +662,10 @@ class LifecycleClassificationTests(unittest.TestCase):
     def test_release_tracking_and_release_only_work_are_distinct(self) -> None:
         self.assertEqual(
             readiness.release_tracking_reason(issue(title="Release 2.0 tracking checklist")),
+            "release planning/tracking issue, not implementation work",
+        )
+        self.assertEqual(
+            readiness.release_tracking_reason(issue(title="Plan to release v3.5.34")),
             "release planning/tracking issue, not implementation work",
         )
         self.assertEqual(
