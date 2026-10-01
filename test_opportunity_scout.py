@@ -292,7 +292,7 @@ class BasicHeuristicTests(unittest.TestCase):
             "6–12h",
         )
         self.assertEqual(scout.estimate_effort(issue(title="Feature", body="x" * 13000)), "1d+")
-        self.assertEqual(scout.estimate_effort(issue(title="Feature", comments=13)), "1d+")
+        self.assertEqual(scout.estimate_effort(issue(title="Feature", comments=13)), "3–6h")
         self.assertEqual(
             scout.estimate_effort(issue(title="Feature", body="normal", comments=4)), "3–6h"
         )

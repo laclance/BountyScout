@@ -12,6 +12,7 @@ from time import monotonic
 from typing import Any, Mapping, cast
 
 import scout_bounties as bounty
+import opportunity_scoring as scoring
 import strategic_competition as competition_policy
 from strategic_claims import strategic_claim_text as strategic_claim_text
 from strategic_readiness import (
@@ -128,37 +129,18 @@ def target_repo_issue_pool(repo: str, token: str | None) -> tuple[list[dict[str,
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
-    """Recognize common contributor-ready label dialects."""
-    normalized = re.sub(r"[-_]+", " ", labels_text.lower())
-    return any(
-        marker in normalized
-        for marker in (
-            "help wanted",
-            "good first issue",
-            "triage/accepted",
-            "refined",
-        )
-    )
+    """Compatibility wrapper for contributor-ready label detection."""
+    return scoring.maintainer_ready_signal(labels_text)
 
 
 def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    title = str(item.get("title", ""))
-    body = str(item.get("body", ""))
-    labels = " ".join(
-        str(x.get("name", "")) if isinstance(x, dict) else str(x)
-        for x in (item.get("labels") or [])
-    ).lower()
-    return title, body, labels, f"{title}\n{body}".lower()
-
-
-CODE_FILE_RE = re.compile(
-    r"(?<![\w.-])(?:[\w.-]+/)*[\w.-]+\.(?:go|sh|py|yaml|yml)\b",
-    re.IGNORECASE,
-)
+    """Compatibility wrapper for normalized issue text."""
+    return scoring.issue_text(item)
 
 
 def code_reference_count(text: str) -> int:
-    return len({match.group(0).lower() for match in CODE_FILE_RE.finditer(text)})
+    """Compatibility wrapper for source/config reference counting."""
+    return scoring.code_reference_count(text)
 
 
 def strategic_basic_candidate(item: Mapping[str, Any]) -> bool:
@@ -174,150 +156,43 @@ def strategic_basic_candidate(item: Mapping[str, Any]) -> bool:
 
 
 def documentation_microfix(item: Mapping[str, Any]) -> bool:
-    """Detect tiny docs-only edits that should not outrank substantive code work."""
-    title, body, labels, text = issue_text(item)
-    docs_signal = bool(
-        re.search(
-            r"\b(?:docs?|documentation|readme|typo|spelling|broken image|broken link)\b",
-            f"{title}\n{labels}",
-            re.IGNORECASE,
-        )
-        or re.search(r"\b(?:docs?/|readme(?:\.[a-z]+)?\b)", body, re.IGNORECASE)
-    )
-    micro_signal = bool(
-        re.search(
-            r"\b(?:typo|spelling|broken image|broken link|link fix|image link|"
-            r"documentation cleanup|docs cleanup)\b",
-            text,
-            re.IGNORECASE,
-        )
-    )
-    return docs_signal and micro_signal and code_reference_count(body) == 0
+    """Compatibility wrapper for docs micro-fix detection."""
+    return scoring.documentation_microfix(item)
+
+
+def estimate_effort_details(item: Mapping[str, Any]) -> scoring.EffortEstimate:
+    """Return effort bucket plus the signals that drove it."""
+    return scoring.estimate_effort_details(item)
 
 
 def estimate_effort(item: Mapping[str, Any]) -> str:
-    title, body, labels, text = issue_text(item)
-    comments = int(item.get("comments") or 0)
-    file_refs = code_reference_count(body)
-
-    if (
-        "kind/feature" in labels
-        or "feature request" in labels
-        or title.lower().startswith(("fr:", "feature request:"))
-        or re.search(
-            r"\b(?:propos(?:e|ed|ing|al)|epic|roadmap|redesign|rewrite|"
-            r"migration|multi-phase|architecture|large refactor|rfc|"
-            r"connection pool|add support|explore publishing)\b",
-            text,
-        )
-        or re.search(
-            r"\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\b",
-            text,
-        )
-        or re.search(
-            r"\b(?:unable to reproduce|cannot reproduce|can't reproduce|"
-            r"haven't been able to reproduce|have not been able to reproduce|"
-            r"low-probability race|non[- ]deterministic repro)\b",
-            text,
-        )
-        or len(body) > 12000
-        or comments > 12
-    ):
-        return "1d+"
-
-    if (
-        re.search(r"\b(?:typo|spelling|readme|documentation|docs-only)\b", text)
-        and len(body) < 5000
-    ):
-        return "<1h"
-
-    mobile_or_desktop = any(
-        marker in labels for marker in ("os-android", "os-ios", "os-macos", "os-windows")
-    )
-    missing_reproduction = "_no response_" in text or "no response" in text
-    suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", body))
-    if (
-        file_refs >= 4
-        or "enhancement" in labels
-        or len(body) > 8500
-        or (mobile_or_desktop and missing_reproduction)
-        or (re.search(r"\bsuggested fix(?:es)?\b", text) and suggested_fix_bullets >= 3)
-    ):
-        return "6–12h"
-
-    bounded = re.search(
-        r"\b(?:regression|deterministic|panics?|deadlocks?|races?|"
-        r"leaks?|incorrect|failing tests?|unit tests?|single|small|narrow|"
-        r"no-op|stale|fix(?:es|ed|ing)?)\b|"
-        r"\bnever closes\b|\bevery sync\b",
-        f"{title.lower()} {labels} {text[:4500]}",
-    )
-    if bounded and comments <= 3 and len(body) < 4500 and file_refs <= 2:
-        return "1–3h"
-
-    return "3–6h"
+    """Compatibility wrapper for implementation-effort estimation."""
+    return scoring.estimate_effort(item)
 
 
 def effort_hours(effort: str) -> float:
-    return {
-        "<1h": 0.75,
-        "1–3h": 2.0,
-        "3–6h": 4.5,
-        "6–12h": 9.0,
-        "1d+": 16.0,
-    }[effort]
+    """Compatibility wrapper for paid expected-value representative hours."""
+    return scoring.effort_hours(effort)
 
 
 def competition(item: Mapping[str, Any]) -> str:
-    comments = int(item.get("comments") or 0)
-    if comments == 0:
-        return "none"
-    if comments <= 3:
-        return "low"
-    if comments <= 8:
-        return "medium"
-    return "high"
+    """Compatibility wrapper for discussion-volume competition buckets."""
+    return scoring.competition(item)
 
 
 def payment_confidence(signal: str | None) -> int:
-    if not signal:
-        return 0
-    if signal.startswith("confirmed bounty platform"):
-        return 100
-    if signal.startswith("explicit bounty command"):
-        return 100
-    if signal.startswith("explicit /reward comment"):
-        return 98
-    if signal.startswith("explicit /bounty comment"):
-        return 98
-    if signal.startswith("bounty labels"):
-        return 95
-    if signal.startswith("named bounty platform"):
-        return 90
-    return 85
+    """Compatibility wrapper for payment confidence scoring."""
+    return scoring.payment_confidence(signal)
 
 
 def reward_text(signal: str | None) -> str | None:
-    if not signal:
-        return None
-    match = re.search(EXTENDED_AMOUNT_RE, signal, re.IGNORECASE)
-    return match.group(0).strip() if match else None
+    """Compatibility wrapper for reward display extraction."""
+    return scoring.reward_text(signal, EXTENDED_AMOUNT_RE)
 
 
 def repo_activity(repo_meta: Mapping[str, Any]) -> str:
-    pushed = bounty.parse_github_datetime(repo_meta.get("pushed_at"))
-    if not pushed:
-        return "unknown"
-    days = max(0, (datetime.now(timezone.utc) - pushed).days)
-    if days <= 7:
-        bucket = "active in last 7d"
-    elif days <= 30:
-        bucket = "active in last 30d"
-    elif days <= 90:
-        bucket = "active in last 90d"
-    else:
-        bucket = f"last push {days}d ago"
-    return f"{bucket} ({repo_meta.get('pushed_at')})"
+    """Compatibility wrapper for repository activity summaries."""
+    return scoring.repo_activity(repo_meta)
 
 
 def github_get_optional(url: str, token: str | None) -> Any:
@@ -725,291 +600,17 @@ def build_candidate(
     guide: str | None,
     activity_comments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    repo, number = bounty.issue_repo_and_number(item)
-    effort = estimate_effort(item)
-    comp = competition(item)
-    stars = int(repo_meta.get("stargazers_count") or 0)
-    pushed = bounty.parse_github_datetime(repo_meta.get("pushed_at"))
-    active_30d = bool(pushed and (datetime.now(timezone.utc) - pushed).days <= 30)
-    _, _, labels_text, text = issue_text(item)
-
-    cash = 0
-    cash_reasons = []
-    amount = bounty.usd_like_amount_from_signal(signal)
-    hourly = None
-    if lane == "paid":
-        confidence = payment_confidence(signal)
-        cash += round(confidence * 0.30)
-        cash_reasons.append(f"payment confidence {confidence}/100")
-        if amount is not None:
-            cash += (
-                20
-                if amount >= 500
-                else 16
-                if amount >= 100
-                else 12
-                if amount >= 25
-                else 8
-                if amount >= 5
-                else 4
-            )
-            hourly = amount / effort_hours(effort)
-            cash += (
-                25
-                if hourly >= 100
-                else 21
-                if hourly >= 50
-                else 16
-                if hourly >= 20
-                else 10
-                if hourly >= 10
-                else 4
-            )
-            cash_reasons.append(f"~${hourly:.0f}/h expected value")
-        else:
-            cash_reasons.append("reward not USD-comparable")
-        cash += {"none": 15, "low": 11, "medium": 6, "high": 0}[comp]
-        if stars >= 1000:
-            cash += 7
-            cash_reasons.append("established repo")
-        elif stars >= 100:
-            cash += 4
-        if active_30d:
-            cash += 3
-        cash = max(0, min(100, cash))
-
-    career = 0
-    career_reasons = []
-    if stars >= 10000:
-        career += 18
-        career_reasons.append("10k+ star repo")
-    elif stars >= 1000:
-        career += 14
-        career_reasons.append("1k+ star repo")
-    elif stars >= 100:
-        career += 9
-    elif stars >= 10:
-        career += 4
-    if active_30d:
-        career += 8
-        career_reasons.append("repo active in last 30d")
-    if repo in TARGET_REPOS:
-        career += 14
-        career_reasons.append("target repo bonus")
-
-    language = str(repo_meta.get("language") or "Unknown")
-    lang = language.lower()
-    skill = (
-        12
-        if lang == "go"
-        else 11
-        if lang in ("typescript", "javascript")
-        else 9
-        if lang in ("ruby", "php")
-        else 8
-        if lang == "hcl"
-        else 0
+    """Build ranked candidate output through the extracted scoring module."""
+    return scoring.build_candidate(
+        item,
+        lane,
+        signal,
+        repo_meta,
+        guide,
+        activity_comments,
+        target_repos=TARGET_REPOS,
+        amount_pattern=EXTENDED_AMOUNT_RE,
     )
-    if skill:
-        career_reasons.append(f"{language} codebase")
-    infra_terms = (
-        "kubernetes",
-        "aws",
-        "network",
-        "dns",
-        "proxy",
-        "routing",
-        "observability",
-        "prometheus",
-        "otel",
-        "distributed",
-        "controller",
-        "terraform",
-        "gitops",
-        "backend",
-        "api",
-        "concurrency",
-    )
-    if any(term in text for term in infra_terms):
-        skill += 6
-        career_reasons.append("target infrastructure/domain fit")
-    career += min(18, skill)
-
-    depth_terms = (
-        "race",
-        "deadlock",
-        "concurrency",
-        "network",
-        "dns",
-        "proxy",
-        "routing",
-        "protocol",
-        "controller",
-        "distributed",
-        "storage",
-        "performance",
-        "memory",
-        "leak",
-        "api",
-    )
-    depth = sum(term in text for term in depth_terms)
-    career += (
-        14
-        if depth >= 3
-        else 8
-        if depth >= 1
-        else 4
-        if re.search(r"\b(?:test|regression|bug|fix)\b", text)
-        else 0
-    )
-    if depth:
-        career_reasons.append("meaningful technical depth")
-
-    issue_points = 0
-    if re.search(r"\b(?:test|tests|regression)\b", text):
-        issue_points += 6
-        career_reasons.append("tests/regression signal")
-
-    maintainer_ready = maintainer_ready_signal(labels_text)
-    if maintainer_ready:
-        issue_points += 8
-        career_reasons.append("maintainer-ready signal")
-
-    if guide:
-        issue_points += 3
-        career_reasons.append("contribution guide found")
-
-    effort_points = {
-        "<1h": 9,
-        "1–3h": 7,
-        "3–6h": 4,
-        "6–12h": 1,
-        "1d+": 0,
-    }[effort]
-    issue_points += effort_points
-    if effort in ("<1h", "1–3h"):
-        career_reasons.append("bounded implementation scope")
-
-    _, body, _, _ = issue_text(item)
-    clarity = 0
-    if re.search(r"\b(?:root cause|code path|cause \(from)\b", text):
-        clarity += 3
-    if "steps to reproduce" in text and "_no response_" not in text:
-        clarity += 2
-    if re.search(r"\b(?:suggested fix|possible fix|expected behavior)\b", text):
-        clarity += 2
-    refs = code_reference_count(body)
-    clarity += min(3, refs)
-    if clarity >= 5:
-        career_reasons.append("clear implementation/reproduction detail")
-    elif clarity:
-        career_reasons.append("implementation detail available")
-    issue_points += min(10, clarity)
-
-    career += min(30, issue_points)
-    career -= {"none": 0, "low": 2, "medium": 6, "high": 12}[comp]
-    if effort == "6–12h":
-        career -= 3
-        career_reasons.append("broader implementation scope")
-    elif effort == "1d+":
-        career -= 10
-        career_reasons.append("large-scope penalty")
-
-    if lane == "strategic":
-        now = datetime.now(timezone.utc)
-        created = bounty.parse_github_datetime(item.get("created_at"))
-        updated = bounty.parse_github_datetime(item.get("updated_at"))
-        created_days = max(0, (now - created).days) if created else None
-        updated_days = max(0, (now - updated).days) if updated else None
-
-        if updated_days is not None:
-            if updated_days <= 14:
-                career += 8
-                career_reasons.append("issue active in last 14d")
-            elif updated_days <= 60:
-                career += 5
-                career_reasons.append("issue active in last 60d")
-            elif updated_days <= 180:
-                career += 2
-                career_reasons.append("issue active in last 180d")
-
-        recent_comment_days: int | None = None
-        recent_maintainer_days: int | None = None
-        for comment in activity_comments or []:
-            stamp = bounty.parse_github_datetime(
-                comment.get("updated_at") or comment.get("created_at")
-            )
-            if not stamp:
-                continue
-            days = max(0, (now - stamp).days)
-            if recent_comment_days is None or days < recent_comment_days:
-                recent_comment_days = days
-            association = str(comment.get("author_association", "")).upper()
-            if association in TRUSTED_ASSOCIATIONS and (
-                recent_maintainer_days is None or days < recent_maintainer_days
-            ):
-                recent_maintainer_days = days
-
-        if recent_maintainer_days is not None and recent_maintainer_days <= 90:
-            career += 8
-            career_reasons.append("recent maintainer activity")
-        elif recent_comment_days is not None and recent_comment_days <= 30:
-            career += 4
-            career_reasons.append("recent active discussion")
-
-        recently_active = bool(
-            (updated_days is not None and updated_days <= 180)
-            or (recent_comment_days is not None and recent_comment_days <= 90)
-            or (recent_maintainer_days is not None and recent_maintainer_days <= 180)
-        )
-        if created_days is not None and not maintainer_ready and not recently_active:
-            if created_days > 730:
-                career -= 15
-                career_reasons.append("stale inactive backlog penalty")
-            elif created_days > 365:
-                career -= 8
-                career_reasons.append("older inactive backlog penalty")
-
-    if lane == "strategic" and documentation_microfix(item):
-        career = min(career, 45)
-        career_reasons.insert(0, "documentation-only micro-fix cap")
-
-    career = max(0, min(100, career))
-
-    priority = (
-        career
-        if lane == "strategic"
-        else min(100, max(cash, career) + (5 if cash >= 70 and career >= 70 else 0))
-    )
-    labels = [
-        str(x.get("name", "")) if isinstance(x, dict) else str(x)
-        for x in (item.get("labels") or [])
-    ]
-    return {
-        "repo": repo,
-        "issue_number": number,
-        "title": item.get("title"),
-        "url": item.get("html_url"),
-        "paid": lane == "paid",
-        "reward": reward_text(signal),
-        "payment_confidence": payment_confidence(signal),
-        "cash_score": cash,
-        "career_score": career,
-        "priority_score": priority,
-        "effort": effort,
-        "expected_hourly": hourly,
-        "competition": comp,
-        "stars": stars,
-        "recent_activity": repo_activity(repo_meta),
-        "language": language,
-        "labels": labels,
-        "cash_reasons": cash_reasons[:6],
-        "career_reasons": career_reasons[:10],
-        "contribution_guide": guide,
-        "comments": int(item.get("comments") or 0),
-        "updated_at": item.get("updated_at"),
-        "rejection_reason": None,
-    }
 
 
 def refresh_issue(
@@ -1690,6 +1291,10 @@ def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
                 f"- **Effort:** {candidate['effort']}",
             ]
         )
+
+    effort_reasons = candidate.get("effort_reasons") or []
+    if effort_reasons:
+        lines.append(f"- **Effort basis:** {', '.join(effort_reasons)}")
 
     lines.extend(
         [

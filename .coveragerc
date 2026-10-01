@@ -3,6 +3,7 @@ branch = True
 source =
     scout_bounties
     opportunity_scout
+    opportunity_scoring
     strategic_claims
     strategic_competition
     strategic_readiness
