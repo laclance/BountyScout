@@ -960,8 +960,8 @@ def discover_strategic(
 
     for query in STRATEGIC_GLOBAL_QUERIES:
         result = bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE)
-        items = result.get("items")
-        if not isinstance(items, list):
+        global_items = result.get("items")
+        if not isinstance(global_items, list):
             add_audit(
                 audit,
                 {
@@ -972,7 +972,7 @@ def discover_strategic(
                 "scan coverage incomplete",
             )
             continue
-        source_batches.append(items)
+        source_batches.append(global_items)
 
     for items in source_batches:
         for item in items:
