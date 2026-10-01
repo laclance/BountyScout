@@ -977,17 +977,17 @@ class CalibrationTests(unittest.TestCase):
         )
 
         with patch.object(
-            bounty,
-            "has_existing_implementation_pr",
-            return_value="search pr",
+            scout,
+            "timeline_open_pr_reason",
+            return_value="timeline pr",
         ):
             self.assertEqual(
                 scout.strategic_competition_reason(issue(), "t", []),
-                "search pr",
+                "timeline pr",
             )
 
         with (
-            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
+            patch.object(scout, "timeline_open_pr_reason", return_value=None),
             patch.object(scout, "linked_open_pr_reason", return_value="linked pr"),
         ):
             self.assertEqual(
@@ -996,7 +996,7 @@ class CalibrationTests(unittest.TestCase):
             )
 
         with (
-            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
+            patch.object(scout, "timeline_open_pr_reason", return_value=None),
             patch.object(scout, "linked_open_pr_reason", return_value=None),
         ):
             claimed = issue(
@@ -1013,7 +1013,10 @@ class CalibrationTests(unittest.TestCase):
             )
 
     def test_timeline_open_pr_reason(self) -> None:
-        self.assertIsNone(scout.timeline_open_pr_reason({"html_url": "bad"}, "t"))
+        self.assertEqual(
+            scout.timeline_open_pr_reason({"html_url": "bad"}, "t"),
+            "could not identify repository/issue number",
+        )
 
         timeline = [
             {
@@ -1044,7 +1047,10 @@ class CalibrationTests(unittest.TestCase):
             )
 
         with patch.object(github, "github_get", return_value={}):
-            self.assertIsNone(scout.timeline_open_pr_reason(issue(), "t"))
+            self.assertEqual(
+                scout.timeline_open_pr_reason(issue(), "t"),
+                "could not verify open implementation PR timeline",
+            )
 
         no_match_timeline = [
             {"event": "commented"},
