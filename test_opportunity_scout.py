@@ -2546,9 +2546,7 @@ class VerificationTests(unittest.TestCase):
         fresh = issue(
             title="🏆 Hall of Fame — October 2026",
             body=(
-                "## 🥇 Top Contributors\n"
-                "## 📊 Monthly Stats\n"
-                "Total Bounty Distributed | **$4770**"
+                "## 🥇 Top Contributors\n## 📊 Monthly Stats\nTotal Bounty Distributed | **$4770**"
             ),
             labels=[{"name": "hall-of-fame"}],
             comments=0,
