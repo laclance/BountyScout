@@ -28,7 +28,7 @@ def explicit_ownership_claim(text: str) -> bool:
         r"\bbefore i (?:write|start writing) code\b",
         r"\b(?:please|kindly) assign(?: it| this issue)? to me\b",
         r"\bassign (?:this|it) to me\b",
-        r"/attempt\b",
+        r"(?:^\s*claiming this(?:\s+(?:issue|task|dbip))?|\bi(?:'m| am) claiming this(?:\s+(?:issue|task|dbip))?|\bi(?:'ll| will) claim this(?:\s+(?:issue|task|dbip))?)(?=[ \t]*(?:[.!,:;—-]|$)|\r?\n)|/attempt\b",
     )
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
 
