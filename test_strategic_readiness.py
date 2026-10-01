@@ -321,13 +321,7 @@ class ManualTrackingIssueTests(unittest.TestCase):
         )
         self.assertIsNone(
             readiness.manual_tracking_issue_reason(
-                issue(
-                    body=(
-                        "Track the following follow-up work:\n"
-                        "- [ ] #10\n"
-                        "- [ ] #11\n"
-                    )
-                )
+                issue(body=("Track the following follow-up work:\n- [ ] #10\n- [ ] #11\n"))
             )
         )
 
