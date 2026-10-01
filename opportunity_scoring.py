@@ -159,6 +159,50 @@ def _cross_component_feature(text: str, file_refs: int) -> bool:
     return sum(term in text for term in component_terms) >= 3
 
 
+def _trusted_history_complexity(
+    activity_comments: Collection[Mapping[str, Any]] | None,
+) -> bool:
+    """Recognize maintainer-confirmed complexity exposed by earlier implementation work."""
+    trusted_history = "\n".join(
+        str(comment.get("body") or "")
+        for comment in activity_comments or ()
+        if str(comment.get("author_association") or "").upper() in TRUSTED_ASSOCIATIONS
+    ).lower()
+    if not trusted_history:
+        return False
+
+    historical_scope = bool(
+        re.search(
+            r"\b(?:quite a big job|major work|structural changes?|"
+            r"needs? (?:the )?code rewritten|rewrite(?:n|ing)? in streaming style)\b",
+            trusted_history,
+        )
+    )
+    concern_patterns = (
+        r"\b(?:cancellation|cancelled|canceling|cancelling|goroutines?|"
+        r"buffering|timeouts?|resource lifecycle)\b",
+        r"\b(?:regression tests?|unit tests?|integration tests?|"
+        r"benchmarks?|benchmarking|test semantics)\b",
+        r"\b(?:streaming style|nested (?:calls?|parsing)|json parser|"
+        r"json unmarshal|unmarshal)\b",
+        r"\b(?:backwards? compatibility|public api|deprecat\w*|v2)\b",
+    )
+    technical_concerns = sum(
+        bool(re.search(pattern, trusted_history)) for pattern in concern_patterns
+    )
+    if historical_scope and technical_concerns:
+        return True
+
+    prior_attempt_context = bool(
+        re.search(
+            r"\b(?:previous|prior|attempt|implementation|pull request|"
+            r"this work|this change)\b",
+            trusted_history,
+        )
+    )
+    return prior_attempt_context and technical_concerns >= 2
+
+
 @dataclass(frozen=True)
 class EffortEstimate:
     """Bucketed implementation estimate plus concise calibration reasons."""
@@ -167,8 +211,11 @@ class EffortEstimate:
     reasons: tuple[str, ...]
 
 
-def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
-    """Estimate implementation effort while separating scope from discussion volume."""
+def estimate_effort_details(
+    item: Mapping[str, Any],
+    activity_comments: Collection[Mapping[str, Any]] | None = None,
+) -> EffortEstimate:
+    """Estimate implementation effort from source text and already-fetched discussion."""
     title, body, labels, text = issue_text(item)
     prose = _prose_body(body)
     file_refs = code_reference_count(body)
@@ -301,6 +348,12 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
         if mobile_or_desktop and missing_reproduction:
             reasons.append("platform-specific reproduction is missing")
         return EffortEstimate("6–12h", tuple(reasons[:3]) or ("broader implementation scope",))
+
+    if _trusted_history_complexity(activity_comments):
+        return EffortEstimate(
+            "6–12h",
+            ("maintainer-confirmed implementation-history complexity",),
+        )
 
     if concurrency_risk:
         return EffortEstimate("3–6h", ("concurrency/lifecycle debugging risk",))
@@ -506,7 +559,10 @@ def build_candidate(
     amount_pattern: str,
 ) -> dict[str, Any]:
     repo, number = bounty.issue_repo_and_number(item)
-    effort_estimate = estimate_effort_details(item)
+    effort_estimate = estimate_effort_details(
+        item,
+        activity_comments if lane == "strategic" else None,
+    )
     effort = effort_estimate.bucket
     comp = competition(item, activity_comments if lane == "strategic" else None)
     stars = int(repo_meta.get("stargazers_count") or 0)
