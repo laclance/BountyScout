@@ -46,7 +46,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout.py` | Application orchestration plus strategic discovery, verification, delivery, and transitional legacy logic | Shrink over time by extracting cohesive strategic domains |
 | `github_access.py` | Fork-owned GitHub JSON transport plus keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
 | `opportunity_reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
-| `opportunity_scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration |
+| `opportunity_scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration, including trusted maintainer-history signals |
 | `opportunity_sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
 | `strategic_claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
 | `strategic_competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses local evidence before timeline I/O; never imports `opportunity_scout.py` |
@@ -105,7 +105,7 @@ These are direction markers, not a requirement to create empty abstractions earl
 - Assigned, actively claimed, superseded, discussion-only, or already-implemented work must not be presented as ready work.
 - Scanner misses are useful product feedback; audit paths should remain observable.
 - Repository/network failures should degrade coverage explicitly rather than silently turning into positive verification.
-- Strategic deep verification is rate-budgeted: inspect broadly, verify in rank order, and stop only when remaining candidates cannot displace the kept set under the known verification-score uplift bound.
+- Strategic deep verification is rate-budgeted: inspect broadly, verify in rank order, and stop only when remaining candidates cannot displace the kept set under the known verification-score uplift bound. Final strategic effort may use the already-fetched trusted maintainer discussion to recognize implementation-history complexity; preview scoring stays source-only and this calibration must not add network fan-out.
 - Comment-fetch failure must remain distinguishable from a real empty discussion thread; failed implementation-PR timeline checks are also verification failures rather than evidence of no competition. Strategic verification does not use per-issue GitHub Search queries, preserving Search quota for discovery. Incomplete verification runs warn prominently and do not advance seen-state.
 - Tests must cover scanner policy without live network access.
 - Ruff, strict mypy, and 100% statement + branch coverage are repository-wide quality gates.
