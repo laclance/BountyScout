@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 import urllib.request
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import patch
 
 import opportunity_sources as sources
@@ -16,7 +16,7 @@ class FakeResponse:
     def __enter__(self) -> "FakeResponse":
         return self
 
-    def __exit__(self, *args: Any) -> bool:
+    def __exit__(self, *args: Any) -> Literal[False]:
         return False
 
     def read(self) -> bytes:
