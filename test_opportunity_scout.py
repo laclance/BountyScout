@@ -177,8 +177,7 @@ class BasicHeuristicTests(unittest.TestCase):
             self.assertIn(repo, scout.TARGET_REPOS)
         self.assertTrue(
             any(
-                'label:"help wanted"' in query
-                and 'label:"bug" OR regression' in query
+                'label:"help wanted"' in query and 'label:"bug" OR regression' in query
                 for query in scout.STRATEGIC_GLOBAL_QUERIES
             )
         )
