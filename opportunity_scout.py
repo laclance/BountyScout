@@ -5,7 +5,10 @@ import os
 import re
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from threading import Lock
+from time import monotonic
 from typing import Any, Mapping, cast
 
 import scout_bounties as bounty
@@ -49,6 +52,16 @@ STRATEGIC_MIN_CAREER_SCORE = 55
 STRATEGIC_AUDIT_LIMIT = 20
 PAID_MIN_CASH_SCORE = 55
 REPORT_LIMIT = 8
+NETWORK_WORKERS = 6
+CACHE_LOCK = Lock()
+CACHE_KEY_LOCKS: dict[str, Any] = {}
+
+
+def cache_lock_for(key: str) -> Any:
+    """Serialize cache fills per repository without blocking unrelated repositories."""
+    with CACHE_LOCK:
+        return CACHE_KEY_LOCKS.setdefault(key, Lock())
+
 
 PAID_DISCOVERY_QUERIES = [
     "is:issue is:open bounty in:title,body sort:updated-desc",
@@ -640,26 +653,32 @@ def opire_platform_refs() -> dict[str, str]:
         )
     )[:PLATFORM_FETCH_LIMIT]
 
-    for path in detail_paths:
-        detail = fetch_text("https://app.opire.dev" + path)
-        if not detail:
-            continue
-        detail = detail.replace("\\/", "/")
-        source = re.search(
-            r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
-            detail,
+    with ThreadPoolExecutor(
+        max_workers=min(NETWORK_WORKERS, max(1, len(detail_paths)))
+    ) as executor:
+        details = executor.map(
+            lambda path: fetch_text("https://app.opire.dev" + path),
+            detail_paths,
         )
-        if not source:
-            continue
-        amount = re.search(
-            r"\$\s*\d[\d,]*(?:\.\d+)?\s+bounty\b",
-            detail,
-            re.IGNORECASE,
-        )
-        signal = "confirmed bounty platform feed (Opire)"
-        if amount:
-            signal += f": {amount.group(0).split()[0]}"
-        refs[source.group(0)] = signal
+        for detail in details:
+            if not detail:
+                continue
+            detail = detail.replace("\\/", "/")
+            source = re.search(
+                r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+                detail,
+            )
+            if not source:
+                continue
+            amount = re.search(
+                r"\$\s*\d[\d,]*(?:\.\d+)?\s+bounty\b",
+                detail,
+                re.IGNORECASE,
+            )
+            signal = "confirmed bounty platform feed (Opire)"
+            if amount:
+                signal += f": {amount.group(0).split()[0]}"
+            refs[source.group(0)] = signal
 
     return refs
 
@@ -688,22 +707,28 @@ def bountyhub_platform_refs() -> dict[str, str]:
         )
     )[:PLATFORM_FETCH_LIMIT]
 
-    for path in detail_paths:
-        detail = fetch_text("https://www.bountyhub.dev" + path)
-        if not detail:
-            continue
-        detail = detail.replace("\\/", "/")
-        source = re.search(
-            r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
-            detail,
+    with ThreadPoolExecutor(
+        max_workers=min(NETWORK_WORKERS, max(1, len(detail_paths)))
+    ) as executor:
+        details = executor.map(
+            lambda path: fetch_text("https://www.bountyhub.dev" + path),
+            detail_paths,
         )
-        if not source:
-            continue
-        amount = re.search(EXTENDED_AMOUNT_RE, detail, re.IGNORECASE)
-        signal = "confirmed bounty platform feed (BountyHub)"
-        if amount:
-            signal += f": {amount.group(0).strip()}"
-        refs[source.group(0)] = signal
+        for detail in details:
+            if not detail:
+                continue
+            detail = detail.replace("\\/", "/")
+            source = re.search(
+                r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+                detail,
+            )
+            if not source:
+                continue
+            amount = re.search(EXTENDED_AMOUNT_RE, detail, re.IGNORECASE)
+            signal = "confirmed bounty platform feed (BountyHub)"
+            if amount:
+                signal += f": {amount.group(0).strip()}"
+            refs[source.group(0)] = signal
 
     return refs
 
@@ -711,12 +736,14 @@ def bountyhub_platform_refs() -> dict[str, str]:
 def platform_paid_refs() -> dict[str, str]:
     """Collect official-platform discoveries, deduped by source GitHub issue URL."""
     refs: dict[str, str] = {}
-    for source in (
-        issuehunt_platform_refs(),
-        opire_platform_refs(),
-        bountyhub_platform_refs(),
-    ):
-        refs.update(source)
+    sources = (
+        issuehunt_platform_refs,
+        opire_platform_refs,
+        bountyhub_platform_refs,
+    )
+    with ThreadPoolExecutor(max_workers=len(sources)) as executor:
+        for source in executor.map(lambda loader: loader(), sources):
+            refs.update(source)
     return refs
 
 
@@ -1201,15 +1228,17 @@ def verify(
     repo, _ = bounty.issue_repo_and_number(fresh)
     if repo is None:
         return None, "could not identify repository/issue number"
-    if repo not in repo_cache:
-        repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
+    with cache_lock_for(f"repo:{repo}"):
+        if repo not in repo_cache:
+            repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
     repo_meta = repo_cache[repo]
     if not repo_meta:
         return None, "repository metadata unavailable"
     if repo_meta.get("archived"):
         return None, "repository is archived"
-    if repo not in guide_cache:
-        guide_cache[repo] = contribution_guide(repo, token)
+    with cache_lock_for(f"guide:{repo}"):
+        if repo not in guide_cache:
+            guide_cache[repo] = contribution_guide(repo, token)
     return (
         build_candidate(
             fresh,
@@ -1241,6 +1270,7 @@ def discover_paid(
     touched: set[str] = set()
     rejected: dict[str, int] = {}
     examples: list[dict[str, Any]] = []
+    pending: list[tuple[dict[str, Any], str | None, bool]] = []
 
     for query in PAID_DISCOVERY_QUERIES:
         for item in bounty.search_github(query, token).get("items", []):
@@ -1248,64 +1278,74 @@ def discover_paid(
             if not url or url in seen or url in touched:
                 continue
             touched.add(url)
-            if not bounty.is_clean_candidate(item):
-                continue
-            candidate, reason = verify(
+            if bounty.is_clean_candidate(item):
+                pending.append((item, None, False))
+
+    # Official platform feeds can expose funded issues that contain no bounty
+    # keywords on GitHub at all. Fetch their source issues concurrently, then
+    # apply the same source-authoritative verification as direct discoveries.
+    platform_sources: list[tuple[str, str]] = []
+    for source_url, platform_signal in platform_paid_refs().items():
+        if source_url in seen or source_url in touched:
+            continue
+        touched.add(source_url)
+        platform_sources.append((source_url, platform_signal))
+
+    with ThreadPoolExecutor(
+        max_workers=min(NETWORK_WORKERS, max(1, len(platform_sources)))
+    ) as executor:
+        platform_items = list(
+            executor.map(
+                lambda row: issue_from_github_url(row[0], token),
+                platform_sources,
+            )
+        )
+
+    for (source_url, platform_signal), item in zip(platform_sources, platform_items, strict=True):
+        if item and bounty.is_clean_candidate(item):
+            pending.append((item, platform_signal, True))
+
+    def verify_paid(
+        row: tuple[dict[str, Any], str | None, bool],
+    ) -> tuple[
+        tuple[dict[str, Any], str | None, bool],
+        tuple[dict[str, Any] | None, str | None],
+    ]:
+        item, platform_signal, _ = row
+        return (
+            row,
+            verify(
                 item,
                 token,
                 repo_cache,
                 guide_cache,
                 require_paid=True,
-            )
-            if reason:
-                add_reject(rejected, examples, item, reason)
-                print(f"Skipping paid candidate {url}: {reason}")
-            else:
-                assert candidate is not None
-                if candidate["cash_score"] < PAID_MIN_CASH_SCORE:
-                    reason = (
-                        f"cash score {candidate['cash_score']}/100 below paid threshold "
-                        f"{PAID_MIN_CASH_SCORE}/100"
-                    )
-                    add_reject(rejected, examples, item, reason)
-                    print(f"Skipping paid candidate {url}: {reason}")
-                else:
-                    found.append(candidate)
-
-    # Official platform feeds can expose funded issues that contain no bounty
-    # keywords on GitHub at all. Source GitHub issue still gets final authority.
-    for source_url, platform_signal in platform_paid_refs().items():
-        if source_url in seen or source_url in touched:
-            continue
-        touched.add(source_url)
-        item = issue_from_github_url(source_url, token)
-        if not item:
-            continue
-        if not bounty.is_clean_candidate(item):
-            continue
-
-        candidate, reason = verify(
-            item,
-            token,
-            repo_cache,
-            guide_cache,
-            require_paid=True,
-            payment_signal_override=platform_signal,
+                payment_signal_override=platform_signal,
+            ),
         )
+
+    with ThreadPoolExecutor(max_workers=min(NETWORK_WORKERS, max(1, len(pending)))) as executor:
+        verification_results = list(executor.map(verify_paid, pending))
+
+    for (item, _, is_platform), (candidate, reason) in verification_results:
+        url = str(item.get("html_url") or "")
+        kind = "platform" if is_platform else "paid"
         if reason:
             add_reject(rejected, examples, item, reason)
-            print(f"Skipping platform candidate {source_url}: {reason}")
-        else:
-            assert candidate is not None
-            if candidate["cash_score"] < PAID_MIN_CASH_SCORE:
-                reason = (
-                    f"cash score {candidate['cash_score']}/100 below paid threshold "
-                    f"{PAID_MIN_CASH_SCORE}/100"
-                )
-                add_reject(rejected, examples, item, reason)
-                print(f"Skipping platform candidate {source_url}: {reason}")
-            else:
-                found.append(candidate)
+            print(f"Skipping {kind} candidate {url}: {reason}")
+            continue
+
+        assert candidate is not None
+        if candidate["cash_score"] < PAID_MIN_CASH_SCORE:
+            reason = (
+                f"cash score {candidate['cash_score']}/100 below paid threshold "
+                f"{PAID_MIN_CASH_SCORE}/100"
+            )
+            add_reject(rejected, examples, item, reason)
+            print(f"Skipping {kind} candidate {url}: {reason}")
+            continue
+
+        found.append(candidate)
 
     return found, rejected, examples
 
@@ -1423,18 +1463,27 @@ def discover_strategic(
     audit: list[dict[str, Any]] = []
 
     source_batches: list[list[dict[str, Any]]] = []
-    for target_repo in TARGET_REPOS:
-        items, source_error = target_repo_issue_pool(target_repo, token)
-        if source_error:
-            add_audit(
-                audit,
-                {
-                    "html_url": f"https://github.com/{target_repo}/issues",
-                    "title": target_repo,
-                },
-                source_error,
-            )
-        source_batches.append(items)
+    with ThreadPoolExecutor(
+        max_workers=min(NETWORK_WORKERS, max(1, len(TARGET_REPOS)))
+    ) as executor:
+        repo_results = executor.map(
+            lambda target_repo: (
+                target_repo,
+                target_repo_issue_pool(target_repo, token),
+            ),
+            TARGET_REPOS,
+        )
+        for target_repo, (items, source_error) in repo_results:
+            if source_error:
+                add_audit(
+                    audit,
+                    {
+                        "html_url": f"https://github.com/{target_repo}/issues",
+                        "title": target_repo,
+                    },
+                    source_error,
+                )
+            source_batches.append(items)
 
     for query in STRATEGIC_GLOBAL_QUERIES:
         source_batches.append(
@@ -1457,8 +1506,9 @@ def discover_strategic(
             repo, _ = bounty.issue_repo_and_number(item)
             if not repo:
                 continue
-            if repo not in repo_cache:
-                repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
+            with cache_lock_for(f"repo:{repo}"):
+                if repo not in repo_cache:
+                    repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
             meta = repo_cache[repo]
             if not meta or meta.get("archived"):
                 if possible_miss_signal(item):
@@ -1480,7 +1530,6 @@ def discover_strategic(
                 )
             )
 
-    found: list[dict[str, Any]] = []
     inspected = strategic_inspection_items(provisional)
     inspected_urls = {
         str(item.get("html_url"))
@@ -1497,63 +1546,110 @@ def discover_strategic(
                 "strong-looking result fell outside the repo top-15 inspection pool",
             )
 
-    for repo, items in inspected.items():
-        ranked: list[tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]] = []
-        for item in items:
-            comments = issue_comments(item, token)
-            signal = bounty.payment_signal(item)
-            lane = "paid" if signal else "strategic"
-            preview = build_candidate(
+    inspection_rows = [(repo, item) for repo, items in inspected.items() for item in items]
+    with ThreadPoolExecutor(
+        max_workers=min(NETWORK_WORKERS, max(1, len(inspection_rows)))
+    ) as executor:
+        comment_batches = list(
+            executor.map(
+                lambda row: issue_comments(row[1], token),
+                inspection_rows,
+            )
+        )
+
+    ranked_by_repo: dict[
+        str,
+        list[tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]],
+    ] = {}
+    for (repo, item), comments in zip(inspection_rows, comment_batches, strict=True):
+        signal = bounty.payment_signal(item)
+        lane = "paid" if signal else "strategic"
+        preview = build_candidate(
+            item,
+            lane,
+            signal,
+            repo_cache[repo],
+            None,
+            comments,
+        )
+        ranked_by_repo.setdefault(repo, []).append(
+            (
+                preview["priority_score"],
+                preview["career_score"],
+                preview["cash_score"],
                 item,
-                lane,
-                signal,
-                repo_cache[repo],
-                None,
                 comments,
             )
-            ranked.append(
-                (
-                    preview["priority_score"],
-                    preview["career_score"],
-                    preview["cash_score"],
-                    item,
-                    comments,
-                )
-            )
+        )
 
+    verification_rows: list[
+        tuple[str, tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]]
+    ] = []
+    for repo in inspected:
+        ranked = ranked_by_repo.get(repo, [])
         ranked.sort(key=lambda row: row[:3], reverse=True)
-        verified_repo: list[dict[str, Any]] = []
-        for _, _, _, item, comments in ranked:
-            candidate, reason = verify(
+        verification_rows.extend((repo, row) for row in ranked)
+
+    def verify_row(
+        entry: tuple[
+            str,
+            tuple[int, int, int, dict[str, Any], list[dict[str, Any]]],
+        ],
+    ) -> tuple[
+        tuple[
+            str,
+            tuple[int, int, int, dict[str, Any], list[dict[str, Any]]],
+        ],
+        tuple[dict[str, Any] | None, str | None],
+    ]:
+        repo, row = entry
+        item = row[3]
+        comments = row[4]
+        return (
+            (repo, row),
+            verify(
                 item,
                 token,
                 repo_cache,
                 guide_cache,
                 activity_comments=comments,
+            ),
+        )
+
+    with ThreadPoolExecutor(
+        max_workers=min(NETWORK_WORKERS, max(1, len(verification_rows)))
+    ) as executor:
+        verification_results = list(executor.map(verify_row, verification_rows))
+
+    verified_by_repo: dict[str, list[dict[str, Any]]] = {repo: [] for repo in inspected}
+    for (repo, row), (candidate, reason) in verification_results:
+        item = row[3]
+        if reason:
+            add_reject(rejected, examples, item, reason)
+            print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+            continue
+
+        assert candidate is not None
+        if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
+            reason = (
+                f"career score {candidate['career_score']}/100 below strategic threshold "
+                f"{STRATEGIC_MIN_CAREER_SCORE}/100"
             )
-            if reason:
-                add_reject(rejected, examples, item, reason)
-                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
-                continue
-
-            assert candidate is not None
-            if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
-                reason = (
-                    f"career score {candidate['career_score']}/100 below strategic threshold "
-                    f"{STRATEGIC_MIN_CAREER_SCORE}/100"
+            add_reject(rejected, examples, item, reason)
+            if possible_miss_signal(item):
+                add_audit(
+                    audit,
+                    item,
+                    f"strong-looking near miss: {reason}",
                 )
-                add_reject(rejected, examples, item, reason)
-                if possible_miss_signal(item):
-                    add_audit(
-                        audit,
-                        item,
-                        f"strong-looking near miss: {reason}",
-                    )
-                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
-                continue
+            print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+            continue
 
-            verified_repo.append(candidate)
+        verified_by_repo[repo].append(candidate)
 
+    found: list[dict[str, Any]] = []
+    for repo in inspected:
+        verified_repo = verified_by_repo[repo]
         verified_repo.sort(
             key=lambda item: (
                 item["priority_score"],
@@ -1659,9 +1755,20 @@ def main() -> None:
     repo_cache: dict[str, dict[str, Any]] = {}
     guide_cache: dict[str, str | None] = {}
 
+    started = monotonic()
+    paid_started = monotonic()
     paid, paid_rejects, paid_examples = discover_paid(token, seen, repo_cache, guide_cache)
+    paid_seconds = monotonic() - paid_started
+
+    strategic_started = monotonic()
     strategic, strategic_rejects, strategic_examples, strategic_audit = discover_strategic(
         token, seen, {x["url"] for x in paid}, repo_cache, guide_cache
+    )
+    strategic_seconds = monotonic() - strategic_started
+    print(
+        "Scout performance: "
+        f"paid={paid_seconds:.1f}s, strategic={strategic_seconds:.1f}s, "
+        f"total={monotonic() - started:.1f}s"
     )
 
     by_url: dict[str, dict[str, Any]] = {}
