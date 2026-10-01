@@ -1522,27 +1522,19 @@ class DiscoveryTests(unittest.TestCase):
         self.assertNotIn("bad", selected)
 
     def test_basic_rejection_audit_reason_filters_known_noise(self) -> None:
-        self.assertIsNone(
-            scout.basic_rejection_audit_reason(issue(pull_request={"url": "x"}))
-        )
-        self.assertIsNone(
-            scout.basic_rejection_audit_reason(issue(assignees=[{"login": "dev"}]))
-        )
+        self.assertIsNone(scout.basic_rejection_audit_reason(issue(pull_request={"url": "x"})))
+        self.assertIsNone(scout.basic_rejection_audit_reason(issue(assignees=[{"login": "dev"}])))
         self.assertIsNone(
             scout.basic_rejection_audit_reason(
                 issue(html_url="https://github.com/laclance/BountyScout/issues/1")
             )
         )
-        self.assertIsNone(
-            scout.basic_rejection_audit_reason(issue(title="Bounty Alert: test"))
-        )
+        self.assertIsNone(scout.basic_rejection_audit_reason(issue(title="Bounty Alert: test")))
         self.assertIsNone(
             scout.basic_rejection_audit_reason(issue(body="article writing proposal"))
         )
 
-        crowded = scout.basic_rejection_audit_reason(
-            issue(comments=bounty.MAX_COMMENTS + 1)
-        )
+        crowded = scout.basic_rejection_audit_reason(issue(comments=bounty.MAX_COMMENTS + 1))
         self.assertIsNotNone(crowded)
         self.assertIn("review competition cutoff", str(crowded))
 
