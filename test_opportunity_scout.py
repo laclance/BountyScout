@@ -1870,13 +1870,16 @@ class VerificationTests(unittest.TestCase):
             labels=[],
             comments=0,
         )
-        with patch.object(
-            github,
-            "github_get",
-            return_value={
-                "state": "open",
-                "html_url": "https://github.com/kubernetes-sigs/external-dns/pull/6293",
-            },
+        with (
+            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
+            patch.object(
+                github,
+                "github_get",
+                return_value={
+                    "state": "open",
+                    "html_url": "https://github.com/kubernetes-sigs/external-dns/pull/6293",
+                },
+            ),
         ):
             self.assertEqual(
                 scout.strategic_rejection(external_dns, "t", []),
