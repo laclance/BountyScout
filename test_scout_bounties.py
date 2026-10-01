@@ -125,6 +125,27 @@ class PaymentTests(unittest.TestCase):
             scout.payment_signal(issue(body="Funded through Opire", title="Task")),
             "named bounty platform + funding language",
         )
+        self.assertEqual(
+            scout.payment_signal(issue(body="20 USDC bounty", title="Task")),
+            "amount + payment term: 20 USDC",
+        )
+        self.assertEqual(
+            scout.payment_signal(issue(body="$20 bounty", title="Task")),
+            "amount + payment term: $20",
+        )
+        self.assertIsNone(
+            scout.payment_signal(issue(body="Reward address: ERC-20 USDC", title="Task"))
+        )
+        chain_love_body = (
+            "No payout is assumed unless the DBIP is approved through the official "
+            "Chain.Love compensation process.\n\n"
+            "### Rewards address\n\n"
+            "Will provide an Ethereum-mainnet ERC-20 USDC/USDT address upon approval "
+            "if required."
+        )
+        self.assertIsNone(
+            scout.payment_signal(issue(body=chain_love_body, title="[DBIP] Proposal"))
+        )
         self.assertIsNone(scout.payment_signal(issue(body="bounty maybe someday", title="Task")))
 
     def test_issue_repo_and_number(self) -> None:
