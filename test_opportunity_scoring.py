@@ -344,6 +344,174 @@ class EffortCalibrationTests(unittest.TestCase):
         )
 
 
+class CompetitionVolumeTests(unittest.TestCase):
+    @staticmethod
+    def controller_runtime_3238_comments() -> list[dict[str, Any]]:
+        comments: list[dict[str, Any]] = [
+            {
+                "body": "Not sure readiness should depend on metrics; the webhook server has a checker.",
+                "user": {"login": "sbueringer"},
+            },
+            {
+                "body": "Maybe a similar metrics checker is useful. What do maintainers think?",
+                "user": {"login": "sbueringer"},
+            },
+        ]
+        for lifecycle in ("stale", "rotten", "stale", "stale", "rotten"):
+            comments.append(
+                {
+                    "body": (
+                        "This bot triages un-triaged issues after periods of inactivity.\n"
+                        f"/lifecycle {lifecycle}"
+                    ),
+                    "user": {"login": "k8s-triage-robot"},
+                }
+            )
+        for command in (
+            "/remove-lifecycle stale",
+            "/remove-lifecycle rotten",
+            "/remove-lifecycle stale",
+            "/remove-lifecycle rotten",
+            "/remove-lifecycle stale",
+            "/remove-lifecycle rotten",
+            "/remove-lifecycle rotten\n/lifecycle frozen",
+        ):
+            comments.append(
+                {
+                    "body": command,
+                    "user": {"login": "camilamacedo86"},
+                }
+            )
+        comments.append(
+            {
+                "body": "Could we please add the frozen label to keep this issue open?",
+                "user": {"login": "camilamacedo86"},
+            }
+        )
+        return comments
+
+    def test_controller_runtime_3238_lifecycle_churn_is_not_high_competition(self) -> None:
+        comments = self.controller_runtime_3238_comments()
+        self.assertEqual(len(comments), 15)
+        self.assertEqual(scoring.competition(issue(comments=15), comments), "low")
+
+        candidate = scoring.build_candidate(
+            issue(
+                title="Add readiness check for metrics server",
+                body="Metrics readiness on Kubernetes 1.33 may need a checker.",
+                comments=15,
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            comments,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertEqual(candidate["competition"], "low")
+        self.assertIn("low competition bonus", candidate["priority_reasons"])
+
+    def test_kubernetes_lifecycle_bot_notices_are_ignored(self) -> None:
+        for login in ("k8s-triage-robot", "k8s-ci-robot"):
+            with self.subTest(login=login):
+                self.assertFalse(
+                    scoring.comment_contributes_to_competition(
+                        {
+                            "body": (
+                                "This bot triages issues after 90d of inactivity. /lifecycle stale"
+                            ),
+                            "user": {"login": login},
+                        }
+                    )
+                )
+
+    def test_lifecycle_and_label_admin_commands_are_ignored(self) -> None:
+        for body in (
+            "/remove-lifecycle stale",
+            "/remove-lifecycle rotten",
+            "/lifecycle stale",
+            "/lifecycle rotten",
+            "/lifecycle frozen",
+            "/label lifecycle/frozen",
+            "/remove-label lifecycle/stale",
+            "/remove-lifecycle rotten\n/lifecycle frozen",
+        ):
+            with self.subTest(body=body):
+                self.assertFalse(
+                    scoring.comment_contributes_to_competition(
+                        {"body": body, "user": {"login": "human-maintainer"}}
+                    )
+                )
+
+    def test_substantive_human_and_bot_implementation_evidence_still_counts(self) -> None:
+        self.assertTrue(
+            scoring.comment_contributes_to_competition(
+                {
+                    "body": "I tested this approach and think the server should expose StartedChecker.",
+                    "user": {"login": "human-dev"},
+                }
+            )
+        )
+        self.assertTrue(
+            scoring.comment_contributes_to_competition(
+                {
+                    "body": "Implementation PR #123 is ready for review.",
+                    "user": {"login": "github-actions[bot]"},
+                }
+            )
+        )
+
+    def test_multiple_substantive_comments_still_reach_medium_and_high(self) -> None:
+        medium = [
+            {"body": f"Implementation discussion {index}", "user": {"login": f"dev-{index}"}}
+            for index in range(4)
+        ]
+        high = [
+            {"body": f"Implementation discussion {index}", "user": {"login": f"dev-{index}"}}
+            for index in range(9)
+        ]
+        self.assertEqual(scoring.competition(issue(comments=4), medium), "medium")
+        self.assertEqual(scoring.competition(issue(comments=9), high), "high")
+
+    def test_raw_count_and_missing_metadata_fallback_remain_conservative(self) -> None:
+        self.assertEqual(scoring.competition(issue(comments=15)), "high")
+        self.assertEqual(scoring.competition(issue(comments=4), [{}, {}, {}, {}]), "medium")
+
+    def test_paid_candidate_keeps_raw_comment_competition(self) -> None:
+        candidate = scoring.build_candidate(
+            issue(title="Paid task", comments=15),
+            "paid",
+            "confirmed bounty platform feed: $25",
+            repo_meta(),
+            None,
+            self.controller_runtime_3238_comments(),
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertEqual(candidate["competition"], "high")
+
+    def test_active_claim_still_rejects_even_when_lifecycle_noise_is_filtered(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        comments = [
+            {
+                "body": "This bot triages issues after inactivity. /lifecycle stale",
+                "updated_at": recent,
+                "user": {"login": "k8s-triage-robot"},
+            },
+            {
+                "body": "I'm working on this now and will open a PR with tests.",
+                "updated_at": recent,
+                "user": {"login": "dev"},
+            },
+        ]
+        self.assertEqual(scoring.competition(issue(comments=2), comments), "low")
+        self.assertEqual(
+            scout.strategic_competition_reason(issue(comments=2), "t", comments),
+            "active claim by @dev",
+        )
+
+
 class ScoringRegressionTests(unittest.TestCase):
     def test_opportunity_scout_wrapper_and_report_expose_effort_basis(self) -> None:
         item = issue(

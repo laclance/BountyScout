@@ -38,12 +38,13 @@
 - **function** `estimate_effort_details()` — line 170
 - **function** `estimate_effort()` — line 313
 - **function** `effort_hours()` — line 318
-- **function** `competition()` — line 328
-- **function** `payment_confidence()` — line 339
-- **function** `reward_text()` — line 357
-- **function** `repo_activity()` — line 364
-- **function** `strategic_priority_score()` — line 380
-- **function** `build_candidate()` — line 425
+- **function** `comment_contributes_to_competition()` — line 337
+- **function** `competition()` — line 372
+- **function** `payment_confidence()` — line 390
+- **function** `reward_text()` — line 408
+- **function** `repo_activity()` — line 415
+- **function** `strategic_priority_score()` — line 431
+- **function** `build_candidate()` — line 476
 
 ## `opportunity_scout.py`
 
