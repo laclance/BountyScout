@@ -496,10 +496,16 @@ def build_candidate(
         "terraform",
         "gitops",
         "backend",
-        "api",
         "concurrency",
     )
-    if any(term in text for term in infra_terms):
+    api_domain_signal = bool(
+        re.search(
+            r"\b(?:http|rest|grpc|kubernetes|cloud|provider|server|backend)\s+api\b|"
+            r"\bapi\s+(?:server|gateway|endpoint|client)\b",
+            text,
+        )
+    )
+    if any(term in text for term in infra_terms) or api_domain_signal:
         skill += 6
         career_reasons.append("target infrastructure/domain fit")
     career += min(18, skill)
