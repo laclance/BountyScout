@@ -46,8 +46,9 @@ Strategic discovery starts with a curated target list covering AWS/Kubernetes, c
 For each curated repository, the scout activity-inspects the top 15 plausible issues, then spends a small global overflow budget on strong recent bug or contributor-ready candidates that narrowly miss that cutoff. It re-ranks inspected issues using issue/comment freshness and then fully verifies candidates in order until up to three valid opportunities survive. Search depth is intentionally broader than the final queue. Verification refreshes the source issue and checks:
 
 - issue is still open and unassigned
-- no obvious active claim
+- no obvious active claim, including explicit "pick this up" or "willing to contribute a PR" ownership
 - no open implementation PR, including implementation links already present in the issue body
+- no explicit multi-child umbrella/tracking issue masquerading as one implementation task
 - no trusted maintainer-authored decision-stage hold
 - no automated CI/release tracking incident
 - repository is available and not archived
