@@ -362,6 +362,7 @@ def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str,
 TRIAGE_PENDING_LABELS = {"needs-triage"}
 TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
 
+
 def claim_source_is_recent(
     source: Mapping[str, Any],
     *,
