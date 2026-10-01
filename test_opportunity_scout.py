@@ -855,6 +855,77 @@ class CalibrationTests(unittest.TestCase):
 
 
 class CandidateTests(unittest.TestCase):
+    def test_strategic_age_penalties_skip_maintainer_ready_work(self) -> None:
+        now = datetime.now(timezone.utc)
+        old = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=0,
+                created_at=(now - timedelta(days=900)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+        )
+        middle = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=0,
+                created_at=(now - timedelta(days=500)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+        )
+        ready = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=0,
+                created_at=(now - timedelta(days=900)).isoformat(),
+                labels=[{"name": "help wanted"}],
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+        )
+        paid = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=0,
+                created_at=(now - timedelta(days=900)).isoformat(),
+            ),
+            "paid",
+            "payment term + amount: $25",
+            repo_meta(),
+            None,
+        )
+        fresh = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=0,
+                created_at=(now - timedelta(days=30)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+        )
+
+        self.assertIn("stale backlog age penalty", old["career_reasons"])
+        self.assertIn("older backlog age penalty", middle["career_reasons"])
+        self.assertNotIn("stale backlog age penalty", ready["career_reasons"])
+        self.assertNotIn("stale backlog age penalty", paid["career_reasons"])
+        self.assertNotIn("older backlog age penalty", fresh["career_reasons"])
+        self.assertLess(old["career_score"], ready["career_score"])
+
     def test_build_paid_candidate_scoring(self) -> None:
         item_ = issue(
             body="network concurrency regression tests",
@@ -1229,6 +1300,66 @@ class VerificationTests(unittest.TestCase):
 
 
 class DiscoveryTests(unittest.TestCase):
+    def test_strategic_verification_items_diversifies_and_caps(self) -> None:
+        rows = [
+            (100, 100, 0, issue(html_url="bad")),
+            (99, 99, 0, issue(html_url="https://github.com/a/a/issues/1")),
+            (98, 98, 0, issue(html_url="https://github.com/a/a/issues/2")),
+            (97, 97, 0, issue(html_url="https://github.com/a/a/issues/3")),
+            (96, 96, 0, issue(html_url="https://github.com/b/b/issues/1")),
+            (95, 95, 0, issue(html_url="https://github.com/b/b/issues/2")),
+            (94, 94, 0, issue(html_url="https://github.com/c/c/issues/1")),
+        ]
+        with (
+            patch.object(scout, "STRATEGIC_VERIFY_PER_REPO", 2),
+            patch.object(scout, "STRATEGIC_VERIFY_LIMIT", 4),
+        ):
+            selected = scout.strategic_verification_items(rows)
+
+        self.assertEqual(
+            [item["html_url"] for item in selected],
+            [
+                "https://github.com/a/a/issues/1",
+                "https://github.com/a/a/issues/2",
+                "https://github.com/b/b/issues/1",
+                "https://github.com/b/b/issues/2",
+            ],
+        )
+
+    def test_discover_strategic_rejects_below_quality_floor(self) -> None:
+        low = issue(html_url="https://github.com/g/g/issues/3", title="Feature")
+        with (
+            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(bounty, "search_github", return_value={"items": [low]}),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(
+                scout,
+                "build_candidate",
+                return_value=candidate(
+                    url=low["html_url"],
+                    paid=False,
+                    priority_score=40,
+                    career_score=40,
+                ),
+            ),
+            patch.object(
+                scout,
+                "verify",
+                return_value=(
+                    candidate(url=low["html_url"], paid=False, career_score=40),
+                    None,
+                ),
+            ),
+        ):
+            found, rejected, examples = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual(found, [])
+        reason = "career score 40/100 below strategic threshold 55/100"
+        self.assertEqual(rejected[reason], 1)
+        self.assertEqual(examples[0]["reason"], reason)
+
     def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
         duplicate = dict(a)

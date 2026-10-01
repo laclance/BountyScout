@@ -47,6 +47,8 @@ STRATEGIC_GLOBAL_QUERIES = [
 TARGET_REPO_QUERY_CHUNK = 3
 STRATEGIC_SEARCH_PER_PAGE = 20
 STRATEGIC_VERIFY_LIMIT = 20
+STRATEGIC_VERIFY_PER_REPO = 3
+STRATEGIC_MIN_CAREER_SCORE = 55
 REPORT_LIMIT = 8
 
 PAID_DISCOVERY_QUERIES = list(
@@ -835,6 +837,17 @@ def build_candidate(
     elif effort == "1d+":
         career -= 10
         career_reasons.append("large-scope penalty")
+
+    created = bounty.parse_github_datetime(item.get("created_at"))
+    if lane == "strategic" and created and not maintainer_ready:
+        age_days = max(0, (datetime.now(timezone.utc) - created).days)
+        if age_days > 730:
+            career -= 15
+            career_reasons.append("stale backlog age penalty")
+        elif age_days > 365:
+            career -= 8
+            career_reasons.append("older backlog age penalty")
+
     career = max(0, min(100, career))
 
     priority = (
@@ -1121,6 +1134,29 @@ def discover_paid(
     return found, rejected, examples
 
 
+def strategic_verification_items(
+    provisional: list[tuple[int, int, int, dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """Build a high-scoring but repo-diverse shortlist for expensive verification."""
+    ordered = sorted(provisional, key=lambda row: row[:3], reverse=True)
+    selected: list[dict[str, Any]] = []
+    per_repo: dict[str, int] = {}
+
+    for _, _, _, item in ordered:
+        repo, _ = bounty.issue_repo_and_number(item)
+        if not repo:
+            continue
+        if per_repo.get(repo, 0) >= STRATEGIC_VERIFY_PER_REPO:
+            continue
+
+        selected.append(item)
+        per_repo[repo] = per_repo.get(repo, 0) + 1
+        if len(selected) >= STRATEGIC_VERIFY_LIMIT:
+            break
+
+    return selected
+
+
 def discover_strategic(
     token: str | None,
     seen: set[str],
@@ -1157,16 +1193,25 @@ def discover_strategic(
                 (preview["priority_score"], preview["career_score"], preview["cash_score"], item)
             )
 
-    provisional.sort(key=lambda row: row[:3], reverse=True)
     found: list[dict[str, Any]] = []
-    for _, _, _, item in provisional[:STRATEGIC_VERIFY_LIMIT]:
+    for item in strategic_verification_items(provisional):
         candidate, reason = verify(item, token, repo_cache, guide_cache)
         if reason:
             add_reject(rejected, examples, item, reason)
             print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
-        else:
-            assert candidate is not None
-            found.append(candidate)
+            continue
+
+        assert candidate is not None
+        if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
+            reason = (
+                f"career score {candidate['career_score']}/100 below strategic threshold "
+                f"{STRATEGIC_MIN_CAREER_SCORE}/100"
+            )
+            add_reject(rejected, examples, item, reason)
+            print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+            continue
+
+        found.append(candidate)
     return found, rejected, examples
 
 
