@@ -1112,6 +1112,7 @@ def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
         lines.extend(
             [
                 f"- **Career score:** {candidate['career_score']}/100",
+                f"- **Priority score:** {candidate['priority_score']}/100",
                 f"- **Effort:** {candidate['effort']}",
             ]
         )
@@ -1119,6 +1120,10 @@ def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
     effort_reasons = candidate.get("effort_reasons") or []
     if effort_reasons:
         lines.append(f"- **Effort basis:** {', '.join(effort_reasons)}")
+
+    priority_reasons = candidate.get("priority_reasons") or []
+    if priority_reasons and not candidate["paid"]:
+        lines.append(f"- **Priority basis:** {', '.join(priority_reasons)}")
 
     lines.extend(
         [
@@ -1148,7 +1153,10 @@ def notification_candidate(candidate: Mapping[str, Any], idx: int) -> list[str]:
             f"cash: {candidate['cash_score']}/100"
         )
     else:
-        lines.append(f"   • strategic OSS | career: {candidate['career_score']}/100")
+        lines.append(
+            f"   • strategic OSS | career: {candidate['career_score']}/100 | "
+            f"priority: {candidate['priority_score']}/100"
+        )
     lines.extend(
         [
             f"   • {candidate['effort']} | competition: {candidate['competition']}",
