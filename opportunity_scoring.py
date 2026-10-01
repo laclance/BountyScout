@@ -106,11 +106,7 @@ def documentation_microfix(item: Mapping[str, Any]) -> bool:
         )
     )
 
-    return (
-        bounded_micro_signal
-        and not implementation_scope
-        and code_reference_count(body) == 0
-    )
+    return bounded_micro_signal and not implementation_scope and code_reference_count(body) == 0
 
 
 def _prose_body(body: str) -> str:
