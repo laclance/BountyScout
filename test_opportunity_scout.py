@@ -1778,7 +1778,9 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(
                 scout,
                 "platform_paid_refs",
-                return_value={platform["html_url"]: "confirmed bounty platform feed (IssueHunt): $2"},
+                return_value={
+                    platform["html_url"]: "confirmed bounty platform feed (IssueHunt): $2"
+                },
             ),
             patch.object(scout, "issue_from_github_url", return_value=platform),
         ):
