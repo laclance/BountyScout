@@ -5,7 +5,10 @@ import os
 import re
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from threading import Lock
+from time import monotonic
 from typing import Any, Mapping, cast
 
 import scout_bounties as bounty
@@ -49,6 +52,8 @@ STRATEGIC_MIN_CAREER_SCORE = 55
 STRATEGIC_AUDIT_LIMIT = 20
 PAID_MIN_CASH_SCORE = 55
 REPORT_LIMIT = 8
+NETWORK_WORKERS = 6
+CACHE_LOCK = Lock()
 
 PAID_DISCOVERY_QUERIES = [
     "is:issue is:open bounty in:title,body sort:updated-desc",
@@ -640,26 +645,33 @@ def opire_platform_refs() -> dict[str, str]:
         )
     )[:PLATFORM_FETCH_LIMIT]
 
-    for path in detail_paths:
-        detail = fetch_text("https://app.opire.dev" + path)
-        if not detail:
-            continue
-        detail = detail.replace("\\/", "/")
-        source = re.search(
-            r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
-            detail,
-        )
-        if not source:
-            continue
-        amount = re.search(
-            r"\$\s*\d[\d,]*(?:\.\d+)?\s+bounty\b",
-            detail,
-            re.IGNORECASE,
-        )
-        signal = "confirmed bounty platform feed (Opire)"
-        if amount:
-            signal += f": {amount.group(0).split()[0]}"
-        refs[source.group(0)] = signal
+    if detail_paths:
+        with ThreadPoolExecutor(
+            max_workers=min(NETWORK_WORKERS, len(detail_paths))
+        ) as executor:
+            details = executor.map(
+                lambda path: fetch_text("https://app.opire.dev" + path),
+                detail_paths,
+            )
+            for detail in details:
+                if not detail:
+                    continue
+                detail = detail.replace("\\/", "/")
+                source = re.search(
+                    r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+                    detail,
+                )
+                if not source:
+                    continue
+                amount = re.search(
+                    r"\$\s*\d[\d,]*(?:\.\d+)?\s+bounty\b",
+                    detail,
+                    re.IGNORECASE,
+                )
+                signal = "confirmed bounty platform feed (Opire)"
+                if amount:
+                    signal += f": {amount.group(0).split()[0]}"
+                refs[source.group(0)] = signal
 
     return refs
 
@@ -688,22 +700,29 @@ def bountyhub_platform_refs() -> dict[str, str]:
         )
     )[:PLATFORM_FETCH_LIMIT]
 
-    for path in detail_paths:
-        detail = fetch_text("https://www.bountyhub.dev" + path)
-        if not detail:
-            continue
-        detail = detail.replace("\\/", "/")
-        source = re.search(
-            r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
-            detail,
-        )
-        if not source:
-            continue
-        amount = re.search(EXTENDED_AMOUNT_RE, detail, re.IGNORECASE)
-        signal = "confirmed bounty platform feed (BountyHub)"
-        if amount:
-            signal += f": {amount.group(0).strip()}"
-        refs[source.group(0)] = signal
+    if detail_paths:
+        with ThreadPoolExecutor(
+            max_workers=min(NETWORK_WORKERS, len(detail_paths))
+        ) as executor:
+            details = executor.map(
+                lambda path: fetch_text("https://www.bountyhub.dev" + path),
+                detail_paths,
+            )
+            for detail in details:
+                if not detail:
+                    continue
+                detail = detail.replace("\\/", "/")
+                source = re.search(
+                    r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
+                    detail,
+                )
+                if not source:
+                    continue
+                amount = re.search(EXTENDED_AMOUNT_RE, detail, re.IGNORECASE)
+                signal = "confirmed bounty platform feed (BountyHub)"
+                if amount:
+                    signal += f": {amount.group(0).strip()}"
+                refs[source.group(0)] = signal
 
     return refs
 
@@ -711,12 +730,14 @@ def bountyhub_platform_refs() -> dict[str, str]:
 def platform_paid_refs() -> dict[str, str]:
     """Collect official-platform discoveries, deduped by source GitHub issue URL."""
     refs: dict[str, str] = {}
-    for source in (
-        issuehunt_platform_refs(),
-        opire_platform_refs(),
-        bountyhub_platform_refs(),
-    ):
-        refs.update(source)
+    sources = (
+        issuehunt_platform_refs,
+        opire_platform_refs,
+        bountyhub_platform_refs,
+    )
+    with ThreadPoolExecutor(max_workers=len(sources)) as executor:
+        for source in executor.map(lambda loader: loader(), sources):
+            refs.update(source)
     return refs
 
 
@@ -1202,14 +1223,18 @@ def verify(
     if repo is None:
         return None, "could not identify repository/issue number"
     if repo not in repo_cache:
-        repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
+        with CACHE_LOCK:
+            if repo not in repo_cache:
+                repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
     repo_meta = repo_cache[repo]
     if not repo_meta:
         return None, "repository metadata unavailable"
     if repo_meta.get("archived"):
         return None, "repository is archived"
     if repo not in guide_cache:
-        guide_cache[repo] = contribution_guide(repo, token)
+        with CACHE_LOCK:
+            if repo not in guide_cache:
+                guide_cache[repo] = contribution_guide(repo, token)
     return (
         build_candidate(
             fresh,
@@ -1423,18 +1448,28 @@ def discover_strategic(
     audit: list[dict[str, Any]] = []
 
     source_batches: list[list[dict[str, Any]]] = []
-    for target_repo in TARGET_REPOS:
-        items, source_error = target_repo_issue_pool(target_repo, token)
-        if source_error:
-            add_audit(
-                audit,
-                {
-                    "html_url": f"https://github.com/{target_repo}/issues",
-                    "title": target_repo,
-                },
-                source_error,
+    if TARGET_REPOS:
+        with ThreadPoolExecutor(
+            max_workers=min(NETWORK_WORKERS, len(TARGET_REPOS))
+        ) as executor:
+            repo_results = executor.map(
+                lambda target_repo: (
+                    target_repo,
+                    target_repo_issue_pool(target_repo, token),
+                ),
+                TARGET_REPOS,
             )
-        source_batches.append(items)
+            for target_repo, (items, source_error) in repo_results:
+                if source_error:
+                    add_audit(
+                        audit,
+                        {
+                            "html_url": f"https://github.com/{target_repo}/issues",
+                            "title": target_repo,
+                        },
+                        source_error,
+                    )
+                source_batches.append(items)
 
     for query in STRATEGIC_GLOBAL_QUERIES:
         source_batches.append(
@@ -1499,8 +1534,17 @@ def discover_strategic(
 
     for repo, items in inspected.items():
         ranked: list[tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]] = []
-        for item in items:
-            comments = issue_comments(item, token)
+        if items:
+            with ThreadPoolExecutor(
+                max_workers=min(NETWORK_WORKERS, len(items))
+            ) as executor:
+                comment_batches = list(
+                    executor.map(lambda item: issue_comments(item, token), items)
+                )
+        else:
+            comment_batches = []
+
+        for item, comments in zip(items, comment_batches, strict=True):
             signal = bounty.payment_signal(item)
             lane = "paid" if signal else "strategic"
             preview = build_candidate(
@@ -1523,14 +1567,36 @@ def discover_strategic(
 
         ranked.sort(key=lambda row: row[:3], reverse=True)
         verified_repo: list[dict[str, Any]] = []
-        for _, _, _, item, comments in ranked:
-            candidate, reason = verify(
-                item,
-                token,
-                repo_cache,
-                guide_cache,
-                activity_comments=comments,
+
+        def verify_row(
+            row: tuple[int, int, int, dict[str, Any], list[dict[str, Any]]],
+        ) -> tuple[
+            tuple[int, int, int, dict[str, Any], list[dict[str, Any]]],
+            tuple[dict[str, Any] | None, str | None],
+        ]:
+            item = row[3]
+            comments = row[4]
+            return (
+                row,
+                verify(
+                    item,
+                    token,
+                    repo_cache,
+                    guide_cache,
+                    activity_comments=comments,
+                ),
             )
+
+        if ranked:
+            with ThreadPoolExecutor(
+                max_workers=min(NETWORK_WORKERS, len(ranked))
+            ) as executor:
+                verification_results = list(executor.map(verify_row, ranked))
+        else:
+            verification_results = []
+
+        for row, (candidate, reason) in verification_results:
+            item = row[3]
             if reason:
                 add_reject(rejected, examples, item, reason)
                 print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
@@ -1659,9 +1725,20 @@ def main() -> None:
     repo_cache: dict[str, dict[str, Any]] = {}
     guide_cache: dict[str, str | None] = {}
 
+    started = monotonic()
+    paid_started = monotonic()
     paid, paid_rejects, paid_examples = discover_paid(token, seen, repo_cache, guide_cache)
+    paid_seconds = monotonic() - paid_started
+
+    strategic_started = monotonic()
     strategic, strategic_rejects, strategic_examples, strategic_audit = discover_strategic(
         token, seen, {x["url"] for x in paid}, repo_cache, guide_cache
+    )
+    strategic_seconds = monotonic() - strategic_started
+    print(
+        "Scout performance: "
+        f"paid={paid_seconds:.1f}s, strategic={strategic_seconds:.1f}s, "
+        f"total={monotonic() - started:.1f}s"
     )
 
     by_url: dict[str, dict[str, Any]] = {}
