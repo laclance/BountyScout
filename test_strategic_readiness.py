@@ -553,7 +553,9 @@ class ManualTrackingIssueTests(unittest.TestCase):
         )
         self.assertIsNone(
             readiness.manual_tracking_issue_reason(
-                issue(author_association="NONE", body="This is an umbrella issue for related ideas.")
+                issue(
+                    author_association="NONE", body="This is an umbrella issue for related ideas."
+                )
             )
         )
 
