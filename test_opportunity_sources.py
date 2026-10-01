@@ -228,6 +228,20 @@ class PlatformAdapterTests(unittest.TestCase):
             {},
         )
 
+    def test_platform_merge_isolates_one_loader_failure(self) -> None:
+        def broken() -> dict[str, str]:
+            raise RuntimeError("parser broke")
+
+        refs = sources.platform_paid_refs(
+            (
+                lambda: {"a": "issuehunt"},
+                broken,
+                lambda: {"b": "bountyhub"},
+            ),
+            network_workers=3,
+        )
+        self.assertEqual(refs, {"a": "issuehunt", "b": "bountyhub"})
+
     def test_platform_merge_is_deduplicated_with_later_loader_precedence(self) -> None:
         refs = sources.platform_paid_refs(
             (
