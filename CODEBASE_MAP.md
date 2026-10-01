@@ -94,10 +94,10 @@
 - **function** `add_audit()` — line 892
 - **function** `strategic_inspection_items()` — line 908
 - **function** `discover_strategic()` — line 920
-- **function** `github_report_ref()` — line 1187
-- **function** `markdown_candidate()` — line 1192
-- **function** `notification_candidate()` — line 1197
-- **function** `main()` — line 1202
+- **function** `github_report_ref()` — line 1198
+- **function** `markdown_candidate()` — line 1203
+- **function** `notification_candidate()` — line 1208
+- **function** `main()` — line 1213
 
 ## `opportunity_sources.py`
 
