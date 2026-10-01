@@ -67,7 +67,7 @@ TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
 def target_repo_issue_pool(repo: str, token: str | None) -> tuple[list[dict[str, Any]], str | None]:
-    """Fetch a full issue-only pool even though GitHub mixes PRs into /issues."""
+    """Fetch enough real issues even though GitHub mixes PRs into /issues."""
     issues: list[dict[str, Any]] = []
 
     for page in range(1, TARGET_REPO_FETCH_PAGES + 1):
