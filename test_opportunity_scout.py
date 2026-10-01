@@ -97,12 +97,70 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertIn("/repos/grpc/grpc-go/issues?", url)
         self.assertIn("state=open", url)
         self.assertIn("sort=updated", url)
-        self.assertIn("per_page=20", url)
+        self.assertIn("per_page=50", url)
+        self.assertIn("page=1", url)
 
         with patch.object(bounty, "github_get", return_value=None):
             items, error = scout.target_repo_issue_pool("grpc/grpc-go", "t")
         self.assertEqual(items, [])
         self.assertIn("scan coverage incomplete", str(error))
+
+        pr_item = issue(
+            html_url="https://github.com/grpc/grpc-go/pull/1",
+            pull_request={"url": "x"},
+        )
+        i1 = issue(html_url="https://github.com/grpc/grpc-go/issues/1")
+        i2 = issue(html_url="https://github.com/grpc/grpc-go/issues/2")
+        i3 = issue(html_url="https://github.com/grpc/grpc-go/issues/3")
+        with (
+            patch.object(scout, "TARGET_REPO_FETCH_PER_PAGE", 4),
+            patch.object(scout, "STRATEGIC_SEARCH_PER_PAGE", 3),
+            patch.object(scout, "TARGET_REPO_FETCH_PAGES", 3),
+            patch.object(
+                bounty,
+                "github_get",
+                side_effect=[
+                    [i1, pr_item, "not-an-issue", pr_item],
+                    [i2, i3, pr_item],
+                ],
+            ) as getter,
+        ):
+            items, error = scout.target_repo_issue_pool("grpc/grpc-go", "t")
+        self.assertIsNone(error)
+        self.assertEqual([item["html_url"] for item in items], [
+            i1["html_url"],
+            i2["html_url"],
+            i3["html_url"],
+        ])
+        self.assertEqual(getter.call_count, 2)
+        self.assertIn("page=2", getter.call_args.args[0])
+
+        with (
+            patch.object(scout, "TARGET_REPO_FETCH_PER_PAGE", 2),
+            patch.object(scout, "STRATEGIC_SEARCH_PER_PAGE", 3),
+            patch.object(
+                bounty,
+                "github_get",
+                side_effect=[[i1, pr_item], None],
+            ),
+        ):
+            items, error = scout.target_repo_issue_pool("grpc/grpc-go", "t")
+        self.assertEqual([item["html_url"] for item in items], [i1["html_url"]])
+        self.assertIn("scan coverage incomplete", str(error))
+
+        with (
+            patch.object(scout, "TARGET_REPO_FETCH_PER_PAGE", 2),
+            patch.object(scout, "STRATEGIC_SEARCH_PER_PAGE", 5),
+            patch.object(scout, "TARGET_REPO_FETCH_PAGES", 2),
+            patch.object(
+                bounty,
+                "github_get",
+                side_effect=[[pr_item, pr_item], [pr_item, pr_item]],
+            ),
+        ):
+            items, error = scout.target_repo_issue_pool("grpc/grpc-go", "t")
+        self.assertEqual(items, [])
+        self.assertIsNone(error)
 
         for repo in (
             "grpc/grpc-go",
