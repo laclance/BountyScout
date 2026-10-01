@@ -3240,9 +3240,7 @@ class DiscoveryTests(unittest.TestCase):
             "generated opportunity-scout report",
         )
         self.assertEqual(
-            scout.strategic_preflight_rejection(
-                issue(labels=[{"name": "support"}], comments=0)
-            ),
+            scout.strategic_preflight_rejection(issue(labels=[{"name": "support"}], comments=0)),
             "support/triage issue rather than a contributor task",
         )
         self.assertEqual(
