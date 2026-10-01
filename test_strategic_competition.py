@@ -184,6 +184,39 @@ class LinkedPullRequestTests(unittest.TestCase):
                 "existing open implementation PR: https://github.com/example/project/pull/13",
             )
 
+    def test_linked_pr_detects_implementation_link_in_issue_body_without_comments(self) -> None:
+        item = issue(
+            comments=0,
+            body=(
+                "PR https://github.com/example/project/pull/6293 "
+                "fixes exactly this and has been open for review."
+            ),
+        )
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "open",
+                "html_url": "https://github.com/example/project/pull/6293",
+            },
+        ) as getter:
+            self.assertEqual(
+                competition.linked_open_pr_reason(item, "t", []),
+                "existing open implementation PR: https://github.com/example/project/pull/6293",
+            )
+        getter.assert_called_once()
+
+        background = issue(
+            comments=0,
+            body=(
+                "For historical context see "
+                "https://github.com/example/project/pull/111 from the earlier refactor."
+            ),
+        )
+        with patch.object(github, "github_get") as no_fetch:
+            self.assertIsNone(competition.linked_open_pr_reason(background, "t", []))
+        no_fetch.assert_not_called()
+
     def test_linked_pr_short_circuits_invalid_issue_and_zero_comments(self) -> None:
         with patch.object(github, "github_get") as getter:
             self.assertIsNone(
