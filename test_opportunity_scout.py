@@ -1675,9 +1675,7 @@ class DiscoveryTests(unittest.TestCase):
                 ),
             ) as verify_mock,
         ):
-            found, rejected, examples, audit = scout.discover_strategic(
-                "t", set(), set(), {}, {}
-            )
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
         self.assertEqual([item["url"] for item in found], [crowded["html_url"]])
         verify_mock.assert_called_once()
