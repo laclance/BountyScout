@@ -41,6 +41,8 @@ STRATEGIC_GLOBAL_QUERIES = [
     'is:issue is:open no:assignee label:"help wanted" regression sort:updated-desc',
 ]
 STRATEGIC_SEARCH_PER_PAGE = 20
+TARGET_REPO_FETCH_PER_PAGE = 50
+TARGET_REPO_FETCH_PAGES = 3
 STRATEGIC_INSPECT_PER_REPO = 15
 STRATEGIC_KEEP_PER_REPO = 3
 STRATEGIC_MIN_CAREER_SCORE = 55
@@ -65,22 +67,38 @@ TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
 def target_repo_issue_pool(repo: str, token: str | None) -> tuple[list[dict[str, Any]], str | None]:
-    """Fetch a target repo's freshest open issues without using GitHub Search API."""
-    params = urllib.parse.urlencode(
-        {
-            "state": "open",
-            "sort": "updated",
-            "direction": "desc",
-            "per_page": STRATEGIC_SEARCH_PER_PAGE,
-        }
-    )
-    data = bounty.github_get(
-        f"https://api.github.com/repos/{repo}/issues?{params}",
-        token,
-    )
-    if not isinstance(data, list):
-        return [], f"target repo discovery failed for {repo}; scan coverage incomplete"
-    return [item for item in data if isinstance(item, dict)], None
+    """Fetch a full issue-only pool even though GitHub mixes PRs into /issues."""
+    issues: list[dict[str, Any]] = []
+
+    for page in range(1, TARGET_REPO_FETCH_PAGES + 1):
+        params = urllib.parse.urlencode(
+            {
+                "state": "open",
+                "sort": "updated",
+                "direction": "desc",
+                "per_page": TARGET_REPO_FETCH_PER_PAGE,
+                "page": page,
+            }
+        )
+        data = bounty.github_get(
+            f"https://api.github.com/repos/{repo}/issues?{params}",
+            token,
+        )
+        if not isinstance(data, list):
+            error = f"target repo discovery failed for {repo}; scan coverage incomplete"
+            return issues[:STRATEGIC_SEARCH_PER_PAGE], error
+
+        for item in data:
+            if not isinstance(item, dict) or "pull_request" in item:
+                continue
+            issues.append(item)
+            if len(issues) >= STRATEGIC_SEARCH_PER_PAGE:
+                return issues[:STRATEGIC_SEARCH_PER_PAGE], None
+
+        if len(data) < TARGET_REPO_FETCH_PER_PAGE:
+            break
+
+    return issues[:STRATEGIC_SEARCH_PER_PAGE], None
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
