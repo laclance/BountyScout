@@ -631,7 +631,6 @@ class CalibrationTests(unittest.TestCase):
                     "active claim by @dev",
                 )
 
-
     def test_strategic_claim_matcher_required_phrases(self) -> None:
         claims = (
             "I'd like to work on this.",
@@ -734,8 +733,7 @@ class CalibrationTests(unittest.TestCase):
     def test_strategic_claim_recency_does_not_permanently_suppress(self) -> None:
         recent = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
         stale = (
-            datetime.now(timezone.utc)
-            - timedelta(days=scout.STRATEGIC_CLAIM_MAX_AGE_DAYS + 30)
+            datetime.now(timezone.utc) - timedelta(days=scout.STRATEGIC_CLAIM_MAX_AGE_DAYS + 30)
         ).isoformat()
 
         recent_comment = {
