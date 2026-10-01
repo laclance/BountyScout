@@ -70,7 +70,12 @@ jobs:
         run: ruff check .
 
       - name: Check generated codebase map
-        run: python scripts/generate_codebase_map.py --check
+        run: |
+          if ! python scripts/generate_codebase_map.py --check; then
+            python scripts/generate_codebase_map.py
+            git diff -- CODEBASE_MAP.md
+            exit 1
+          fi
 
       - name: Compile Python
         run: python -m py_compile *.py scripts/*.py
