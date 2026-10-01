@@ -2225,6 +2225,24 @@ class VerificationTests(unittest.TestCase):
             "umbrella tracking issue, not a single implementation task",
         )
 
+    def test_fresh_1414_run_false_positive_regressions(self) -> None:
+        undici_tracker = issue(
+            html_url="https://github.com/nodejs/undici/issues/5177",
+            title="[2026] Tracking issue for flaky tests",
+            body=(
+                "This is 2026 equivalent of the previous flaky-test tracker where maintainers "
+                "had reduced flaky tests. We can use this issue for tracking, and create "
+                "sub-issues per test failure?"
+            ),
+            author_association="MEMBER",
+            comments=4,
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self.assertEqual(
+            scout.strategic_rejection(undici_tracker, "t", []),
+            "umbrella tracking issue, not a single implementation task",
+        )
+
     def test_fresh_1350_run_false_positive_regressions(self) -> None:
         soup = issue(
             html_url="https://github.com/MakazhanAlpamys/Soup/issues/1530",

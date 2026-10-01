@@ -539,6 +539,30 @@ class ManualTrackingIssueTests(unittest.TestCase):
             "umbrella tracking issue, not a single implementation task",
         )
 
+    def test_tracking_container_that_delegates_work_to_subissues_is_umbrella(self) -> None:
+        tracker = issue(
+            title="[2026] Tracking issue for flaky tests",
+            author_association="MEMBER",
+            body=(
+                "This is the 2026 equivalent of the previous flaky-test tracker. "
+                "We can use this issue for tracking, and create sub-issues per test failure?"
+            ),
+        )
+        self.assertEqual(
+            readiness.manual_tracking_issue_reason(tracker),
+            "umbrella tracking issue, not a single implementation task",
+        )
+        self.assertIsNone(
+            readiness.manual_tracking_issue_reason(
+                issue(body="Use this issue for tracking the regression while implementing it here.")
+            )
+        )
+        self.assertIsNone(
+            readiness.manual_tracking_issue_reason(
+                issue(body="Create a sub-issue for optional cleanup after this fix lands.")
+            )
+        )
+
     def test_normal_checklists_and_small_cross_references_stay_actionable(self) -> None:
         self.assertIsNone(
             readiness.manual_tracking_issue_reason(

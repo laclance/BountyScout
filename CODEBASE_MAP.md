@@ -173,5 +173,5 @@
 - **function** `reward_history_reason()` — line 513
 - **function** `reporter_support_triage_reason()` — line 534
 - **function** `manual_tracking_issue_reason()` — line 555
-- **function** `automated_tracking_issue_reason()` — line 586
-- **function** `release_tracking_reason()` — line 630
+- **function** `automated_tracking_issue_reason()` — line 602
+- **function** `release_tracking_reason()` — line 646
