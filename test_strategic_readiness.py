@@ -198,6 +198,46 @@ class MaintainerReadinessTests(unittest.TestCase):
             (None, None),
         )
 
+    def test_wrong_solution_from_maintainer_blocks_requested_approach(self) -> None:
+        wrong_solution = [
+            {
+                "body": (
+                    "A merge option would be the wrong solution for this. "
+                    "The profile should be defined declaratively instead."
+                ),
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), wrong_solution),
+            (
+                False,
+                "maintainer indicates the proposed implementation approach is not wanted",
+            ),
+        )
+
+        untrusted = [
+            {
+                "body": "This is the wrong solution; use something else.",
+                "author_association": "NONE",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), untrusted),
+            (None, None),
+        )
+
+        later_ready = wrong_solution + [
+            {
+                "body": "We reconsidered this; a PR in this repository is welcome.",
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), later_ready),
+            (True, None),
+        )
+
     def test_feedback_language_only_blocks_proposal_stage(self) -> None:
         comment = [
             {
@@ -264,6 +304,36 @@ class LifecycleClassificationTests(unittest.TestCase):
             readiness.release_tracking_reason(issue(body="Please publish a new release."))
         )
         self.assertIsNone(readiness.release_tracking_reason(issue(title="Bug in release parser")))
+
+        undici = issue(
+            comments=2,
+        )
+        undici_comments = [
+            {
+                "body": (
+                    "Looks like this was fixed on main by #5864. "
+                    "It is not released yet; should be good with the next release."
+                ),
+                "author_association": "NONE",
+            }
+        ]
+        self.assertEqual(
+            readiness.release_tracking_reason(undici, undici_comments),
+            "implementation already merged; only release/tagging remains",
+        )
+
+        self.assertIsNone(
+            readiness.release_tracking_reason(
+                issue(),
+                [{"body": "This bug reproduces on main and may affect the next release."}],
+            )
+        )
+        self.assertIsNone(
+            readiness.release_tracking_reason(
+                issue(),
+                [{"body": "Fixed on main, but please also backport this to the release branch."}],
+            )
+        )
 
 
 if __name__ == "__main__":
