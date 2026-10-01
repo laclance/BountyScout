@@ -4,6 +4,7 @@ source =
     scout_bounties
     opportunity_scout
     opportunity_scoring
+    opportunity_sources
     strategic_claims
     strategic_competition
     strategic_readiness
