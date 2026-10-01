@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from threading import Lock
 from typing import Any, TypeVar
 
@@ -82,12 +82,10 @@ def repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
 
 
 def issue_comments(
-    item: MutableMapping[str, Any] | dict[str, Any] | Any,
+    item: Mapping[str, Any],
     token: str | None,
 ) -> list[dict[str, Any]]:
     """Fetch all currently exposed issue comments used by strategic verification."""
-    if not isinstance(item, dict):
-        return []
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number or not int(item.get("comments") or 0):
         return []
@@ -99,14 +97,19 @@ def issue_comments(
     return comments if isinstance(comments, list) else []
 
 
-def contribution_guide(repo: str, token: str | None) -> str | None:
+def contribution_guide(
+    repo: str,
+    token: str | None,
+    getter: Callable[[str, str | None], Any] | None = None,
+) -> str | None:
     """Return the first contribution guide found at common repository paths."""
+    load = getter or (
+        lambda url, auth: github_get(url, auth, timeout=10, log_errors=False)
+    )
     for path in ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"):
-        data = github_get(
+        data = load(
             f"https://api.github.com/repos/{repo}/contents/{urllib.parse.quote(path)}",
             token,
-            timeout=10,
-            log_errors=False,
         )
         if isinstance(data, dict) and data.get("html_url"):
             return str(data["html_url"])
