@@ -34,9 +34,9 @@ Cash score considers payment confidence, stated reward, rough expected hourly va
 
 ## Strategic OSS lane
 
-Strategic discovery starts with a curated target list covering AWS/Kubernetes, container runtimes, networking, RPC/storage, observability, Go tooling, Terraform, GitOps, and selected JS/TS infrastructure projects, plus narrow global searches for contributor-ready bugs.
+Strategic discovery starts with a curated target list covering AWS/Kubernetes, container runtimes, networking, RPC/storage, observability, Go tooling, Terraform, GitOps, and selected JS/TS infrastructure projects, plus narrow global searches for contributor-ready bugs. Curated repositories are read through GitHub's core Issues API rather than the Search API, so every target gets its own result budget without exhausting search-rate limits.
 
-Candidates are provisionally ranked first. Search depth is intentionally broader than the final queue, and only the strongest candidates get the expensive verification pass, which refreshes the source issue and checks:
+For each curated repository, the scout activity-inspects up to 15 plausible issues, re-ranks them using issue/comment freshness, and then fully verifies candidates in order until up to three valid opportunities survive. Search depth is intentionally broader than the final queue. Verification refreshes the source issue and checks:
 
 - issue is still open and unassigned
 - no obvious active claim
@@ -44,7 +44,9 @@ Candidates are provisionally ranked first. Search depth is intentionally broader
 - repository is available and not archived
 - contribution guide at common repository locations
 
-Career score considers repository reputation/activity, target-repo bonus, language/domain fit, technical depth, tests/contributor signals, scope, effort, and competition.
+Career score considers repository reputation/activity, target-repo bonus, language/domain fit, technical depth, tests/contributor signals, scope, effort, competition, issue freshness, and recent maintainer/discussion activity. Old issues are penalized only when they are actually inactive rather than merely old.
+
+The scout also emits potential scanner misses: strong-looking items that were filtered early, fell just outside a repo's inspection pool, or narrowly missed the quality floor. These are intended as feedback for tuning false-negative and false-positive behavior over time.
 
 ## Ranked output
 
