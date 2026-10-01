@@ -25,6 +25,17 @@ Existing rows can be corrected in bounded follow-up PRs after maintainers decide
 repeated destination is redundant or whether a better official docs/product URL exists.
 """
 
+TAILSCALE_19694_BODY = """The Tailscaled-on-macOS wiki already says MagicDNS works if users
+set 100.100.100.100 as their DNS server, but it does not explain how. Add a short section
+with the exact macOS setup:
+
+1. Add 100.100.100.100 in System Settings -> Network -> Wi-Fi -> DNS.
+2. Create /etc/resolver/ts.net with nameserver 100.100.100.100.
+3. Flush the cache and HUP mDNSResponder.
+
+This is documentation for the existing tailscaled behavior; no runtime change is requested.
+"""
+
 
 def issue(**overrides: Any) -> dict[str, Any]:
     item: dict[str, Any] = {
@@ -186,6 +197,81 @@ class EffortCalibrationTests(unittest.TestCase):
         )
         self.assertEqual(scoring.estimate_effort(micro), "<1h")
         self.assertEqual(scoring.estimate_effort(broader), "1–3h")
+
+    def test_documentation_feature_prefix_does_not_force_large_scope(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="FR: [documentation] explain existing DNS setup",
+                body="Add the exact resolver setup steps to the existing documentation.",
+                labels=[{"name": "fr"}],
+            )
+        )
+        self.assertEqual(estimate.bucket, "1–3h")
+        self.assertEqual(estimate.reasons, ("bounded documentation change",))
+
+    def test_tailscale_19694_is_bounded_documentation(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title=(
+                    'FR: [documentation] Explain how to configure MagicDNS manually for '
+                    'tailscaled on macOS in the "Tailscaled-on-macOS"'
+                ),
+                body=TAILSCALE_19694_BODY,
+                labels=[{"name": "fr"}],
+            )
+        )
+        self.assertEqual(estimate.bucket, "1–3h")
+        self.assertEqual(estimate.reasons, ("bounded documentation change",))
+
+    def test_feature_request_documentation_title_can_remain_bounded(self) -> None:
+        self.assertEqual(
+            scoring.estimate_effort(
+                issue(
+                    title="Feature request: update documentation for resolver setup",
+                    body="Document the existing configuration and example commands.",
+                )
+            ),
+            "1–3h",
+        )
+
+    def test_normal_feature_request_still_triggers_large_scope(self) -> None:
+        self.assertEqual(
+            scoring.estimate_effort(
+                issue(
+                    title="FR: Add connection pool support",
+                    body="Add connection pooling and lifecycle management to the client.",
+                )
+            ),
+            "1d+",
+        )
+
+    def test_documentation_feature_with_architecture_scope_remains_large(self) -> None:
+        self.assertEqual(
+            scoring.estimate_effort(
+                issue(
+                    title="FR: [documentation] redesign storage architecture guide",
+                    body=(
+                        "The work requires an architecture redesign spanning schema, storage, "
+                        "configuration, and protocol behavior before the docs can be updated."
+                    ),
+                )
+            ),
+            "1d+",
+        )
+
+    def test_documentation_feature_with_runtime_parser_scope_remains_large(self) -> None:
+        self.assertEqual(
+            scoring.estimate_effort(
+                issue(
+                    title="FR: [documentation] document configuration validation",
+                    body=(
+                        "Update the guide and implement parser logic plus runtime validation "
+                        "behavior so the documented configuration is enforced."
+                    ),
+                )
+            ),
+            "1d+",
+        )
 
     def test_chain_love_3969_is_not_a_documentation_microfix(self) -> None:
         item = issue(
