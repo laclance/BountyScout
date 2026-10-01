@@ -556,12 +556,27 @@ def maintainer_readiness_comment_state(
     proposal_stage = proposal_stage_signal(item)
     state: bool | None = None
     reason: str | None = None
+    diagnostic_pending = False
 
     for comment in comments or []:
+        body = normalized_claim_text(str(comment.get("body", ""))).lower()
+
+        supplied_diagnostic = bool(
+            re.search(
+                r"\b(?:attached|provided|uploaded|included|here(?:'s| is)|see)\b"
+                r".{0,160}\b(?:cpu profile|memory profile|heap profile|profile|stack trace|"
+                r"minimal reproducer|reproducer|logs?|benchmark|trace|dump)\b",
+                body,
+                re.DOTALL,
+            )
+        )
+        if diagnostic_pending and supplied_diagnostic:
+            state = None
+            reason = None
+            diagnostic_pending = False
+
         if not maintainer_comment_authority(comment):
             continue
-
-        body = str(comment.get("body", "")).lower()
 
         ready = any(
             marker in body
@@ -576,15 +591,94 @@ def maintainer_readiness_comment_state(
                 "you can start implementation",
                 "happy to accept a pr",
                 "happy to accept a pull request",
+                "pr in this repository is welcome",
+                "pull request in this repository is welcome",
+                "implementation is wanted here",
+                "reviving this issue",
+                "revive this issue",
+                "this issue is active again",
+                "reopening this for implementation",
             )
         )
         if ready:
             state = True
             reason = None
+            diagnostic_pending = False
             continue
 
+        requested_diagnostic = bool(
+            re.search(
+                r"\b(?:could|can|would)\s+you\s+(?:please\s+)?"
+                r"(?:provide|share|attach|capture|collect|send)\b|"
+                r"\bwould\s+it\s+be\s+possible\s+to\s+(?:provide|share|attach)\b|"
+                r"\bplease\s+(?:provide|share|attach|capture|collect|send)\b|"
+                r"\bwe\s+need\s+(?:a|the)\b",
+                body,
+            )
+            and re.search(
+                r"\b(?:cpu|memory|heap)\s+profiles?\b|"
+                r"\bprofiles?\s+from\b|"
+                r"\bstack traces?\b|"
+                r"\bminimal reproduc(?:er|tion)\b|"
+                r"\breproducers?\b|"
+                r"\blogs?\s+(?:from|required|showing)\b|"
+                r"\bbenchmarks?\b|"
+                r"\btraces?\b|"
+                r"\bdumps?\b",
+                body,
+            )
+        )
+        redirect_target = bool(
+            re.search(
+                r"https://github\.com/[\w.-]+/[\w.-]+|"
+                r"(?<![\w.-])[\w.-]+/[\w.-]+(?![\w.-])|"
+                r"\b(?:specification|upstream|another repository|another project|"
+                r"canonical repository)\b",
+                body,
+            )
+        )
+        cross_project_redirect = redirect_target and bool(
+            re.search(
+                r"\brequires?\s+(?:a\s+)?(?:change|fix)\s+in\b|"
+                r"\bneeds?\s+to\s+be\s+(?:fixed|changed|implemented)\s+in\b|"
+                r"\bplease\s+open\s+(?:a\s+)?(?:ticket|issue)\s+(?:there|against)\b|"
+                r"\bbest\s+to\s+open\s+(?:a\s+)?(?:ticket|issue)\s+there\b|"
+                r"\b(?:implementation|change|fix)\s+belongs\s+in\b|"
+                r"\bthis\s+is\s+an?\s+upstream\s+issue\b",
+                body,
+            )
+        )
+        canonical_reference = bool(
+            re.search(
+                r"(?<!\w)#\d+\b|https://github\.com/[\w.-]+/[\w.-]+/issues/\d+",
+                body,
+            )
+        )
+        canonical_duplicate = (
+            canonical_reference
+            and "not a duplicate" not in body
+            and bool(
+                re.search(
+                    r"\blooks?\s+like\s+(?:a\s+)?(?:\(?possible\)?\s+)?"
+                    r"duplicate\s+of\b|"
+                    r"\bpossible\s+duplicate\s+of\b|"
+                    r"\btracked\s+in\s+(?:issue\s+)?"
+                    r"(?:#|https://github\.com/)|"
+                    r"\bdiscussion\s+is\s+(?:being\s+)?tracked\s+there\b|"
+                    r"\bplease\s+continue\s+(?:this|the discussion)\s+in\b",
+                    body,
+                )
+            )
+        )
+
         hold_reason: str | None = None
-        if any(
+        if requested_diagnostic:
+            hold_reason = "maintainer is waiting for requested diagnostic evidence"
+        elif cross_project_redirect:
+            hold_reason = "maintainer redirected implementation/discussion to another project"
+        elif canonical_duplicate:
+            hold_reason = "maintainer indicates this is probably tracked by another canonical issue"
+        elif any(
             marker in body
             for marker in (
                 "needs discussion",
@@ -658,9 +752,9 @@ def maintainer_readiness_comment_state(
         if hold_reason:
             state = False
             reason = hold_reason
+            diagnostic_pending = requested_diagnostic
 
     return state, reason
-
 
 def readiness_pending_label_reason(
     item: Mapping[str, Any],
@@ -685,6 +779,18 @@ def readiness_pending_label_reason(
             return reason
     return None
 
+
+
+def abandoned_lifecycle_reason(
+    item: Mapping[str, Any],
+    ready_override: bool = False,
+) -> str | None:
+    """Reject unambiguously abandoned lifecycle states unless explicitly revived."""
+    if ready_override:
+        return None
+    if "lifecycle/rotten" in issue_label_set(item):
+        return "issue is in an abandoned/rotten lifecycle state"
+    return None
 
 def automated_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
     """Reject bot-maintained dashboards/trackers that are not contributor tasks."""
@@ -1541,6 +1647,11 @@ def strategic_rejection(
     label_set = issue_label_set(item)
     labels_text = " ".join(label_set)
     comment_ready, comment_hold_reason = maintainer_readiness_comment_state(item, comments)
+
+    abandoned_reason = abandoned_lifecycle_reason(item, comment_ready is True)
+    if abandoned_reason:
+        return abandoned_reason
+
     accepted = (
         bool(TRIAGE_ACCEPTED_LABELS & label_set)
         or maintainer_ready_signal(labels_text)
