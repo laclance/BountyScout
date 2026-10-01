@@ -198,7 +198,7 @@ class PlatformAdapterTests(unittest.TestCase):
     def test_bountyhub_direct_detail_and_amount(self) -> None:
         pages = {
             "https://www.bountyhub.dev/en/bounties": (
-                "https:\/\/github.com\/direct\/repo\/issues\/1 "
+                r"https:\/\/github.com\/direct\/repo\/issues\/1 "
                 '<a href="/en/bounty/view/A">a</a><a href="/en/bounty/view/B">b</a>'
             ),
             "https://www.bountyhub.dev/en/bounty/view/A": "",
