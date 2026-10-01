@@ -240,6 +240,18 @@ class EligibilityTests(unittest.TestCase):
             scout.candidate_rejection_reason(proposal, "t")[0],
             "unfunded bounty proposal, not an existing award",
         )
+        markdown_proposal = issue(
+            body=(
+                "**Bounty proposal**\n\n"
+                "Would you approve **US$100 cash upon acceptance and merge** "
+                "for this focused correction? Please confirm eligibility first."
+            )
+        )
+        self.assertEqual(
+            scout.candidate_rejection_reason(markdown_proposal, "t")[0],
+            "unfunded bounty proposal, not an existing award",
+        )
+
         meta = issue(body="bounty-watch $100 reward")
         self.assertEqual(
             scout.candidate_rejection_reason(meta, "t")[0],

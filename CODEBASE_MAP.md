@@ -86,17 +86,17 @@
 - **function** `non_actionable_diagnostic_reason()` — line 483
 - **function** `strategic_rejection()` — line 512
 - **function** `verify()` — line 585
-- **function** `add_reject()` — line 685
-- **function** `discover_paid()` — line 693
-- **function** `possible_miss_signal()` — line 783
-- **function** `basic_rejection_audit_reason()` — line 813
-- **function** `add_audit()` — line 853
-- **function** `strategic_inspection_items()` — line 869
-- **function** `discover_strategic()` — line 881
-- **function** `github_report_ref()` — line 1105
-- **function** `markdown_candidate()` — line 1110
-- **function** `notification_candidate()` — line 1115
-- **function** `main()` — line 1120
+- **function** `add_reject()` — line 689
+- **function** `discover_paid()` — line 697
+- **function** `possible_miss_signal()` — line 787
+- **function** `basic_rejection_audit_reason()` — line 817
+- **function** `add_audit()` — line 857
+- **function** `strategic_inspection_items()` — line 873
+- **function** `discover_strategic()` — line 885
+- **function** `github_report_ref()` — line 1109
+- **function** `markdown_candidate()` — line 1114
+- **function** `notification_candidate()` — line 1119
+- **function** `main()` — line 1124
 
 ## `opportunity_sources.py`
 
@@ -114,33 +114,33 @@
 
 ## `scout_bounties.py`
 
-- **function** `load_seen_bounties()` — line 61
-- **function** `save_seen_bounties()` — line 74
-- **function** `github_get()` — line 85
-- **function** `search_github()` — line 104
-- **function** `payment_signal()` — line 111
-- **function** `issue_repo_and_number()` — line 161
-- **function** `has_existing_implementation_pr()` — line 170
-- **function** `active_claim_reason()` — line 197
-- **function** `is_clean_candidate()` — line 226
-- **function** `candidate_rejection_reason()` — line 275
-- **function** `parse_github_datetime()` — line 319
-- **function** `usd_like_amount_from_signal()` — line 329
-- **function** `fetch_repo_metadata()` — line 349
-- **function** `score_candidate()` — line 355
-- **function** `send_telegram_notification()` — line 481
-- **function** `send_discord_notification()` — line 505
-- **function** `create_github_issue()` — line 523
-- **function** `main()` — line 552
+- **function** `load_seen_bounties()` — line 63
+- **function** `save_seen_bounties()` — line 76
+- **function** `github_get()` — line 87
+- **function** `search_github()` — line 106
+- **function** `payment_signal()` — line 113
+- **function** `issue_repo_and_number()` — line 163
+- **function** `has_existing_implementation_pr()` — line 172
+- **function** `active_claim_reason()` — line 199
+- **function** `is_clean_candidate()` — line 228
+- **function** `candidate_rejection_reason()` — line 277
+- **function** `parse_github_datetime()` — line 321
+- **function** `usd_like_amount_from_signal()` — line 331
+- **function** `fetch_repo_metadata()` — line 351
+- **function** `score_candidate()` — line 357
+- **function** `send_telegram_notification()` — line 483
+- **function** `send_discord_notification()` — line 507
+- **function** `create_github_issue()` — line 525
+- **function** `main()` — line 554
 
 ## `strategic_claims.py`
 
 - **function** `normalized_claim_text()` — line 12
 - **function** `explicit_ownership_claim()` — line 17
 - **function** `implementation_underway_claim()` — line 35
-- **function** `pr_intent_claim()` — line 55
-- **function** `concrete_first_person_plan_claim()` — line 73
-- **function** `strategic_claim_text()` — line 86
+- **function** `pr_intent_claim()` — line 56
+- **function** `concrete_first_person_plan_claim()` — line 74
+- **function** `strategic_claim_text()` — line 87
 
 ## `strategic_competition.py`
 
