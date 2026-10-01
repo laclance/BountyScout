@@ -3129,8 +3129,8 @@ class DiscoveryTests(unittest.TestCase):
                 return_value=candidate(
                     url=low["html_url"],
                     paid=False,
-                    priority_score=40,
-                    career_score=40,
+                    priority_score=50,
+                    career_score=50,
                 ),
             ),
             patch.object(
@@ -3228,6 +3228,36 @@ class DiscoveryTests(unittest.TestCase):
         self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
 
     def test_strategic_preflight_rejects_only_source_visible_states(self) -> None:
+        with patch.object(bounty, "is_clean_candidate", return_value=False):
+            self.assertEqual(
+                scout.strategic_preflight_rejection(issue(comments=0)),
+                "failed basic eligibility filter",
+            )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(title="OSS Opportunity Queue: generated report", comments=0)
+            ),
+            "generated opportunity-scout report",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "support"}], comments=0)
+            ),
+            "support/triage issue rather than a contributor task",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "lifecycle/rotten"}], comments=0)
+            ),
+            "issue is in an abandoned/rotten lifecycle state",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "needs reproduction"}], comments=0)
+            ),
+            "awaiting reproduction confirmation",
+        )
+        self.assertIsNone(scout.strategic_preflight_rejection(issue(comments=0)))
         self.assertEqual(
             scout.strategic_preflight_rejection(issue(labels=[{"name": "claimed"}], comments=2)),
             "issue is marked claimed by the project",
