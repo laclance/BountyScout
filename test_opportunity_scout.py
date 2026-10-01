@@ -1370,6 +1370,206 @@ class VerificationTests(unittest.TestCase):
                 )
             )
 
+    def test_readiness_gate_known_false_positive_classes(self) -> None:
+        loki = issue(
+            title="Interpretation of date range in Grafana UI vs query_range API is wrong",
+            labels=[{"name": "type/bug"}],
+        )
+        loki_comments = [
+            {
+                "body": (
+                    "This particular issue came up as needs discussion, so I'm going to "
+                    "hand it off to the Engineering team to look at."
+                ),
+                "author_association": "CONTRIBUTOR",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(loki, "t", loki_comments),
+            "maintainer says issue still needs discussion",
+        )
+
+        argo = issue(
+            title="chore: upgrade golang to 1.26.3",
+            body=(
+                "PR #27737 (merged 2026-05-07) already bumps Go to 1.26.3 on master "
+                "but a new release tag has not yet been published. "
+                "Request: please tag a new ArgoCD release from the current master."
+            ),
+        )
+        self.assertEqual(
+            scout.strategic_rejection(argo, "t", []),
+            "implementation already merged; only release/tagging remains",
+        )
+
+        traefik = issue(
+            title="Per-ingress request metrics",
+            labels=[{"name": "kind/proposal"}],
+        )
+        traefik_comments = [
+            {
+                "body": (
+                    "We'd like to gauge community interest before committing. "
+                    "We'll reevaluate based on the feedback. "
+                    "This discussion is time-boxed to 6 months."
+                ),
+                "author_association": "OWNER",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(traefik, "t", traefik_comments),
+            "proposal is still gathering feedback",
+        )
+
+        dashboard = issue(
+            title="Dependency Dashboard",
+            labels=[{"name": "dependencies"}],
+            user={"login": "renovate-sh-app[bot]"},
+            comments=0,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(dashboard, "t", []),
+            "automated dependency dashboard, not an implementation task",
+        )
+
+        moby = issue(
+            title="docker cp copy-out can write outside the destination",
+            labels=[{"name": "status/needs-reproduction"}],
+        )
+        self.assertEqual(
+            scout.strategic_rejection(moby, "t", []),
+            "awaiting reproduction confirmation",
+        )
+
+    def test_readiness_gate_allows_explicit_ready_override_and_normal_features(self) -> None:
+        pending = issue(labels=[{"name": "status/needs-reproduction"}])
+        ready_comments = [
+            {
+                "body": "Reproduced and confirmed. This is ready for implementation.",
+                "author_association": "MEMBER",
+            }
+        ]
+        feature = issue(
+            title="Add per-request metrics",
+            labels=[{"name": "enhancement"}],
+        )
+        proposal_without_hold = issue(
+            title="Per-request metrics",
+            labels=[{"name": "kind/proposal"}],
+        )
+
+        with patch.object(scout, "extended_competition_reason", return_value=None):
+            self.assertIsNone(scout.strategic_rejection(pending, "t", ready_comments))
+            self.assertIsNone(scout.strategic_rejection(feature, "t", []))
+            self.assertIsNone(scout.strategic_rejection(proposal_without_hold, "t", []))
+
+        self.assertIsNone(
+            scout.readiness_pending_label_reason(
+                issue(labels=[{"name": "needs-investigation"}, {"name": "help wanted"}]),
+                ready_override=True,
+            )
+        )
+
+    def test_readiness_helpers_cover_release_tracking_and_maintainer_waits(self) -> None:
+        self.assertEqual(
+            scout.release_tracking_reason(issue(title="Release 2.0 tracking checklist")),
+            "release planning/tracking issue, not implementation work",
+        )
+        wait_comments = [
+            {
+                "body": "Please wait before implementing; we need to clarify the expected API.",
+                "author_association": "COLLABORATOR",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(issue(title="API behavior change"), "t", wait_comments),
+            "maintainer asked contributors to wait before implementation",
+        )
+
+    def test_readiness_helper_branch_coverage(self) -> None:
+        regular = issue(title="Network bug")
+        proposal = issue(title="Network metrics", labels=[{"name": "kind/proposal"}])
+
+        self.assertTrue(
+            scout.maintainer_comment_authority({"body": "Thanks.", "author_association": "MEMBER"})
+        )
+        self.assertTrue(
+            scout.maintainer_comment_authority(
+                {
+                    "body": "I'm going to hand it off to the Engineering team.",
+                    "author_association": "CONTRIBUTOR",
+                }
+            )
+        )
+        self.assertFalse(
+            scout.maintainer_comment_authority(
+                {"body": "Thanks.", "author_association": "CONTRIBUTOR"}
+            )
+        )
+        self.assertFalse(
+            scout.maintainer_comment_authority(
+                {
+                    "body": "I'll hand it off to the Engineering team.",
+                    "author_association": "NONE",
+                }
+            )
+        )
+
+        state, reason = scout.maintainer_readiness_comment_state(
+            regular,
+            [{"body": "needs discussion", "author_association": "NONE"}],
+        )
+        self.assertIsNone(state)
+        self.assertIsNone(reason)
+
+        cases = (
+            (
+                "We need more investigation before coding.",
+                "maintainer says issue still needs investigation",
+            ),
+            (
+                "Are you sure you reproduced this on the current CLI?",
+                "maintainer says reproduction is still required",
+            ),
+            (
+                "We need clarification on the API contract.",
+                "maintainer says issue still needs clarification",
+            ),
+        )
+        for body, expected in cases:
+            with self.subTest(body=body):
+                state, reason = scout.maintainer_readiness_comment_state(
+                    regular,
+                    [{"body": body, "author_association": "MEMBER"}],
+                )
+                self.assertFalse(state)
+                self.assertEqual(reason, expected)
+
+        state, reason = scout.maintainer_readiness_comment_state(
+            proposal,
+            [
+                {
+                    "body": "This discussion is time-boxed to six months.",
+                    "author_association": "OWNER",
+                }
+            ],
+        )
+        self.assertFalse(state)
+        self.assertEqual(reason, "proposal is still gathering feedback")
+
+        state, reason = scout.maintainer_readiness_comment_state(
+            regular,
+            [{"body": "Thanks for the report.", "author_association": "COLLABORATOR"}],
+        )
+        self.assertIsNone(state)
+        self.assertIsNone(reason)
+
+        self.assertIsNone(
+            scout.automated_tracking_issue_reason(
+                issue(title="Routine bot report", user={"login": "example[bot]"})
+            )
+        )
+
     def test_verify_refresh_and_clean_failures(self) -> None:
         with patch.object(scout, "refresh_issue", return_value=(None, "closed")):
             self.assertEqual(scout.verify(issue(), "t", {}, {})[1], "closed")

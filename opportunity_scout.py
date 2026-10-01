@@ -378,6 +378,266 @@ def triage_pending_signal(labels_text: str) -> bool:
     )
 
 
+def issue_label_set(item: Mapping[str, Any]) -> set[str]:
+    """Return normalized raw label names without flattening their separators."""
+    return {
+        (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip().lower()
+        for label in (item.get("labels") or [])
+        if (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip()
+    }
+
+
+def proposal_stage_signal(item: Mapping[str, Any]) -> bool:
+    """Recognize explicit proposal/RFC/discussion-stage metadata."""
+    title, _, labels, _ = issue_text(item)
+    normalized_labels = re.sub(r"[-_/:]+", " ", labels)
+    return bool(
+        re.search(r"\b(?:proposal|rfc)\b", title, re.IGNORECASE)
+        or any(
+            marker in normalized_labels
+            for marker in (
+                "kind proposal",
+                "type proposal",
+                "status proposal",
+                "rfc",
+                "needs discussion",
+                "discussion",
+            )
+        )
+    )
+
+
+def maintainer_comment_authority(comment: Mapping[str, Any]) -> bool:
+    """Trust maintainer associations plus explicit project-action comments."""
+    association = str(comment.get("author_association", "")).upper()
+    if association in TRUSTED_ASSOCIATIONS:
+        return True
+    if association != "CONTRIBUTOR":
+        return False
+
+    body = str(comment.get("body", "")).lower()
+    return any(
+        marker in body
+        for marker in (
+            "hand it off to the engineering team",
+            "hand this off to the engineering team",
+            "we're marking this as",
+            "we are marking this as",
+            "we'll reevaluate",
+            "we will reevaluate",
+            "i'm closing this",
+            "i am closing this",
+            "we're closing this",
+            "we are closing this",
+        )
+    )
+
+
+def maintainer_readiness_comment_state(
+    item: Mapping[str, Any],
+    comments: list[dict[str, Any]] | None,
+) -> tuple[bool | None, str | None]:
+    """Return the latest explicit trusted-maintainer readiness stance."""
+    proposal_stage = proposal_stage_signal(item)
+    state: bool | None = None
+    reason: str | None = None
+
+    for comment in comments or []:
+        if not maintainer_comment_authority(comment):
+            continue
+
+        body = str(comment.get("body", "")).lower()
+
+        ready = any(
+            marker in body
+            for marker in (
+                "ready for implementation",
+                "ready to implement",
+                "feel free to work on this",
+                "contributions welcome",
+                "prs welcome",
+                "pull requests welcome",
+                "go ahead and implement",
+                "you can start implementation",
+                "happy to accept a pr",
+                "happy to accept a pull request",
+            )
+        )
+        if ready:
+            state = True
+            reason = None
+            continue
+
+        hold_reason: str | None = None
+        if any(
+            marker in body
+            for marker in (
+                "needs discussion",
+                "need more discussion",
+                "need to discuss this first",
+                "should discuss this first",
+            )
+        ):
+            hold_reason = "maintainer says issue still needs discussion"
+        elif any(
+            marker in body
+            for marker in (
+                "needs investigation",
+                "need more investigation",
+                "need to investigate",
+                "needs engineering investigation",
+            )
+        ):
+            hold_reason = "maintainer says issue still needs investigation"
+        elif any(
+            marker in body
+            for marker in (
+                "needs reproduction",
+                "need a reproduction",
+                "need reproduction",
+                "please reproduce",
+                "can you reproduce",
+            )
+        ) or ("are you sure" in body and "reproduc" in body):
+            hold_reason = "maintainer says reproduction is still required"
+        elif any(
+            marker in body
+            for marker in (
+                "not ready for implementation",
+                "not ready to implement",
+                "please wait before implementing",
+                "please wait to implement",
+                "hold off on implementation",
+                "hold off implementing",
+                "do not start implementation",
+                "don't start implementation",
+            )
+        ):
+            hold_reason = "maintainer asked contributors to wait before implementation"
+        elif any(
+            marker in body
+            for marker in (
+                "needs clarification",
+                "need clarification",
+                "need to clarify",
+                "please clarify before",
+            )
+        ):
+            hold_reason = "maintainer says issue still needs clarification"
+        elif proposal_stage and any(
+            marker in body
+            for marker in (
+                "gauge community interest",
+                "gather feedback",
+                "collect feedback",
+                "community time to weigh in",
+                "reevaluate based on the feedback",
+                "re-evaluate based on the feedback",
+                "before committing",
+            )
+        ):
+            hold_reason = "proposal is still gathering feedback"
+        elif proposal_stage and "time-boxed" in body and "discussion" in body:
+            hold_reason = "proposal is still gathering feedback"
+
+        if hold_reason:
+            state = False
+            reason = hold_reason
+
+    return state, reason
+
+
+def readiness_pending_label_reason(
+    item: Mapping[str, Any],
+    ready_override: bool = False,
+) -> str | None:
+    """Reject explicit not-ready label states unless readiness is overridden."""
+    if ready_override:
+        return None
+
+    normalized = [re.sub(r"[-_/:]+", " ", label) for label in issue_label_set(item)]
+    rules = (
+        ("needs reproduction", "awaiting reproduction confirmation"),
+        ("waiting for reproduction", "awaiting reproduction confirmation"),
+        ("needs discussion", "awaiting maintainer discussion"),
+        ("needs investigation", "awaiting maintainer investigation"),
+        ("needs analysis", "awaiting maintainer investigation"),
+        ("needs clarification", "awaiting maintainer clarification"),
+        ("needs design", "awaiting maintainer design decision"),
+    )
+    for marker, reason in rules:
+        if any(marker in label for label in normalized):
+            return reason
+    return None
+
+
+def automated_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
+    """Reject bot-maintained dashboards/trackers that are not contributor tasks."""
+    title, body, labels, _ = issue_text(item)
+    login = str((item.get("user") or {}).get("login", "")).lower()
+    bot_authored = login.endswith("[bot]") or any(
+        marker in login for marker in ("renovate", "dependabot")
+    )
+    if not bot_authored:
+        return None
+
+    title_text = title.lower()
+    dependency_tracking = bool(
+        re.search(
+            r"\b(?:dependency|dependencies)\s+(?:dashboard|tracker|tracking)\b",
+            title_text,
+        )
+    )
+    renovate_dashboard = (
+        "renovate" in f"{login}\n{body}".lower()
+        and "dependencies" in labels
+        and "dashboard" in title_text
+    )
+    if dependency_tracking or renovate_dashboard:
+        return "automated dependency dashboard, not an implementation task"
+    return None
+
+
+def release_tracking_reason(
+    item: Mapping[str, Any],
+    comments: list[dict[str, Any]] | None = None,
+) -> str | None:
+    """Reject release bookkeeping and work that is already implemented."""
+    title, body, _, _ = issue_text(item)
+    tracking_text = title.lower()
+    if re.search(
+        r"\brelease(?:\s+\S+){0,2}\s+(?:tracking|tracker|checklist|planning)\b|"
+        r"\b(?:tracking|tracker|checklist)\s+(?:for\s+)?release\b",
+        tracking_text,
+    ):
+        return "release planning/tracking issue, not implementation work"
+
+    comment_text = "\n".join(str(comment.get("body", "")) for comment in comments or [])
+    evidence = f"{body}\n{comment_text}".lower()
+    implementation_done = any(
+        re.search(pattern, evidence, re.IGNORECASE | re.DOTALL)
+        for pattern in (
+            r"\bpr\s*#\d+.{0,120}\bmerged\b",
+            r"\balready\s+(?:merged|fixed|implemented|resolved)\b",
+            r"\b(?:seems|appears)\s+to\s+be\s+resolved\s+by\b",
+            r"\b(?:is|was)\s+resolved\s+by\b",
+        )
+    )
+    release_only = any(
+        re.search(pattern, evidence, re.IGNORECASE | re.DOTALL)
+        for pattern in (
+            r"\brelease\s+tag\s+has\s+not\s+yet\s+been\s+published\b",
+            r"\brequest\s*:\s*please\s+tag\s+(?:a\s+)?(?:new\s+)?release\b",
+            r"\bplease\s+(?:tag|cut|publish)\s+(?:a\s+)?(?:new\s+)?release\b",
+            r"\bwaiting\s+for\s+(?:a\s+)?(?:release|tag)\b",
+            r"\bonly\s+(?:release|tagging)\s+remains\b",
+        )
+    )
+    if implementation_done and release_only:
+        return "implementation already merged; only release/tagging remains"
+    return None
+
+
 def linked_open_pr_reason(
     item: Mapping[str, Any], token: str | None, comments: list[dict[str, Any]] | None = None
 ) -> str | None:
@@ -1141,16 +1401,33 @@ def strategic_rejection(
     ):
         return "support/triage issue rather than a contributor task"
 
-    label_set = {
-        (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip().lower()
-        for label in (item.get("labels") or [])
-        if (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip()
-    }
+    label_set = issue_label_set(item)
     labels_text = " ".join(label_set)
-    accepted = bool(TRIAGE_ACCEPTED_LABELS & label_set) or maintainer_ready_signal(labels_text)
+    comment_ready, comment_hold_reason = maintainer_readiness_comment_state(item, comments)
+    accepted = (
+        bool(TRIAGE_ACCEPTED_LABELS & label_set)
+        or maintainer_ready_signal(labels_text)
+        or comment_ready is True
+    )
+
+    readiness_reason = readiness_pending_label_reason(item, accepted)
+    if readiness_reason:
+        return readiness_reason
+
     pending = bool(TRIAGE_PENDING_LABELS & label_set) or triage_pending_signal(labels_text)
     if pending and not accepted:
         return "awaiting maintainer triage"
+
+    tracking_reason = automated_tracking_issue_reason(item)
+    if tracking_reason:
+        return tracking_reason
+
+    release_reason = release_tracking_reason(item, comments)
+    if release_reason:
+        return release_reason
+
+    if comment_hold_reason:
+        return comment_hold_reason
 
     diagnostic_reason = non_actionable_diagnostic_reason(item)
     if diagnostic_reason:
