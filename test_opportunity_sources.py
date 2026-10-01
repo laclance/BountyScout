@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import opportunity_sources as sources
 import github_access as github
-import scout_bounties as bounty
 
 
 class FakeResponse:
