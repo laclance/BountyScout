@@ -653,8 +653,7 @@ class LifecycleClassificationTests(unittest.TestCase):
 
         republish = issue(
             title=(
-                "undici-types 6.21.x: a trusted-publisher re-release would unblock "
-                "current users"
+                "undici-types 6.21.x: a trusted-publisher re-release would unblock current users"
             ),
             body=(
                 "Suggestion: publish undici-types@6.21.1 with the same content as 6.21.0 "
