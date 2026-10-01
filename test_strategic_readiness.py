@@ -98,6 +98,21 @@ class MaintainerReadinessTests(unittest.TestCase):
             )
         )
 
+    def test_node_log_request_is_a_diagnostic_hold(self) -> None:
+        comments = [
+            {
+                "body": (
+                    "Could you share the node logs if you have collected them from the "
+                    "affected instance?"
+                ),
+                "author_association": "COLLABORATOR",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), comments),
+            (False, "maintainer is waiting for requested diagnostic evidence"),
+        )
+
     def test_requested_diagnostic_is_cleared_when_evidence_arrives(self) -> None:
         comments = [
             {
@@ -156,6 +171,22 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
         self.assertEqual(
             readiness.maintainer_readiness_comment_state(issue(), redirect),
+            (
+                False,
+                "maintainer redirected implementation/discussion to another project",
+            ),
+        )
+        core_redirect = [
+            {
+                "body": (
+                    "Closing it here would help it being backported to previous node. "
+                    "But I think we should do it in core."
+                ),
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), core_redirect),
             (
                 False,
                 "maintainer redirected implementation/discussion to another project",
@@ -619,6 +650,20 @@ class LifecycleClassificationTests(unittest.TestCase):
             readiness.release_tracking_reason(issue(body="Please publish a new release."))
         )
         self.assertIsNone(readiness.release_tracking_reason(issue(title="Bug in release parser")))
+
+        republish = issue(
+            title=(
+                "undici-types 6.21.x: a trusted-publisher re-release would unblock current users"
+            ),
+            body=(
+                "Suggestion: publish undici-types@6.21.1 with the same content as 6.21.0 "
+                "through the current trusted-publisher workflow."
+            ),
+        )
+        self.assertEqual(
+            readiness.release_tracking_reason(republish),
+            "existing package content; only release/publication remains",
+        )
 
         missing_release = issue(
             title="Version 3.13.4 missing release",

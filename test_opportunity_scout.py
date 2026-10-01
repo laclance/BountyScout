@@ -977,17 +977,17 @@ class CalibrationTests(unittest.TestCase):
         )
 
         with patch.object(
-            bounty,
-            "has_existing_implementation_pr",
-            return_value="search pr",
+            scout,
+            "timeline_open_pr_reason",
+            return_value="timeline pr",
         ):
             self.assertEqual(
                 scout.strategic_competition_reason(issue(), "t", []),
-                "search pr",
+                "timeline pr",
             )
 
         with (
-            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
+            patch.object(scout, "timeline_open_pr_reason", return_value=None),
             patch.object(scout, "linked_open_pr_reason", return_value="linked pr"),
         ):
             self.assertEqual(
@@ -996,7 +996,7 @@ class CalibrationTests(unittest.TestCase):
             )
 
         with (
-            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
+            patch.object(scout, "timeline_open_pr_reason", return_value=None),
             patch.object(scout, "linked_open_pr_reason", return_value=None),
         ):
             claimed = issue(
@@ -1013,7 +1013,10 @@ class CalibrationTests(unittest.TestCase):
             )
 
     def test_timeline_open_pr_reason(self) -> None:
-        self.assertIsNone(scout.timeline_open_pr_reason({"html_url": "bad"}, "t"))
+        self.assertEqual(
+            scout.timeline_open_pr_reason({"html_url": "bad"}, "t"),
+            "could not identify repository/issue number",
+        )
 
         timeline = [
             {
@@ -1044,7 +1047,10 @@ class CalibrationTests(unittest.TestCase):
             )
 
         with patch.object(github, "github_get", return_value={}):
-            self.assertIsNone(scout.timeline_open_pr_reason(issue(), "t"))
+            self.assertEqual(
+                scout.timeline_open_pr_reason(issue(), "t"),
+                "could not verify open implementation PR timeline",
+            )
 
         no_match_timeline = [
             {"event": "commented"},
@@ -2219,6 +2225,82 @@ class VerificationTests(unittest.TestCase):
             "umbrella tracking issue, not a single implementation task",
         )
 
+    def test_fresh_1350_run_false_positive_regressions(self) -> None:
+        soup = issue(
+            html_url="https://github.com/MakazhanAlpamys/Soup/issues/1530",
+            title="from-traces file input silently writes zero pairs",
+            labels=[{"name": "bug"}, {"name": "help wanted"}, {"name": "good first issue"}],
+            comments=1,
+        )
+        soup_comments = [
+            {
+                "body": (
+                    "Taking this one — I'll trace why --logs <file> yields an empty "
+                    "dataset and fix the parsing."
+                ),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "user": {"login": "vaputa"},
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(soup, "t", soup_comments),
+            "active claim by @vaputa",
+        )
+
+        republish = issue(
+            html_url="https://github.com/nodejs/undici/issues/5919",
+            title=(
+                "undici-types 6.21.x: a trusted-publisher re-release would unblock current users"
+            ),
+            body=(
+                "Suggestion: publish undici-types@6.21.1 with the same content as 6.21.0 "
+                "through the current trusted-publisher workflow."
+            ),
+            comments=0,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(republish, "t", []),
+            "existing package content; only release/publication remains",
+        )
+
+        aws_cni = issue(
+            html_url="https://github.com/aws/amazon-vpc-cni-k8s/issues/3833",
+            title="ipamd attaches ENIs but never registers them",
+            comments=1,
+        )
+        aws_comments = [
+            {
+                "body": (
+                    "Could you share the node logs if you have collected them from the "
+                    "affected instance?"
+                ),
+                "author_association": "COLLABORATOR",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(aws_cni, "t", aws_comments),
+            "maintainer is waiting for requested diagnostic evidence",
+        )
+
+        undici_core = issue(
+            html_url="https://github.com/nodejs/undici/issues/2558",
+            title="Enhancement of IPv6 Connectivity and Address Selection",
+            comments=1,
+        )
+        undici_core_comments = [
+            {
+                "body": (
+                    "Closing it here would help it being backported to previous node. "
+                    "But I think we should do it in core."
+                ),
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(undici_core, "t", undici_core_comments),
+            "maintainer redirected implementation/discussion to another project",
+        )
+
     def test_readiness_gate_targeted_live_refinements(self) -> None:
         profile_request = [
             {
@@ -3193,7 +3275,7 @@ class DiscoveryTests(unittest.TestCase):
                 scout,
                 "verify",
                 side_effect=[
-                    (None, "could not verify open implementation PR search"),
+                    (None, "could not verify open implementation PR timeline"),
                     (None, "could not refresh source issue"),
                 ],
             ) as verify_mock,
@@ -3203,7 +3285,7 @@ class DiscoveryTests(unittest.TestCase):
 
         self.assertEqual(found, [])
         self.assertEqual(verify_mock.call_count, 2)
-        self.assertEqual(rejected["could not verify open implementation PR search"], 1)
+        self.assertEqual(rejected["could not verify open implementation PR timeline"], 1)
         self.assertEqual(rejected["could not refresh source issue"], 1)
         self.assertEqual(len(examples), 2)
         self.assertTrue(
@@ -3567,7 +3649,7 @@ class FormattingAndMainTests(unittest.TestCase):
                     {
                         "could not refresh source issue": 2,
                         "could not refresh issue comments": 2,
-                        "could not verify open implementation PR search": 1,
+                        "could not verify open implementation PR timeline": 1,
                     },
                     [],
                     [],

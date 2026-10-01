@@ -18,6 +18,7 @@ def explicit_ownership_claim(text: str) -> bool:
     """Recognize first-person statements that take ownership of implementation."""
     patterns = (
         r"\bi(?:'d| would) like to (?:work on|take|handle|implement|fix|resolve|pick (?:this|it) up)\b",
+        r"^\s*taking (?:this|this one|it)\b",
         r"\bi(?:'d| would) love to (?:work on|take on|handle|implement|fix|resolve)\b",
         r"\bi(?:'m| am) interested in working on\b",
         r"\bi(?:'m| am) (?:taking|working on) (?:this|it|an independent pass)\b",

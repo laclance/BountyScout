@@ -49,6 +49,7 @@ For each curated repository, the scout activity-inspects the top 15 plausible is
 - issue is still open and unassigned
 - no obvious active claim, including explicit ownership, concrete local implementation work, or an issue-numbered work branch linked by its author
 - no open implementation PR, including implementation links already present in the issue body
+- strategic competition checks use local claim/link evidence first, then the issue timeline; they do not spend GitHub Search quota on per-issue PR lookups
 - no explicit multi-child umbrella/tracking issue masquerading as one implementation task, including maintainer-declared umbrella issues
 - no reporter-authored diagnostic/guidance questionnaire that still needs triage before implementation
 - no trusted maintainer-authored decision-stage or explicit no-PR hold
