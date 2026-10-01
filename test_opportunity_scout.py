@@ -629,12 +629,13 @@ class CalibrationTests(unittest.TestCase):
             getter.assert_not_called()
 
         with patch.object(github, "github_get", return_value=[]):
-            self.assertIsNone(
+            self.assertEqual(
                 scout.search_open_implementation_pr_reason(
                     issue(body="There may already be a PR for this.", comments=0),
                     "t",
                     [],
-                )
+                ),
+                "could not verify open implementation PR search",
             )
 
         edge_results = {
