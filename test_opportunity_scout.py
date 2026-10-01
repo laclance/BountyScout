@@ -3594,26 +3594,34 @@ class FormattingAndMainTests(unittest.TestCase):
 
     def test_main_prefetches_strategic_search_before_paid_discovery(self) -> None:
         order: list[str] = []
-        prefetched = [("global-q", {"items": []})]
+        prefetched: list[tuple[str, dict[str, Any]]] = [("global-q", {"items": []})]
+
+        def prefetch(_token: str | None) -> list[tuple[str, dict[str, Any]]]:
+            order.append("strategic-search")
+            return prefetched
+
+        def paid(*args: Any) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
+            order.append("paid")
+            return [], {}, []
+
+        def strategic_discovery(
+            *args: Any,
+        ) -> tuple[
+            list[dict[str, Any]],
+            dict[str, int],
+            list[dict[str, Any]],
+            list[dict[str, Any]],
+        ]:
+            order.append("strategic")
+            return [], {}, [], []
+
         env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/repo"}
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value=set()),
-            patch.object(
-                scout,
-                "strategic_global_search_results",
-                side_effect=lambda token: order.append("strategic-search") or prefetched,
-            ),
-            patch.object(
-                scout,
-                "discover_paid",
-                side_effect=lambda *args: order.append("paid") or ([], {}, []),
-            ),
-            patch.object(
-                scout,
-                "discover_strategic",
-                side_effect=lambda *args: order.append("strategic") or ([], {}, [], []),
-            ) as strategic,
+            patch.object(scout, "strategic_global_search_results", side_effect=prefetch),
+            patch.object(scout, "discover_paid", side_effect=paid),
+            patch.object(scout, "discover_strategic", side_effect=strategic_discovery) as strategic,
         ):
             scout.main()
 
