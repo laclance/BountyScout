@@ -615,6 +615,40 @@ class CalibrationTests(unittest.TestCase):
             )
             getter.assert_not_called()
 
+        with patch.object(bounty, "github_get", return_value=[]):
+            self.assertIsNone(
+                scout.search_open_implementation_pr_reason(
+                    issue(body="There may already be a PR for this.", comments=0),
+                    "t",
+                    [],
+                )
+            )
+
+        edge_results = {
+            "items": [
+                "invalid",
+                {
+                    "title": "not a pull request result",
+                    "body": "Closes #42",
+                    "html_url": "https://github.com/example/project/issues/100",
+                },
+                {
+                    "pull_request": {"url": "x"},
+                    "title": "implementation without a URL",
+                    "body": "Fixes #42",
+                    "html_url": "",
+                },
+            ]
+        }
+        with patch.object(bounty, "github_get", return_value=edge_results):
+            self.assertIsNone(
+                scout.search_open_implementation_pr_reason(
+                    issue(body="A pull request may exist.", comments=0),
+                    "t",
+                    [],
+                )
+            )
+
         search_result = {
             "items": [
                 {
