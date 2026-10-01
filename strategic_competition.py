@@ -34,7 +34,7 @@ SUPPLEMENTAL_CLAIM_PATTERNS = (
 LinkedPrChecker = Callable[[Mapping[str, Any], str | None, list[dict[str, Any]]], str | None]
 ClaimChecker = Callable[[Mapping[str, Any], list[dict[str, Any]]], str | None]
 SupplementalClaimChecker = Callable[[Mapping[str, Any], list[dict[str, Any]]], str | None]
-SearchPrChecker = Callable[[Mapping[str, Any], str | None, list[dict[str, Any]]], str | None]
+TimelinePrChecker = Callable[[Mapping[str, Any], str | None], str | None]
 
 
 def claim_source_is_recent(source: Mapping[str, Any], *, issue_body: bool = False) -> bool:
@@ -202,17 +202,17 @@ def search_open_implementation_pr_reason(
 
 
 def timeline_open_pr_reason(item: Mapping[str, Any], token: str | None) -> str | None:
-    """Detect open PRs that GitHub has cross-referenced on the issue timeline."""
+    """Detect open timeline-linked PRs and fail closed when timeline evidence is unavailable."""
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number:
-        return None
+        return "could not identify repository/issue number"
 
     timeline = github.github_get(
         f"https://api.github.com/repos/{repo}/issues/{number}/timeline?per_page=100",
         token,
     )
     if not isinstance(timeline, list):
-        return None
+        return "could not verify open implementation PR timeline"
 
     for event in timeline:
         if event.get("event") != "cross-referenced":
@@ -283,16 +283,16 @@ def strategic_competition_reason(
     token: str | None,
     comments: list[dict[str, Any]],
     *,
+    timeline_pr_checker: TimelinePrChecker = timeline_open_pr_reason,
     linked_pr_checker: LinkedPrChecker = linked_open_pr_reason,
     strategic_claim_checker: ClaimChecker = strategic_claim_reason,
-    search_pr_checker: SearchPrChecker = search_open_implementation_pr_reason,
 ) -> str | None:
     """Apply strategic-only competition checks without changing paid-bounty behavior."""
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number:
         return "could not identify repository/issue number"
 
-    reason = bounty.has_existing_implementation_pr(repo, number, token)
+    reason = timeline_pr_checker(item, token)
     if reason:
         return reason
 
@@ -300,8 +300,4 @@ def strategic_competition_reason(
     if reason:
         return reason
 
-    reason = strategic_claim_checker(item, comments)
-    if reason:
-        return reason
-
-    return search_pr_checker(item, token, comments)
+    return strategic_claim_checker(item, comments)
