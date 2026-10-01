@@ -124,20 +124,13 @@ class ClaimCompetitionTests(unittest.TestCase):
                 ],
             )
         )
-        self.assertIsNone(
-            competition.supplemental_claim_reason(issue(comments=0), [])
-        )
+        self.assertIsNone(competition.supplemental_claim_reason(issue(comments=0), []))
 
 
 class LinkedPullRequestTests(unittest.TestCase):
     def test_linked_pr_checks_open_state_and_deduplicates_candidates(self) -> None:
         comments = [
-            {
-                "body": (
-                    "submitted PR #10; implementation pull request #11; "
-                    "also submitted PR #10"
-                )
-            }
+            {"body": ("submitted PR #10; implementation pull request #11; also submitted PR #10")}
         ]
         with patch.object(
             bounty,
@@ -163,9 +156,7 @@ class LinkedPullRequestTests(unittest.TestCase):
             }
         ]
         with patch.object(bounty, "github_get", return_value=[]):
-            self.assertIsNone(
-                competition.linked_open_pr_reason(issue(), "t", comments)
-            )
+            self.assertIsNone(competition.linked_open_pr_reason(issue(), "t", comments))
 
         same_repo = [
             {
@@ -191,9 +182,7 @@ class LinkedPullRequestTests(unittest.TestCase):
                     [],
                 )
             )
-            self.assertIsNone(
-                competition.linked_open_pr_reason(issue(comments=0), "t", [])
-            )
+            self.assertIsNone(competition.linked_open_pr_reason(issue(comments=0), "t", []))
             getter.assert_not_called()
 
 
@@ -272,10 +261,13 @@ class SearchPullRequestTests(unittest.TestCase):
             },
         ]
         for response in cases:
-            with self.subTest(response=response), patch.object(
-                bounty,
-                "github_get",
-                return_value=response,
+            with (
+                self.subTest(response=response),
+                patch.object(
+                    bounty,
+                    "github_get",
+                    return_value=response,
+                ),
             ):
                 self.assertIsNone(
                     competition.search_open_implementation_pr_reason(
@@ -329,9 +321,7 @@ class TimelinePullRequestTests(unittest.TestCase):
 
         with patch.object(bounty, "github_get", return_value={}):
             self.assertIsNone(competition.timeline_open_pr_reason(issue(), "t"))
-        self.assertIsNone(
-            competition.timeline_open_pr_reason({"html_url": "bad"}, "t")
-        )
+        self.assertIsNone(competition.timeline_open_pr_reason({"html_url": "bad"}, "t"))
 
 
 class CompetitionOrchestrationTests(unittest.TestCase):
