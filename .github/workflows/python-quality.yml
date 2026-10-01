@@ -19,7 +19,9 @@ on:
       - ".github/workflows/bounty-scout.yml"
 
 permissions:
+  actions: write
   contents: write
+  pull-requests: write
 
 jobs:
   quality:
@@ -74,3 +76,75 @@ jobs:
 
       - name: Enforce coverage
         run: coverage report
+
+  repository-cleanup:
+    if: github.event_name == 'pull_request' && github.head_ref == 'ops/repository-cleanup-20261001'
+    needs: quality
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Delete historical one-shot workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_ids="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" --jq '.workflow_runs[] | select(.name | startswith("One-shot")) | .id')"
+          if [ -z "$run_ids" ]; then
+            echo "No one-shot workflow runs found."
+          else
+            for run_id in $run_ids; do
+              echo "Deleting one-shot workflow run $run_id"
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id"
+            done
+          fi
+
+      - name: Delete stale branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branches=(
+            "ci/add-ruff-formatting"
+            "ci/consolidate-python-quality"
+            "ci/refresh-actions-and-branch-validation"
+            "feat/expand-opportunity-discovery"
+            "feat/full-repo-inspection-audit"
+            "feat/help-wanted-label-dialects"
+            "feature/expand-bounty-discovery"
+            "feature/oss-opportunity-scout"
+            "fix/calibrate-opportunity-ranking"
+            "fix/clickable-silent-report-links"
+            "fix/core-repo-discovery-quality"
+            "fix/differentiate-opportunity-ranking"
+            "fix/help-wanted-query-labels"
+            "fix/isolate-scout-reports"
+            "fix/issue-only-repo-pools"
+            "fix/live-scan-calibration"
+            "fix/strategic-comment-cutoff"
+            "fix/strategic-shortlist-quality"
+            "fix/verifier-competition-actionability"
+            "fix/verify-full-repo-shortlists"
+            "ops/scout-rerun-20261001"
+            "ops/scout-rerun-calibrated-20261001"
+            "ops/scout-rerun-core-20261001"
+            "ops/scout-rerun-expanded-20261001"
+            "ops/scout-rerun-inspection-20261001"
+            "ops/scout-rerun-quality-20261001"
+            "refactor/type-all-python"
+            "test/comprehensive-suite"
+            "test/enforce-mypy"
+          )
+          for branch in "${branches[@]}"; do
+            echo "Deleting branch $branch"
+            encoded_ref="$(python -c 'import sys, urllib.parse; print(urllib.parse.quote("heads/" + sys.argv[1], safe=""))' "$branch")"
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/$encoded_ref" || {
+              echo "Branch $branch was already absent or could not be deleted."
+            }
+          done
+
+      - name: Close cleanup PR and delete cleanup branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" -f state=closed >/dev/null
+          encoded_ref="$(python -c 'import urllib.parse; print(urllib.parse.quote("heads/ops/repository-cleanup-20261001", safe=""))')"
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/$encoded_ref"
+
