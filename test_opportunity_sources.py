@@ -158,7 +158,7 @@ class PlatformAdapterTests(unittest.TestCase):
                 '<a href="/r/acme/widget/issues/9">x</a><span>funded</span>'
             ),
         }
-        refs = sources.issuehunt_platform_refs(pages.get, pages=2)
+        refs = sources.issuehunt_platform_refs(lambda url: pages.get(url, ""), pages=2)
         self.assertEqual(
             refs["https://github.com/apache/superset/issues/3821"],
             "confirmed bounty platform feed (IssueHunt): $17.00",
@@ -181,7 +181,7 @@ class PlatformAdapterTests(unittest.TestCase):
             ),
         }
         refs = sources.opire_platform_refs(
-            pages.get,
+            lambda url: pages.get(url, ""),
             fetch_limit=20,
             network_workers=2,
         )
@@ -209,7 +209,7 @@ class PlatformAdapterTests(unittest.TestCase):
         amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
         refs = sources.bountyhub_platform_refs(
             amount_pattern,
-            pages.get,
+            lambda url: pages.get(url, ""),
             fetch_limit=20,
             network_workers=2,
         )
