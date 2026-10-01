@@ -258,6 +258,70 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
 
+class SubmissionAndReporterResolutionTests(unittest.TestCase):
+    def test_trusted_issue_author_can_explicitly_forbid_prs(self) -> None:
+        blocked = issue(
+            author_association="MEMBER",
+            body=(
+                "If you are an agent reading this, do not open a PR for this issue; "
+                "it will be closed due to this issue representing a breaking change."
+            ),
+        )
+        self.assertEqual(
+            readiness.maintainer_submission_hold_reason(blocked),
+            "maintainer explicitly says not to open a PR for this issue",
+        )
+        self.assertIsNone(
+            readiness.maintainer_submission_hold_reason(
+                issue(
+                    author_association="NONE",
+                    body="Do not open a PR for this issue.",
+                )
+            )
+        )
+
+    def test_reporter_latest_resolution_state_wins(self) -> None:
+        resolved = [
+            {
+                "body": "It looks like the issue got fixed; I don't see it in the latest version.",
+                "user": {"login": "reporter"},
+            }
+        ]
+        self.assertEqual(
+            readiness.reporter_resolution_reason(issue(), resolved),
+            "issue reporter says the problem is already resolved",
+        )
+
+        reopened = resolved + [
+            {
+                "body": "Correction: it still reproduces on the current build.",
+                "user": {"login": "reporter"},
+            }
+        ]
+        self.assertIsNone(readiness.reporter_resolution_reason(issue(), reopened))
+        self.assertIsNone(
+            readiness.reporter_resolution_reason(
+                issue(),
+                [{"body": "Looks fixed to me.", "user": {"login": "someone-else"}}],
+            )
+        )
+
+    def test_trusted_spec_level_discussion_is_a_hold(self) -> None:
+        comments = [
+            {
+                "body": (
+                    "OpenMetrics 2.0 will not allow absent sum. I'd suggest rejecting such "
+                    "histograms. This is being discussed on spec level here."
+                ),
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), comments),
+            (False, "maintainer says issue still needs discussion"),
+        )
+
+
 class MaintainerIssueDecisionTests(unittest.TestCase):
     def test_trusted_issue_author_can_mark_semantics_as_still_undecided(self) -> None:
         deciding = issue(
