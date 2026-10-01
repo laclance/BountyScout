@@ -322,6 +322,51 @@ def repo_activity(repo_meta: Mapping[str, Any]) -> str:
     return f"{bucket} ({repo_meta.get('pushed_at')})"
 
 
+def strategic_priority_score(
+    career_score: int,
+    effort: str,
+    competition_level: str,
+) -> tuple[int, list[str]]:
+    """Turn career value into actionable priority using execution friction.
+
+    Career score remains the long-term value signal. Priority answers the more
+    practical question: given similarly valuable issues, which one is the best
+    use of contributor time right now?
+    """
+    effort_adjustment = {
+        "<1h": 5,
+        "1–3h": 6,
+        "3–6h": 2,
+        "6–12h": -4,
+        "1d+": -10,
+    }[effort]
+    competition_adjustment = {
+        "none": 7,
+        "low": 3,
+        "medium": -4,
+        "high": -10,
+    }[competition_level]
+
+    reasons: list[str] = []
+    if effort_adjustment > 0:
+        reasons.append(f"{effort} execution bonus")
+    else:
+        reasons.append(f"{effort} execution penalty")
+
+    if competition_level == "none":
+        reasons.append("no visible competition bonus")
+    elif competition_adjustment > 0:
+        reasons.append(f"{competition_level} competition bonus")
+    else:
+        reasons.append(f"{competition_level} competition penalty")
+
+    priority = max(
+        0,
+        min(100, career_score + effort_adjustment + competition_adjustment),
+    )
+    return priority, reasons
+
+
 def build_candidate(
     item: Mapping[str, Any],
     lane: str,
@@ -585,11 +630,11 @@ def build_candidate(
 
     career = max(0, min(100, career))
 
-    priority = (
-        career
-        if lane == "strategic"
-        else min(100, max(cash, career) + (5 if cash >= 70 and career >= 70 else 0))
-    )
+    if lane == "strategic":
+        priority, priority_reasons = strategic_priority_score(career, effort, comp)
+    else:
+        priority = min(100, max(cash, career) + (5 if cash >= 70 and career >= 70 else 0))
+        priority_reasons = []
     labels = [
         str(x.get("name", "")) if isinstance(x, dict) else str(x)
         for x in (item.get("labels") or [])
@@ -605,6 +650,7 @@ def build_candidate(
         "cash_score": cash,
         "career_score": career,
         "priority_score": priority,
+        "priority_reasons": priority_reasons,
         "effort": effort,
         "effort_reasons": list(effort_estimate.reasons),
         "expected_hourly": hourly,

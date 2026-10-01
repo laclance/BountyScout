@@ -229,7 +229,12 @@ class ScoringRegressionTests(unittest.TestCase):
             amount_pattern=AMOUNT_RE,
         )
         rendered = scout.markdown_candidate(result, 1)
+        self.assertIn("**Priority score:**", rendered)
         self.assertIn("**Effort basis:** bounded deterministic bug signal", rendered)
+        self.assertIn(
+            "**Priority basis:** 1–3h execution bonus, no visible competition bonus",
+            rendered,
+        )
 
     def test_candidate_exposes_effort_reasons(self) -> None:
         result = scoring.build_candidate(
@@ -249,7 +254,44 @@ class ScoringRegressionTests(unittest.TestCase):
             result["effort_reasons"],
             ["bounded deterministic bug signal"],
         )
-        self.assertEqual(result["priority_score"], result["career_score"])
+        self.assertGreater(result["priority_score"], result["career_score"])
+        self.assertEqual(
+            result["priority_reasons"],
+            ["1–3h execution bonus", "no visible competition bonus"],
+        )
+
+    def test_strategic_priority_favors_execution_fit_when_career_is_nearly_equal(self) -> None:
+        containerd_priority, containerd_reasons = scoring.strategic_priority_score(
+            80,
+            "1–3h",
+            "none",
+        )
+        terraform_priority, terraform_reasons = scoring.strategic_priority_score(
+            81,
+            "3–6h",
+            "medium",
+        )
+
+        self.assertEqual(containerd_priority, 93)
+        self.assertEqual(terraform_priority, 79)
+        self.assertGreater(containerd_priority, terraform_priority)
+        self.assertEqual(
+            containerd_reasons,
+            ["1–3h execution bonus", "no visible competition bonus"],
+        )
+        self.assertEqual(
+            terraform_reasons,
+            ["3–6h execution bonus", "medium competition penalty"],
+        )
+
+    def test_strategic_priority_still_allows_large_career_gap_to_win(self) -> None:
+        high_value, _ = scoring.strategic_priority_score(95, "6–12h", "low")
+        easy_but_weaker, _ = scoring.strategic_priority_score(70, "1–3h", "none")
+        self.assertGreater(high_value, easy_but_weaker)
+
+    def test_strategic_priority_caps_extreme_adjustments(self) -> None:
+        self.assertEqual(scoring.strategic_priority_score(100, "<1h", "none")[0], 100)
+        self.assertEqual(scoring.strategic_priority_score(5, "1d+", "high")[0], 0)
 
     def test_paid_expected_value_uses_estimated_effort(self) -> None:
         result = scoring.build_candidate(

@@ -17,7 +17,8 @@
 - **function** `payment_confidence()` — line 284
 - **function** `reward_text()` — line 302
 - **function** `repo_activity()` — line 309
-- **function** `build_candidate()` — line 325
+- **function** `strategic_priority_score()` — line 325
+- **function** `build_candidate()` — line 370
 
 ## `opportunity_scout.py`
 
@@ -69,8 +70,8 @@
 - **function** `discover_strategic()` — line 853
 - **function** `github_report_ref()` — line 1073
 - **function** `markdown_candidate()` — line 1086
-- **function** `notification_candidate()` — line 1140
-- **function** `main()` — line 1161
+- **function** `notification_candidate()` — line 1145
+- **function** `main()` — line 1169
 
 ## `opportunity_sources.py`
 
