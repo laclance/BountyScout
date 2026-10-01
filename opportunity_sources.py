@@ -274,6 +274,7 @@ def platform_paid_refs(
     refs: dict[str, str] = {}
     if not loaders:
         return refs
+
     def load_source(loader: Callable[[], dict[str, str]]) -> dict[str, str]:
         try:
             return loader()
