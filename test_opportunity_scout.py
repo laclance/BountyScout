@@ -1753,7 +1753,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertFalse(any(item["url"] == dirty_weak["html_url"] for item in audit))
         self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
 
-    def test_discover_strategic_audits_after_repo_has_winners(self) -> None:
+    def test_discover_strategic_verifies_all_then_keeps_best(self) -> None:
         winner = issue(
             html_url="https://github.com/g/g/issues/1",
             title="Proxy regression",
@@ -1792,6 +1792,22 @@ class DiscoveryTests(unittest.TestCase):
                 career_score=score,
             )
 
+        def verify_item(
+            item_: dict[str, Any],
+            *args: Any,
+            **kwargs: Any,
+        ) -> tuple[dict[str, Any], None]:
+            score = scores[item_["html_url"]]
+            return (
+                candidate(
+                    url=item_["html_url"],
+                    paid=False,
+                    priority_score=score,
+                    career_score=score,
+                ),
+                None,
+            )
+
         with (
             patch.object(scout, "TARGET_REPOS", ["g/g"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
@@ -1804,23 +1820,14 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
             patch.object(scout, "build_candidate", side_effect=preview),
             patch.object(scout, "issue_comments", return_value=[]),
-            patch.object(
-                scout,
-                "verify",
-                return_value=(
-                    candidate(url=winner["html_url"], paid=False, career_score=90),
-                    None,
-                ),
-            ) as verify_mock,
+            patch.object(scout, "verify", side_effect=verify_item) as verify_mock,
             patch.object(scout, "STRATEGIC_KEEP_PER_REPO", 1),
         ):
             found, _, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
         self.assertEqual([item["url"] for item in found], [winner["html_url"]])
-        verify_mock.assert_called_once()
-        self.assertEqual(len(audit), 1)
-        self.assertEqual(audit[0]["url"], strong_extra["html_url"])
-        self.assertIn("three stronger candidates", audit[0]["reason"])
+        self.assertEqual(verify_mock.call_count, 3)
+        self.assertEqual(audit, [])
 
     def test_discover_strategic_audits_target_source_failure(self) -> None:
         with (
