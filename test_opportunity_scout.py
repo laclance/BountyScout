@@ -3347,6 +3347,24 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(audit[0]["url"], "https://github.com/a/a/issues")
         self.assertIn("coverage incomplete", audit[0]["reason"])
 
+    def test_discover_strategic_audits_global_search_failure(self) -> None:
+        with (
+            patch.object(scout, "TARGET_REPOS", []),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", ["global-q"]),
+            patch.object(bounty, "search_github", return_value={}),
+        ):
+            found, rejected, examples, audit = scout.discover_strategic(
+                "t", set(), set(), {}, {}
+            )
+
+        self.assertEqual(found, [])
+        self.assertEqual(rejected, {})
+        self.assertEqual(examples, [])
+        self.assertEqual(len(audit), 1)
+        self.assertEqual(audit[0]["url"], "https://github.com/issues")
+        self.assertIn("global strategic discovery search failed", audit[0]["reason"])
+        self.assertIn("coverage incomplete", audit[0]["reason"])
+
     def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
         duplicate = dict(a)
@@ -3664,6 +3682,44 @@ class FormattingAndMainTests(unittest.TestCase):
         gh.assert_called_once()
         self.assertIn("0 new verified candidates", gh.call_args.args[2])
         self.assertIn("Strategic verification coverage is incomplete", gh.call_args.args[3])
+        save.assert_not_called()
+        self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
+
+    def test_main_discovery_failure_warns_and_preserves_seen_state(self) -> None:
+        env = {
+            "GITHUB_TOKEN": "tok",
+            "GITHUB_REPOSITORY": "me/BountyScout",
+        }
+        buf = io.StringIO()
+        audit = [
+            {
+                "url": "https://github.com/issues",
+                "title": "Global GitHub Search: global-q",
+                "reason": (
+                    "global strategic discovery search failed for query: global-q; "
+                    "scan coverage incomplete"
+                ),
+            }
+        ]
+        strategic = candidate(paid=False)
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(
+                scout,
+                "discover_strategic",
+                return_value=([strategic], {}, [], audit),
+            ),
+            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(bounty, "save_seen_bounties") as save,
+            redirect_stdout(buf),
+        ):
+            scout.main()
+
+        gh.assert_called_once()
+        self.assertIn("Strategic verification coverage is incomplete", gh.call_args.args[3])
+        self.assertIn("1 discovery/source/comment/competition checks failed", gh.call_args.args[3])
         save.assert_not_called()
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
 
