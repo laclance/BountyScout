@@ -2953,6 +2953,7 @@ class VerificationTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(bounty, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(scout, "comment_payment_signal", return_value=None),
             patch.object(
                 github,
                 "issue_comments_checked",
