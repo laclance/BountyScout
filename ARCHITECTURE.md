@@ -45,6 +45,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `scout_bounties.py` | Upstream-compatible paid discovery, payment signals, basic competition checks, notifications | Keep changes conservative to reduce upstream merge conflicts |
 | `opportunity_scout.py` | Application orchestration plus strategic discovery, verification, reporting, and transitional legacy logic | Shrink over time by extracting cohesive strategic domains |
 | `opportunity_scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration |
+| `opportunity_sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
 | `strategic_claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
 | `strategic_competition.py` | Active-claim, linked/search/timeline implementation-PR detection, and competition precedence | May call upstream GitHub helpers; never imports `opportunity_scout.py` |
 | `strategic_readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
@@ -58,10 +59,13 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 opportunity_scout.py
     |-- scout_bounties.py
     |-- opportunity_scoring.py
+    |-- opportunity_sources.py
     |-- strategic_claims.py
     |-- strategic_competition.py
     |-- strategic_readiness.py
 
+opportunity_sources.py --> scout_bounties.py
+opportunity_sources.py  -X-> opportunity_scout.py
 opportunity_scoring.py --> scout_bounties.py
 opportunity_scoring.py --> strategic_readiness.py
 opportunity_scoring.py  -X-> opportunity_scout.py
@@ -82,7 +86,6 @@ Do not perform a big-bang package rewrite. Extract one stable responsibility at 
 
 Likely future boundaries, when the code pressure justifies them:
 
-- discovery/source adapters
 - reporting/notification formatting
 - GitHub HTTP access and cache behavior
 
