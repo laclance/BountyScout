@@ -36,18 +36,9 @@ TARGET_REPOS = [
     "nodejs/undici",
 ]
 STRATEGIC_GLOBAL_QUERIES = [
-    'is:issue is:open no:assignee label:"help wanted" regression sort:updated-desc',
-    'is:issue is:open no:assignee label:"help wanted" tests sort:updated-desc',
-    'is:issue is:open no:assignee label:"help wanted" panic sort:updated-desc',
-    'is:issue is:open no:assignee label:"help wanted" deadlock sort:updated-desc',
     'is:issue is:open no:assignee label:"help wanted" label:"bug" sort:updated-desc',
-    'is:issue is:open no:assignee label:"help wanted" label:"type/bug" sort:updated-desc',
-    'is:issue is:open no:assignee label:"Status: Help Wanted" label:"Type: Bug" sort:updated-desc',
-    'is:issue is:open no:assignee label:"Help-Wanted" sort:updated-desc',
-    'is:issue is:open no:assignee label:"contributor/help-wanted" sort:updated-desc',
-    'is:issue is:open no:assignee label:"good first issue" bug sort:updated-desc',
-    'is:issue is:open no:assignee label:"bug" kubernetes sort:updated-desc',
-    'is:issue is:open no:assignee label:"bug" networking sort:updated-desc',
+    'is:issue is:open no:assignee label:"good first issue" label:"bug" sort:updated-desc',
+    'is:issue is:open no:assignee label:"help wanted" regression sort:updated-desc',
 ]
 STRATEGIC_SEARCH_PER_PAGE = 20
 STRATEGIC_INSPECT_PER_REPO = 15
@@ -56,17 +47,11 @@ STRATEGIC_MIN_CAREER_SCORE = 55
 STRATEGIC_AUDIT_LIMIT = 20
 REPORT_LIMIT = 8
 
-PAID_DISCOVERY_QUERIES = list(
-    dict.fromkeys(
-        bounty.SEARCH_QUERIES
-        + [
-            'is:issue is:open "/reward" in:comments sort:updated-desc',
-            'is:issue is:open "/bounty" in:comments sort:updated-desc',
-            "is:issue is:open (opire.dev OR bountyhub.dev OR algora.io) in:comments sort:updated-desc",
-            'is:issue is:open (reward OR compensation OR payout OR "cash prize") "$" in:title,body sort:updated-desc',
-        ]
-    )
-)
+PAID_DISCOVERY_QUERIES = [
+    "is:issue is:open bounty in:title,body sort:updated-desc",
+    'is:issue is:open "/reward" in:comments sort:updated-desc',
+    "is:issue is:open (opire.dev OR bountyhub.dev OR algora.io) in:comments sort:updated-desc",
+]
 EXTENDED_AMOUNT_RE = (
     r"(?:[$€£¥₹]\s*\d[\d,]*(?:\.\d+)?|"
     r"(?<![A-Za-z])R\s*\d[\d,]*(?:\.\d+)?|"
@@ -81,6 +66,20 @@ TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 def target_repo_queries() -> list[str]:
     """Give every curated repository its own result budget."""
     return [f"is:issue is:open no:assignee repo:{repo} sort:updated-desc" for repo in TARGET_REPOS]
+
+
+def maintainer_ready_signal(labels_text: str) -> bool:
+    """Recognize common contributor-ready label dialects."""
+    normalized = re.sub(r"[-_]+", " ", labels_text.lower())
+    return any(
+        marker in normalized
+        for marker in (
+            "help wanted",
+            "good first issue",
+            "triage/accepted",
+            "refined",
+        )
+    )
 
 
 def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
@@ -249,7 +248,7 @@ def fetch_text(url: str, timeout: int = 12) -> str:
 
 
 def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str, Any]]:
-    """Fetch comments for payment verification; basic filters cap threads at 25."""
+    """Fetch issue comments for activity, payment, and competition checks."""
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number or not int(item.get("comments") or 0):
         return []
@@ -394,7 +393,7 @@ def extended_competition_reason(
     if reason:
         return reason
 
-    return timeline_open_pr_reason(item, token)
+    return None
 
 
 def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
@@ -795,10 +794,7 @@ def build_candidate(
         issue_points += 6
         career_reasons.append("tests/regression signal")
 
-    maintainer_ready = any(
-        label in labels_text
-        for label in ("help wanted", "good first issue", "triage/accepted", "refined")
-    )
+    maintainer_ready = maintainer_ready_signal(labels_text)
     if maintainer_ready:
         issue_points += 8
         career_reasons.append("maintainer-ready signal")
@@ -973,7 +969,7 @@ def upstream_wrapper_issue_url(item: Mapping[str, Any]) -> str | None:
 def non_actionable_diagnostic_reason(item: Mapping[str, Any]) -> str | None:
     """Reject machine/OS crash diagnostics that lack an actionable contributor path."""
     _, body, labels, text = issue_text(item)
-    maintainer_ready = any(label in labels for label in TRIAGE_ACCEPTED_LABELS)
+    maintainer_ready = maintainer_ready_signal(labels)
     if maintainer_ready or code_reference_count(body):
         return None
 
@@ -1029,7 +1025,10 @@ def strategic_rejection(
         for label in (item.get("labels") or [])
         if (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip()
     }
-    if TRIAGE_PENDING_LABELS & label_set and not TRIAGE_ACCEPTED_LABELS & label_set:
+    accepted = bool(TRIAGE_ACCEPTED_LABELS & label_set) or maintainer_ready_signal(
+        " ".join(label_set)
+    )
+    if TRIAGE_PENDING_LABELS & label_set and not accepted:
         return "awaiting maintainer triage"
 
     diagnostic_reason = non_actionable_diagnostic_reason(item)
@@ -1316,6 +1315,21 @@ def discover_strategic(
 
     found: list[dict[str, Any]] = []
     inspected = strategic_inspection_items(provisional)
+    inspected_urls = {
+        str(item.get("html_url"))
+        for items in inspected.values()
+        for item in items
+        if item.get("html_url")
+    }
+    for _, _, _, item in provisional:
+        url = str(item.get("html_url") or "")
+        if url and url not in inspected_urls and possible_miss_signal(item):
+            add_audit(
+                audit,
+                item,
+                "strong-looking result fell outside the repo top-15 inspection pool",
+            )
+
     for repo, items in inspected.items():
         ranked: list[tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]] = []
         for item in items:
