@@ -730,7 +730,6 @@ class CalibrationTests(unittest.TestCase):
         )
         self.assertEqual(scout.estimate_effort(tailscale), "1d+")
 
-
     def test_verify_resolves_aggregator_wrapper_to_upstream(self) -> None:
         wrapper = issue(
             html_url="https://github.com/aggregator/jobs/issues/4",
