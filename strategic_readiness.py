@@ -637,12 +637,8 @@ def release_tracking_reason(
     tracking_text = title.lower()
     labels = _labels_text(item)
     republish_only = (
-        ("re-release" in f"{title}\n{body}".lower() or "republish" in body.lower())
-        and (
-            "same content as" in body.lower()
-            or "trusted-publisher" in f"{title}\n{body}".lower()
-        )
-    )
+        "re-release" in f"{title}\n{body}".lower() or "republish" in body.lower()
+    ) and ("same content as" in body.lower() or "trusted-publisher" in f"{title}\n{body}".lower())
     if republish_only:
         return "existing package content; only release/publication remains"
 
