@@ -447,8 +447,10 @@ def strategic_claim_text(text: str) -> bool:
 
 def claim_source_is_recent(source: Mapping[str, Any], *, issue_body: bool = False) -> bool:
     """Keep old claims from permanently suppressing strategic opportunities."""
-    timestamp = source.get("created_at") if issue_body else (
-        source.get("updated_at") or source.get("created_at")
+    timestamp = (
+        source.get("created_at")
+        if issue_body
+        else (source.get("updated_at") or source.get("created_at"))
     )
     stamp = bounty.parse_github_datetime(timestamp)
     if stamp is None:
@@ -474,7 +476,6 @@ def strategic_claim_reason(
             author = (comment.get("user") or {}).get("login", "someone")
             return f"active claim by @{author}"
     return None
-
 
 
 def triage_pending_signal(labels_text: str) -> bool:
