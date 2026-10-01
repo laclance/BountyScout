@@ -50,25 +50,63 @@ def code_reference_count(text: str) -> int:
 
 
 def documentation_microfix(item: Mapping[str, Any]) -> bool:
-    """Detect tiny docs-only edits that should not outrank substantive code work."""
+    """Detect explicitly bounded docs edits, not incidental docs wording."""
     title, body, labels, text = issue_text(item)
-    docs_signal = bool(
+    title_and_labels = f"{title}\n{labels}"
+
+    docs_context = bool(
         re.search(
-            r"\b(?:docs?|documentation|readme|typo|spelling|broken image|broken link)\b",
-            f"{title}\n{labels}",
+            r"\b(?:docs?|documentation|readme)\b",
+            title_and_labels,
             re.IGNORECASE,
         )
-        or re.search(r"\b(?:docs?/|readme(?:\.[a-z]+)?\b)", body, re.IGNORECASE)
     )
-    micro_signal = bool(
+    micro_pattern = (
+        r"\b(?:typo|spelling|broken\s+(?:(?:docs?|documentation|readme)\s+)?"
+        r"(?:link|image)|(?:link|image)\s+fix|documentation cleanup|docs cleanup)\b"
+    )
+    title_micro_signal = bool(re.search(micro_pattern, title, re.IGNORECASE))
+    bounded_body_docs_signal = bool(
         re.search(
-            r"\b(?:typo|spelling|broken image|broken link|link fix|image link|"
-            r"documentation cleanup|docs cleanup)\b",
+            r"\b(?:fix|correct|repair)\b[^\n.!?]{0,100}"
+            r"\b(?:typo|spelling|broken\s+(?:(?:docs?|documentation|readme)\s+)?"
+            r"(?:link|image))\b[^\n.!?]{0,100}"
+            r"\b(?:docs?|documentation|readme)\b|"
+            r"\b(?:docs?|documentation|readme)\b[^\n.!?]{0,100}"
+            r"\b(?:fix|correct|repair)\b[^\n.!?]{0,100}"
+            r"\b(?:typo|spelling|broken\s+(?:link|image))\b",
+            body,
+            re.IGNORECASE,
+        )
+    )
+    bounded_micro_signal = bool(
+        (docs_context and title_micro_signal)
+        or (
+            docs_context
+            and re.search(
+                r"\b(?:fix|correct|repair)\b[^\n.!?]{0,100}" + micro_pattern,
+                body,
+                re.IGNORECASE,
+            )
+        )
+        or bounded_body_docs_signal
+    )
+
+    implementation_scope = bool(
+        re.search(
+            r"\b(?:add|implement|change|modify|extend)\s+(?:the\s+)?"
+            r"(?:validator|parser|runtime|validation logic|parsing logic)\b|"
+            r"\b(?:validator|parser|runtime)\s+(?:logic|code|behavior)\b|"
+            r"\bparse\s+(?:a\s+|the\s+)?json\b|"
+            r"\bnormaliz\w*\s+(?:the\s+)?(?:urls?|destinations?)\b|"
+            r"\bstructured validation errors?\b|"
+            r"\b(?:data|schema) migration\b",
             text,
             re.IGNORECASE,
         )
     )
-    return docs_signal and micro_signal and code_reference_count(body) == 0
+
+    return bounded_micro_signal and not implementation_scope and code_reference_count(body) == 0
 
 
 def _prose_body(body: str) -> str:
