@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import patch
 
 import opportunity_scout as scout
+import github_access as github
 import scout_bounties as bounty
 import strategic_competition as competition
 
@@ -165,7 +166,7 @@ class LinkedPullRequestTests(unittest.TestCase):
                 )
             }
         ]
-        with patch.object(bounty, "github_get", return_value=[]):
+        with patch.object(github, "github_get", return_value=[]):
             self.assertIsNone(competition.linked_open_pr_reason(issue(), "t", comments))
 
         same_repo = [
@@ -184,7 +185,7 @@ class LinkedPullRequestTests(unittest.TestCase):
             )
 
     def test_linked_pr_short_circuits_invalid_issue_and_zero_comments(self) -> None:
-        with patch.object(bounty, "github_get") as getter:
+        with patch.object(github, "github_get") as getter:
             self.assertIsNone(
                 competition.linked_open_pr_reason(
                     {"html_url": "bad", "comments": 1},
@@ -198,7 +199,7 @@ class LinkedPullRequestTests(unittest.TestCase):
 
 class SearchPullRequestTests(unittest.TestCase):
     def test_search_only_runs_when_thread_hints_at_implementation(self) -> None:
-        with patch.object(bounty, "github_get") as getter:
+        with patch.object(github, "github_get") as getter:
             self.assertIsNone(
                 competition.search_open_implementation_pr_reason(
                     issue(body="No competing work is known."),
@@ -237,7 +238,7 @@ class SearchPullRequestTests(unittest.TestCase):
                 },
             ]
         }
-        with patch.object(bounty, "github_get", return_value=results) as getter:
+        with patch.object(github, "github_get", return_value=results) as getter:
             self.assertEqual(
                 competition.search_open_implementation_pr_reason(
                     issue(body="A pull request may already exist."),
@@ -323,13 +324,13 @@ class TimelinePullRequestTests(unittest.TestCase):
                 },
             },
         ]
-        with patch.object(bounty, "github_get", return_value=timeline):
+        with patch.object(github, "github_get", return_value=timeline):
             self.assertEqual(
                 competition.timeline_open_pr_reason(issue(), "t"),
                 "existing open implementation PR: https://github.com/example/project/pull/9",
             )
 
-        with patch.object(bounty, "github_get", return_value={}):
+        with patch.object(github, "github_get", return_value={}):
             self.assertIsNone(competition.timeline_open_pr_reason(issue(), "t"))
         self.assertIsNone(competition.timeline_open_pr_reason({"html_url": "bad"}, "t"))
 
