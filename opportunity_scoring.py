@@ -325,8 +325,59 @@ def effort_hours(effort: str) -> float:
     }[effort]
 
 
-def competition(item: Mapping[str, Any]) -> str:
-    comments = int(item.get("comments") or 0)
+LIFECYCLE_HOUSEKEEPING_BOTS = {"k8s-triage-robot", "k8s-ci-robot"}
+LIFECYCLE_ADMIN_COMMAND_RE = re.compile(
+    r"/(?:remove-lifecycle\s+(?:stale|rotten)|"
+    r"lifecycle\s+(?:stale|rotten|frozen)|"
+    r"(?:remove-)?label\s+\S.*)",
+    re.IGNORECASE,
+)
+
+
+def comment_contributes_to_competition(comment: Mapping[str, Any]) -> bool:
+    """Return whether a comment is substantive enough to count as competition."""
+    body = str(comment.get("body") or "").strip()
+    if not body:
+        return True
+
+    lines = [line.strip() for line in body.splitlines() if line.strip()]
+    if lines and all(LIFECYCLE_ADMIN_COMMAND_RE.fullmatch(line) for line in lines):
+        return False
+
+    login = str((comment.get("user") or {}).get("login", "")).lower()
+    bot_author = login.endswith("[bot]") or login in LIFECYCLE_HOUSEKEEPING_BOTS
+    if not bot_author:
+        return True
+
+    lowered = body.lower()
+    lifecycle_notice = (
+        "this bot triages" in lowered
+        or "automatically marked as stale" in lowered
+        or "automatically marked as rotten" in lowered
+        or "closed due to inactivity" in lowered
+        or "due to inactivity" in lowered
+        or (
+            login in LIFECYCLE_HOUSEKEEPING_BOTS
+            and re.search(
+                r"(?:lifecycle/(?:stale|rotten)|"
+                r"/lifecycle\s+(?:stale|rotten)|"
+                r"/remove-lifecycle\s+(?:stale|rotten))",
+                lowered,
+            )
+        )
+    )
+    return not bool(lifecycle_notice)
+
+
+def competition(
+    item: Mapping[str, Any],
+    activity_comments: Collection[Mapping[str, Any]] | None = None,
+) -> str:
+    comments = (
+        sum(comment_contributes_to_competition(comment) for comment in activity_comments)
+        if activity_comments is not None
+        else int(item.get("comments") or 0)
+    )
     if comments == 0:
         return "none"
     if comments <= 3:
@@ -436,7 +487,7 @@ def build_candidate(
     repo, number = bounty.issue_repo_and_number(item)
     effort_estimate = estimate_effort_details(item)
     effort = effort_estimate.bucket
-    comp = competition(item)
+    comp = competition(item, activity_comments if lane == "strategic" else None)
     stars = int(repo_meta.get("stargazers_count") or 0)
     pushed = bounty.parse_github_datetime(repo_meta.get("pushed_at"))
     active_30d = bool(pushed and (datetime.now(timezone.utc) - pushed).days <= 30)
