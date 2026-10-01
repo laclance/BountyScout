@@ -327,7 +327,4 @@ def strategic_inspection_items(
     for row, repo in overflow[:adaptive_budget]:
         selected_rows[repo].append(row)
 
-    return {
-        repo: [row[3] for row in rows]
-        for repo, rows in selected_rows.items()
-    }
+    return {repo: [row[3] for row in rows] for repo, rows in selected_rows.items()}
