@@ -352,6 +352,49 @@ class ScoringRegressionTests(unittest.TestCase):
         self.assertIn("recent maintainer activity", result["career_reasons"])
         self.assertNotIn("stale inactive backlog penalty", result["career_reasons"])
 
+    def test_bot_only_activity_does_not_revive_old_issue(self) -> None:
+        now = datetime.now(timezone.utc)
+        bot_time = now - timedelta(days=12)
+        result = scoring.build_candidate(
+            issue(
+                title='Make "Bump etcd Version in Kubernetes" part of the release process',
+                body="Release process enhancement.",
+                created_at=(now - timedelta(days=540)).isoformat(),
+                updated_at=bot_time.isoformat(),
+                comments=2,
+                labels=[{"name": "stale"}],
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            [
+                {
+                    "created_at": (now - timedelta(days=525)).isoformat(),
+                    "author_association": "MEMBER",
+                    "user": {"login": "human-maintainer"},
+                },
+                {
+                    "created_at": bot_time.isoformat(),
+                    "updated_at": bot_time.isoformat(),
+                    "author_association": "CONTRIBUTOR",
+                    "user": {"login": "github-actions[bot]"},
+                    "body": "This issue has been automatically marked as stale.",
+                },
+                {
+                    "created_at": (bot_time - timedelta(days=30)).isoformat(),
+                    "author_association": "CONTRIBUTOR",
+                    "user": {"login": "stale[bot]"},
+                    "body": "Older automated stale reminder.",
+                },
+            ],
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertNotIn("issue active in last 14d", result["career_reasons"])
+        self.assertNotIn("recent active discussion", result["career_reasons"])
+        self.assertIn("older inactive backlog penalty", result["career_reasons"])
+
     def test_inactive_old_issue_penalty_remains(self) -> None:
         now = datetime.now(timezone.utc)
         result = scoring.build_candidate(

@@ -21,9 +21,11 @@ from strategic_readiness import (
     issue_label_set as issue_label_set,
     maintainer_comment_authority as maintainer_comment_authority,
     maintainer_issue_decision_reason as maintainer_issue_decision_reason,
+    maintainer_submission_hold_reason as maintainer_submission_hold_reason,
     manual_tracking_issue_reason as manual_tracking_issue_reason,
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
     proposal_stage_signal as proposal_stage_signal,
+    reporter_resolution_reason as reporter_resolution_reason,
     readiness_pending_label_reason as readiness_pending_label_reason,
     release_tracking_reason as release_tracking_reason,
     triage_pending_signal as triage_pending_signal,
@@ -571,6 +573,14 @@ def strategic_rejection(
     decision_reason = maintainer_issue_decision_reason(item)
     if decision_reason:
         return decision_reason
+
+    submission_hold_reason = maintainer_submission_hold_reason(item)
+    if submission_hold_reason:
+        return submission_hold_reason
+
+    reporter_reason = reporter_resolution_reason(item, comments)
+    if reporter_reason:
+        return reporter_reason
 
     if comment_hold_reason:
         return comment_hold_reason

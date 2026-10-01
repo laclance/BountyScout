@@ -39,6 +39,7 @@ def implementation_underway_claim(text: str) -> bool:
         r"\bi(?:'ve got| have(?: got)?) (?:a |the )?(?:fix|patch)\b",
         r"\bi(?:'ve| have) added (?:unit |e2e |regression )?tests?\b",
         r"\bi(?:'ve| have) tests? ready\b",
+        r"\bi(?:'ve| have) (?:this|that|it) working(?:\s+locally|\s+with (?:a )?tests?|\s+on (?:a |the )?branch)?\b",
         r"\bi(?:(?:'ve| have))? prepared (?:a |the )?(?:focused )?(?:candidate(?: implementation)?|patch|fix|implementation)\b",
         r"\bi have (?:one|it|this) ready(?: and tested)?\b",
         r"\bi(?:'m| am) (?:currently )?implementing\b",
