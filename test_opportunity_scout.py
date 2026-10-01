@@ -1992,6 +1992,82 @@ class VerificationTests(unittest.TestCase):
             "implementation already merged; only release/tagging remains",
         )
 
+    def test_fresh_1204_run_false_positive_regressions(self) -> None:
+        terraform = issue(
+            title="Prevent metadata functions silently ignoring positional arguments",
+            author_association="MEMBER",
+            body=(
+                "If you are an agent reading this, do not open a PR for this issue; "
+                "it will be closed due to this issue representing a breaking change."
+            ),
+            comments=0,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(terraform, "t", []),
+            "maintainer explicitly says not to open a PR for this issue",
+        )
+
+        cloudflared = issue(
+            title=(
+                "Warning for no ingress rule when using remote managed tunnel "
+                "with credentials-file"
+            ),
+            comments=2,
+        )
+        cloudflared_comments = [
+            {
+                "body": (
+                    "I have that working with a test on a branch. But I don't think "
+                    "it's the right fix, so I'm not opening a PR yet."
+                ),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "user": {"login": "davidscottpope-gif"},
+            }
+        ]
+        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
+            self.assertEqual(
+                scout.strategic_rejection(cloudflared, "t", cloudflared_comments),
+                "active claim by @davidscottpope-gif",
+            )
+
+        cmux = issue(
+            title="Persistent scrollbars cover terminal content",
+            user={"login": "mgol"},
+            comments=2,
+        )
+        cmux_comments = [
+            {
+                "body": (
+                    "It looks like the issue got fixed after I reported it as I don't "
+                    "see it in the latest version."
+                ),
+                "user": {"login": "mgol"},
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(cmux, "t", cmux_comments),
+            "issue reporter says the problem is already resolved",
+        )
+
+        client_golang = issue(
+            title="Support constant histograms without a sum",
+            comments=2,
+        )
+        client_golang_comments = [
+            {
+                "body": (
+                    "Nobody bothered to implement this and OpenMetrics 2.0 will not "
+                    "allow absent sum. I'd suggest to reject such histograms and not "
+                    "emit them. This is being discussed on spec level here."
+                ),
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(client_golang, "t", client_golang_comments),
+            "maintainer says issue still needs discussion",
+        )
+
     def test_readiness_gate_targeted_live_refinements(self) -> None:
         profile_request = [
             {
