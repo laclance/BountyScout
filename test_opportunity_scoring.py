@@ -174,9 +174,7 @@ class EffortCalibrationTests(unittest.TestCase):
 
     def test_feature_request_and_environment_heavy_signals_remain_large(self) -> None:
         self.assertEqual(
-            scoring.estimate_effort(
-                issue(title="FR: Support ExternalName", body="small request")
-            ),
+            scoring.estimate_effort(issue(title="FR: Support ExternalName", body="small request")),
             "1d+",
         )
         self.assertEqual(
