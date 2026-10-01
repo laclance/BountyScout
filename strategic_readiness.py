@@ -246,6 +246,9 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
             "being discussed at the spec level",
             "spec-level discussion",
             "specification discussion is ongoing",
+            "worth discussion",
+            "would like to hear from the community",
+            "like to hear from the community",
         )
     ):
         return "maintainer says issue still needs discussion", False
@@ -521,8 +524,38 @@ def reward_history_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
-def manual_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
+def reporter_support_triage_reason(item: Mapping[str, Any]) -> str | None:
+    """Reject reporter-authored diagnostic/support requests without defined implementation."""
+    body = str(item.get("body", ""))
+    normalized = normalized_claim_text(body).lower()
+    guidance_request = (
+        "would like to determine whether" in normalized
+        or "would particularly appreciate guidance" in normalized
+        or "would appreciate guidance" in normalized
+    )
+    question_count = len(
+        re.findall(
+            r"(?m)^\s*\d+\.\s+(?:is|are|could|would|should|can|do|does)\b.*\?\s*$",
+            body,
+            re.IGNORECASE,
+        )
+    )
+    if guidance_request and question_count >= 3:
+        return "support/triage issue rather than a contributor task"
+    return None
+
+
+def manual_tracking_issue_reason(
+    item: Mapping[str, Any],
+    comments: list[dict[str, Any]] | None = None,
+) -> str | None:
     """Reject explicit umbrella issues that track multiple child implementation tasks."""
+    for comment in comments or []:
+        association = str(comment.get("author_association", "")).upper()
+        body = normalized_claim_text(str(comment.get("body", ""))).lower()
+        if association in TRUSTED_ASSOCIATIONS and "umbrella issue" in body:
+            return "umbrella tracking issue, not a single implementation task"
+
     body = str(item.get("body", ""))
     tracking_intent = bool(
         re.search(
