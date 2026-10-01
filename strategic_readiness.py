@@ -123,6 +123,7 @@ def _diagnostic_requested(body: str) -> bool:
         r"\bminimal reproduc(?:er|tion)\b|"
         r"\breproducers?\b|"
         r"\blogs?\s+(?:from|required|showing)\b|"
+        r"\b(?:node|instance|daemon|pod|container)\s+logs?\b|"
         r"\bbenchmarks?\b|"
         r"\btraces?\b|"
         r"\bdumps?\b",
@@ -133,6 +134,12 @@ def _diagnostic_requested(body: str) -> bool:
 
 def _redirects_to_other_project(body: str) -> bool:
     """Return whether the maintainer redirects the actual change to another project."""
+    if "closing it here" in body and re.search(
+        r"\b(?:i think\s+)?we should do it in core\b",
+        body,
+    ):
+        return True
+
     redirect_target = bool(
         re.search(
             r"https://github\.com/[\w.-]+/[\w.-]+|"
@@ -629,6 +636,16 @@ def release_tracking_reason(
     body = str(item.get("body", ""))
     tracking_text = title.lower()
     labels = _labels_text(item)
+    republish_only = (
+        ("re-release" in f"{title}\n{body}".lower() or "republish" in body.lower())
+        and (
+            "same content as" in body.lower()
+            or "trusted-publisher" in f"{title}\n{body}".lower()
+        )
+    )
+    if republish_only:
+        return "existing package content; only release/publication remains"
+
     if re.search(
         r"\brelease(?:\s+\S+){0,2}\s+(?:tracking|tracker|checklist|planning)\b|"
         r"\b(?:tracking|tracker|checklist)\s+(?:for\s+)?release\b|"
