@@ -133,8 +133,8 @@
 - **function** `issue_label_set()` — line 40
 - **function** `proposal_stage_signal()` — line 49
 - **function** `maintainer_comment_authority()` — line 69
-- **function** `maintainer_readiness_comment_state()` — line 291
-- **function** `readiness_pending_label_reason()` — line 327
-- **function** `abandoned_lifecycle_reason()` — line 351
-- **function** `automated_tracking_issue_reason()` — line 363
-- **function** `release_tracking_reason()` — line 392
+- **function** `maintainer_readiness_comment_state()` — line 305
+- **function** `readiness_pending_label_reason()` — line 341
+- **function** `abandoned_lifecycle_reason()` — line 365
+- **function** `automated_tracking_issue_reason()` — line 377
+- **function** `release_tracking_reason()` — line 406
