@@ -292,7 +292,7 @@ def strategic_competition_reason(
     if not repo or not number:
         return "could not identify repository/issue number"
 
-    reason = timeline_pr_checker(item, token)
+    reason = strategic_claim_checker(item, comments)
     if reason:
         return reason
 
@@ -300,4 +300,4 @@ def strategic_competition_reason(
     if reason:
         return reason
 
-    return strategic_claim_checker(item, comments)
+    return timeline_pr_checker(item, token)
