@@ -139,11 +139,24 @@ class GitHubResourceTests(unittest.TestCase):
 
     def test_issue_comments_short_circuit_and_shape(self) -> None:
         self.assertEqual(github.issue_comments({"html_url": "bad", "comments": 1}, "t"), [])
+        self.assertEqual(
+            github.issue_comments_checked({"html_url": "bad", "comments": 1}, "t"),
+            ([], "could not identify repository/issue number"),
+        )
+        self.assertEqual(github.issue_comments_checked(issue(comments=0), "t"), ([], None))
         self.assertEqual(github.issue_comments(issue(comments=0), "t"), [])
 
         with patch.object(github, "github_get", return_value={"bad": "shape"}):
+            self.assertEqual(
+                github.issue_comments_checked(issue(), "t"),
+                ([], "could not refresh issue comments"),
+            )
             self.assertEqual(github.issue_comments(issue(), "t"), [])
         with patch.object(github, "github_get", return_value=[{"body": "x"}]) as getter:
+            self.assertEqual(
+                github.issue_comments_checked(issue(), "t"),
+                ([{"body": "x"}], None),
+            )
             self.assertEqual(github.issue_comments(issue(), "t"), [{"body": "x"}])
             self.assertIn("/issues/42/comments?per_page=100", getter.call_args.args[0])
 
