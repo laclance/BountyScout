@@ -64,9 +64,7 @@ ISSUEHUNT_PAGES = 2
 TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
-def target_repo_issue_pool(
-    repo: str, token: str | None
-) -> tuple[list[dict[str, Any]], str | None]:
+def target_repo_issue_pool(repo: str, token: str | None) -> tuple[list[dict[str, Any]], str | None]:
     """Fetch a target repo's freshest open issues without using GitHub Search API."""
     params = urllib.parse.urlencode(
         {
@@ -1328,9 +1326,7 @@ def discover_strategic(
 
     for query in STRATEGIC_GLOBAL_QUERIES:
         source_batches.append(
-            bounty.search_github(
-                query, token, per_page=STRATEGIC_SEARCH_PER_PAGE
-            ).get("items", [])
+            bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE).get("items", [])
         )
 
     for items in source_batches:
