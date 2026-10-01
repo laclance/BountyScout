@@ -26,6 +26,7 @@ from strategic_readiness import (
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
     proposal_stage_signal as proposal_stage_signal,
     reporter_resolution_reason as reporter_resolution_reason,
+    security_disclosure_reason as security_disclosure_reason,
     readiness_pending_label_reason as readiness_pending_label_reason,
     release_tracking_reason as release_tracking_reason,
     triage_pending_signal as triage_pending_signal,
@@ -558,6 +559,10 @@ def strategic_rejection(
     if pending and not accepted:
         return "awaiting maintainer triage"
 
+    security_reason = security_disclosure_reason(item)
+    if security_reason:
+        return security_reason
+
     manual_tracking_reason = manual_tracking_issue_reason(item)
     if manual_tracking_reason:
         return manual_tracking_reason
@@ -797,7 +802,8 @@ def discover_paid(
 def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     """Flag strong raw results that deserve scrutiny when filters discard them."""
     if (
-        manual_tracking_issue_reason(item)
+        security_disclosure_reason(item)
+        or manual_tracking_issue_reason(item)
         or automated_tracking_issue_reason(item)
         or release_tracking_reason(item)
     ):
