@@ -4,7 +4,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from time import monotonic
+from time import monotonic, sleep
 from typing import Any, Mapping
 
 import github_access as github
@@ -78,6 +78,7 @@ STRATEGIC_AUDIT_LIMIT = 20
 PAID_MIN_CASH_SCORE = 55
 REPORT_LIMIT = 8
 NETWORK_WORKERS = 6
+DISCOVERY_SEARCH_INTERVAL_SECONDS = 2.1
 CACHE_LOCKS = github.KeyedLockPool()
 
 
@@ -734,6 +735,7 @@ def discover_paid(
     seen: set[str],
     repo_cache: dict[str, dict[str, Any]],
     guide_cache: dict[str, str | None],
+    search_results: list[tuple[str, dict[str, Any]]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
     found: list[dict[str, Any]] = []
     touched: set[str] = set()
@@ -741,8 +743,16 @@ def discover_paid(
     examples: list[dict[str, Any]] = []
     pending: list[tuple[dict[str, Any], str | None, bool]] = []
 
-    for query in PAID_DISCOVERY_QUERIES:
-        for item in bounty.search_github(query, token).get("items", []):
+    if search_results is None:
+        search_results = [
+            (query, bounty.search_github(query, token)) for query in PAID_DISCOVERY_QUERIES
+        ]
+
+    for _, result in search_results:
+        items = result.get("items")
+        if not isinstance(items, list):
+            continue
+        for item in items:
             url = item.get("html_url")
             if not url or url in seen or url in touched:
                 continue
@@ -930,6 +940,30 @@ def strategic_global_search_results(
         )
         for query in STRATEGIC_GLOBAL_QUERIES
     ]
+
+
+def prefetch_discovery_searches(
+    token: str | None,
+) -> tuple[
+    list[tuple[str, dict[str, Any]]],
+    list[tuple[str, dict[str, Any]]],
+]:
+    """Pace paid and strategic Search calls to avoid burst/secondary rate limits."""
+    requests = [
+        ("paid", query, 15) for query in PAID_DISCOVERY_QUERIES
+    ] + [
+        ("strategic", query, STRATEGIC_SEARCH_PER_PAGE)
+        for query in STRATEGIC_GLOBAL_QUERIES
+    ]
+    paid_results: list[tuple[str, dict[str, Any]]] = []
+    strategic_results: list[tuple[str, dict[str, Any]]] = []
+    for index, (lane, query, per_page) in enumerate(requests):
+        result = bounty.search_github(query, token, per_page=per_page)
+        target = paid_results if lane == "paid" else strategic_results
+        target.append((query, result))
+        if index + 1 < len(requests):
+            sleep(DISCOVERY_SEARCH_INTERVAL_SECONDS)
+    return paid_results, strategic_results
 
 
 def discover_strategic(
@@ -1236,11 +1270,14 @@ def main() -> None:
     guide_cache: dict[str, str | None] = {}
 
     started = monotonic()
-    prefetched_global_searches = (
-        strategic_global_search_results(token) if token and repo_fullname else None
-    )
+    prefetched_paid_searches: list[tuple[str, dict[str, Any]]] | None = None
+    prefetched_global_searches: list[tuple[str, dict[str, Any]]] | None = None
+    if token and repo_fullname:
+        prefetched_paid_searches, prefetched_global_searches = prefetch_discovery_searches(token)
     paid_started = monotonic()
-    paid, paid_rejects, paid_examples = discover_paid(token, seen, repo_cache, guide_cache)
+    paid, paid_rejects, paid_examples = discover_paid(
+        token, seen, repo_cache, guide_cache, prefetched_paid_searches
+    )
     paid_seconds = monotonic() - paid_started
 
     strategic_started = monotonic()
@@ -1252,6 +1289,18 @@ def main() -> None:
         guide_cache,
         prefetched_global_searches,
     )
+    if prefetched_paid_searches is not None:
+        for query, result in prefetched_paid_searches:
+            if not isinstance(result.get("items"), list):
+                add_audit(
+                    strategic_audit,
+                    {
+                        "html_url": "https://github.com/issues",
+                        "title": f"Paid GitHub Search: {query}",
+                    },
+                    f"paid discovery search failed for query: {query}; scan coverage incomplete",
+                )
+
     strategic_seconds = monotonic() - strategic_started
     print(
         "Scout performance: "
@@ -1293,7 +1342,7 @@ def main() -> None:
     coverage_warning = None
     if discovery_failures or verification_failures >= STRATEGIC_COVERAGE_WARNING_THRESHOLD:
         coverage_warning = (
-            "Strategic verification coverage is incomplete: "
+            "Opportunity discovery/verification coverage is incomplete: "
             f"{coverage_failures} discovery/source/comment/competition checks failed, "
             "so this ranking may omit stronger candidates. "
             "Seen-state will not be advanced for this run."
