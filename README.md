@@ -13,6 +13,7 @@ The paid scanner remains intentionally close to upstream, while fork-specific st
 
 - `scout_bounties.py` — upstream-compatible paid bounty discovery and strict payment/competition filters.
 - `opportunity_scout.py` — application orchestration and strategic scanner composition.
+- `opportunity_reporting.py` — GitHub queue reports, reject/audit summaries, and length-safe notification formatting.
 - `opportunity_scoring.py` — effort estimation and cash/career ranking over verified evidence.
 - `opportunity_sources.py` — GitHub/platform source adapters and bounded adaptive inspection selection.
 - `strategic_claims.py` — pure contributor ownership/implementation claim detection.
