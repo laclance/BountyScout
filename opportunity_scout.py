@@ -1231,13 +1231,29 @@ def main() -> None:
         for item in strategic_audit:
             print(f"- {item['url']}: {item['reason']}")
 
-    if not queue:
+    rejects = reporting.rejection_summary(paid_rejects, strategic_rejects)
+    source_failures = sum(
+        strategic_rejects.get(reason, 0)
+        for reason in (
+            "could not refresh source issue",
+            "could not refresh issue comments",
+        )
+    )
+    coverage_warning = None
+    if source_failures >= STRATEGIC_COVERAGE_WARNING_THRESHOLD:
+        coverage_warning = (
+            "Strategic verification coverage is incomplete: "
+            f"{source_failures} source/comment refreshes failed, so this ranking may omit "
+            "stronger candidates. Seen-state will not be advanced for this run."
+        )
+        print(f"WARNING: {coverage_warning}")
+
+    if not queue and coverage_warning is None:
         print("No new verified OSS opportunities found.")
         return
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    message = reporting.notification_message(queue, now)
-    rejects = reporting.rejection_summary(paid_rejects, strategic_rejects)
+    message = reporting.notification_message(queue, now, warning=coverage_warning)
 
     attempted = False
     delivered = False
@@ -1265,6 +1281,7 @@ def main() -> None:
             verification_examples=paid_examples + strategic_examples,
             strategic_audit=strategic_audit,
             reject_counts=rejects,
+            coverage_warning=coverage_warning,
         )
         delivered = (
             bounty.create_github_issue(
@@ -1282,9 +1299,11 @@ def main() -> None:
             + ", ".join(f"{k}={v}" for k, v in sorted(rejects.items()))
         )
 
-    if attempted and delivered:
+    if attempted and delivered and coverage_warning is None:
         seen.update(x["url"] for x in queue)
         bounty.save_seen_bounties(seen)
+    elif attempted and delivered:
+        print("Verification coverage incomplete; state was not updated.")
     else:
         print("No notification was delivered; state was not updated.")
 
