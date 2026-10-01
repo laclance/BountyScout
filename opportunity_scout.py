@@ -12,7 +12,7 @@ from time import monotonic
 from typing import Any, Mapping, cast
 
 import scout_bounties as bounty
-from strategic_claims import normalized_claim_text, strategic_claim_text
+from strategic_claims import normalized_claim_text, strategic_claim_text as strategic_claim_text
 
 TARGET_REPOS = [
     "aws/amazon-vpc-cni-k8s",
