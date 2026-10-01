@@ -32,6 +32,7 @@ Paid candidates reuse the existing BountyScout rules, including rejection of:
 - pull requests, assigned issues, and overcrowded threads
 - recursive BountyScout alerts and obvious spam
 - unfunded bounty proposals
+- payout histories / Hall-of-Fame leaderboards that summarize past rewards rather than open work
 - meta/bug-bounty monitoring alerts
 - issues without a real payment signal
 - issues with an open implementation PR
@@ -43,7 +44,7 @@ Cash score considers payment confidence, stated reward, rough expected hourly va
 
 Strategic discovery starts with a curated target list covering AWS/Kubernetes, container runtimes, networking, RPC/storage, observability, Go tooling, Terraform, GitOps, and selected JS/TS infrastructure projects, plus narrow global searches for contributor-ready bugs. Curated repositories are read through GitHub's core Issues API rather than the Search API, so every target gets its own result budget without exhausting search-rate limits.
 
-For each curated repository, the scout activity-inspects the top 15 plausible issues, then spends a small global overflow budget on strong recent bug or contributor-ready candidates that narrowly miss that cutoff. It re-ranks inspected issues using issue/comment freshness and then fully verifies candidates in order until up to three valid opportunities survive. Search depth is intentionally broader than the final queue. Verification refreshes the source issue and checks:
+For each curated repository, the scout activity-inspects the top 15 plausible issues, then spends a small global overflow budget on strong recent bug or contributor-ready candidates that narrowly miss that cutoff. It ranks the full inspection pool from list metadata, then deep-verifies candidates in order until the top three verified slots are mathematically settled; the stopping bound includes the maximum score uplift from contribution-guide and recent-maintainer evidence. This preserves broad inspection while avoiding comment + refresh requests for candidates that cannot enter the kept set. Search depth is intentionally broader than the final queue. Verification refreshes the source issue and checks:
 
 - issue is still open and unassigned
 - no obvious active claim, including explicit "pick this up" or "willing to contribute a PR" ownership
@@ -76,7 +77,7 @@ Each reported candidate includes:
 - scoring reasons
 - contribution-guide link when found
 
-The GitHub issue report also includes examples rejected during final verification.
+The GitHub issue report also includes examples rejected during final verification. Repeated source/comment refresh failures produce a prominent incomplete-coverage warning, and incomplete runs do not advance seen-state.
 
 ## Workflow
 
