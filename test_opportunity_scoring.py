@@ -25,6 +25,39 @@ Existing rows can be corrected in bounded follow-up PRs after maintainers decide
 repeated destination is redundant or whether a better official docs/product URL exists.
 """
 
+TAILSCALE_19694_BODY = """### What are you trying to do?
+
+The "Comparison to GUI version" section of the [[Tailscaled-on-macOS](https://github.com/tailscale/tailscale/wiki/Tailscaled-on-macOS)](https://github.com/tailscale/tailscale/wiki/Tailscaled-on-macOS) wiki page already mentions that when running `tailscaled`, "MagicDNS works, but you need to set `100.100.100.100` as your DNS server yourself. It doesn't change your DNS config." — but it doesn't explain *how* to do that.
+
+macOS has a little-known feature where files dropped into `/etc/resolver/` configure per-domain DNS resolvers. Each filename is a DNS domain, and the contents tell `mDNSResponder` which nameserver to use for that domain. The following steps are sufficient to make MagicDNS work with `tailscaled` on macOS:
+
+1. Go to **System Settings → Network → Wi-Fi → Details… → DNS** and add `100.100.100.100` to the DNS servers table.
+2. Run the following commands in your terminal:
+
+```sh
+sudo mkdir -p /etc/resolver
+sudo sh -c 'echo "nameserver 100.100.100.100" > /etc/resolver/ts.net'
+sudo dscacheutil -flushcache
+sudo killall -HUP mDNSResponder
+```
+
+This tells `mDNSResponder`: "for anything ending in `.ts.net`, ask `100.100.100.100` instead of the default resolver." Without it, `.ts.net` hostnames silently fail — the system asks the default nameserver (e.g. `1.1.1.1`), which has no knowledge of private tailnet nodes.
+
+### How should we solve this?
+
+By adding the above instructions to the "Tailscaled-on-macOS" wiki page, ideally as a short section underneath or expanding the existing MagicDNS bullet point in "Comparison to GUI version".
+
+### What is the impact of not solving this?
+
+Users running `tailscaled` who enable MagicDNS will find that `.ts.net` hostnames don't resolve, with no obvious explanation. Moreover, the note "...but you need to set `100.100.100.100` as your DNS server yourself..." means the user needs to figure out how to do this in MacOS. 
+
+They'll need to dig through issues and forum posts to discover the `/etc/resolver/` workaround. This could facilitate the process for users that would like to try `tailscaled` in MacOS without being advanced users with networking themselves.
+
+### Anything else?
+
+[tailscaled on macOS](https://github.com/tailscale/tailscale/wiki/Tailscaled-on-macOS)
+[Three ways to run Tailscale on macOS](https://tailscale.com/docs/concepts/macos-variants)"""
+
 
 def issue(**overrides: Any) -> dict[str, Any]:
     item: dict[str, Any] = {
@@ -186,6 +219,81 @@ class EffortCalibrationTests(unittest.TestCase):
         )
         self.assertEqual(scoring.estimate_effort(micro), "<1h")
         self.assertEqual(scoring.estimate_effort(broader), "1–3h")
+
+    def test_documentation_feature_prefix_does_not_force_large_scope(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="FR: [documentation] explain existing DNS setup",
+                body="Add the exact resolver setup steps to the existing documentation.",
+                labels=[{"name": "fr"}],
+            )
+        )
+        self.assertEqual(estimate.bucket, "1–3h")
+        self.assertEqual(estimate.reasons, ("bounded documentation change",))
+
+    def test_tailscale_19694_is_bounded_documentation(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title=(
+                    "FR: [documentation] Explain how to configure MagicDNS manually for "
+                    'tailscaled on macOS in the "Tailscaled-on-macOS"'
+                ),
+                body=TAILSCALE_19694_BODY,
+                labels=[{"name": "fr"}],
+            )
+        )
+        self.assertEqual(estimate.bucket, "1–3h")
+        self.assertEqual(estimate.reasons, ("bounded documentation change",))
+
+    def test_feature_request_documentation_title_can_remain_bounded(self) -> None:
+        self.assertEqual(
+            scoring.estimate_effort(
+                issue(
+                    title="Feature request: update documentation for resolver setup",
+                    body="Document the existing configuration and example commands.",
+                )
+            ),
+            "1–3h",
+        )
+
+    def test_normal_feature_request_still_triggers_large_scope(self) -> None:
+        self.assertEqual(
+            scoring.estimate_effort(
+                issue(
+                    title="FR: Add connection pool support",
+                    body="Add connection pooling and lifecycle management to the client.",
+                )
+            ),
+            "1d+",
+        )
+
+    def test_documentation_feature_with_architecture_scope_remains_large(self) -> None:
+        self.assertEqual(
+            scoring.estimate_effort(
+                issue(
+                    title="FR: [documentation] redesign storage architecture guide",
+                    body=(
+                        "The work requires an architecture redesign spanning schema, storage, "
+                        "configuration, and protocol behavior before the docs can be updated."
+                    ),
+                )
+            ),
+            "1d+",
+        )
+
+    def test_documentation_feature_with_runtime_parser_scope_remains_large(self) -> None:
+        self.assertEqual(
+            scoring.estimate_effort(
+                issue(
+                    title="FR: [documentation] document configuration validation",
+                    body=(
+                        "Update the guide and implement parser logic plus runtime validation "
+                        "behavior so the documented configuration is enforced."
+                    ),
+                )
+            ),
+            "1d+",
+        )
 
     def test_chain_love_3969_is_not_a_documentation_microfix(self) -> None:
         item = issue(

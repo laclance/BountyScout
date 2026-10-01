@@ -173,6 +173,31 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
     prose = _prose_body(body)
     file_refs = code_reference_count(body)
     feature = _feature_signal(title, labels, text)
+    normalized_labels = _normalized_labels(labels)
+    docs_signal = bool(
+        re.search(
+            r"\b(?:docs?|documentation|readme)\b",
+            f"{title}\n{labels}",
+            re.IGNORECASE,
+        )
+    )
+    feature_request_scope = bool(
+        title.lower().startswith(("fr:", "feature request:"))
+        or "feature request" in normalized_labels
+    )
+    docs_feature_implementation_scope = bool(
+        re.search(
+            r"\b(?:add|implement|change|modify|extend|refactor|rewrite)\s+(?:the\s+)?"
+            r"(?:validator|parser|runtime|protocol|subsystem|architecture|api|server|client)\b|"
+            r"\b(?:validator|parser|runtime|protocol)\s+(?:logic|code|behavior)\b",
+            text,
+            re.IGNORECASE,
+        )
+        or _cross_component_feature(text, file_refs)
+    )
+    bounded_docs_feature_request = bool(
+        feature_request_scope and docs_signal and not docs_feature_implementation_scope
+    )
 
     if documentation_microfix(item):
         return EffortEstimate("<1h", ("documentation-only micro-fix",))
@@ -185,8 +210,7 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
             r"large refactor|rfc|connection pool|explore publishing)\b",
             text,
         )
-        or title.lower().startswith(("fr:", "feature request:"))
-        or "feature request" in _normalized_labels(labels)
+        or (feature_request_scope and not bounded_docs_feature_request)
     )
     compatibility_risk = bool(
         re.search(
@@ -224,9 +248,6 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
     if len(prose) > 12000:
         return EffortEstimate("1d+", ("large narrative implementation scope",))
 
-    docs_signal = bool(
-        re.search(r"\b(?:docs?|documentation|readme)\b", f"{title}\n{labels}", re.IGNORECASE)
-    )
     broad_docs = bool(
         docs_signal
         and (
