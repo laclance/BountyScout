@@ -49,7 +49,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration |
 | `opportunity_sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
 | `strategic_claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
-| `strategic_competition.py` | Active-claim, linked/search/timeline implementation-PR detection, and competition precedence | May call upstream GitHub helpers; never imports `opportunity_scout.py` |
+| `strategic_competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses local evidence before timeline I/O; never imports `opportunity_scout.py` |
 | `strategic_readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` | Notification state | Only mark items seen after a notification path succeeds |
 | `.github/workflows/bounty-scout.yml` | Scheduled scanner execution | Runtime workflow, not the quality gate |
@@ -106,7 +106,7 @@ These are direction markers, not a requirement to create empty abstractions earl
 - Scanner misses are useful product feedback; audit paths should remain observable.
 - Repository/network failures should degrade coverage explicitly rather than silently turning into positive verification.
 - Strategic deep verification is rate-budgeted: inspect broadly, verify in rank order, and stop only when remaining candidates cannot displace the kept set under the known verification-score uplift bound.
-- Comment-fetch failure must remain distinguishable from a real empty discussion thread; failed implementation-PR searches are also verification failures rather than evidence of no competition. Incomplete verification runs warn prominently and do not advance seen-state.
+- Comment-fetch failure must remain distinguishable from a real empty discussion thread; failed implementation-PR timeline checks are also verification failures rather than evidence of no competition. Strategic verification does not use per-issue GitHub Search queries, preserving Search quota for discovery. Incomplete verification runs warn prominently and do not advance seen-state.
 - Tests must cover scanner policy without live network access.
 - Ruff, strict mypy, and 100% statement + branch coverage are repository-wide quality gates.
 
