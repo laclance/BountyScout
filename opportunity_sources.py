@@ -299,3 +299,58 @@ def strategic_inspection_items(
         selected_rows[repo].append(row)
 
     return {repo: [row[3] for row in rows] for repo, rows in selected_rows.items()}
+
+
+def candidate_rank_key(candidate: Mapping[str, Any]) -> tuple[int, int, int, int]:
+    """Return the final strategic queue ordering key for a verified candidate."""
+    return (
+        int(candidate["priority_score"]),
+        int(candidate["career_score"]),
+        int(candidate["cash_score"]),
+        -int(candidate.get("comments") or 0),
+    )
+
+
+def strategic_verification_upper_bound(
+    row: IssueRow,
+    *,
+    score_uplift_bound: int,
+) -> tuple[int, int, int, int]:
+    """Return the most optimistic final ordering key for an unverified preview row."""
+    item = row[3]
+    return (
+        min(100, row[0] + score_uplift_bound),
+        min(100, row[1] + score_uplift_bound),
+        row[2],
+        -int(item.get("comments") or 0),
+    )
+
+
+def strategic_repo_slots_settled(
+    verified: Sequence[Mapping[str, Any]],
+    remaining: Sequence[IssueRow],
+    *,
+    keep_per_repo: int,
+    score_uplift_bound: int,
+) -> bool:
+    """Return whether remaining previews cannot displace the verified keep set."""
+    if len(verified) < keep_per_repo:
+        return False
+    if not remaining:
+        return True
+
+    ranked_verified = sorted(
+        verified,
+        key=candidate_rank_key,
+        reverse=True,
+    )
+    cutoff = candidate_rank_key(ranked_verified[keep_per_repo - 1])
+    best_remaining = max(
+        strategic_verification_upper_bound(
+            row,
+            score_uplift_bound=score_uplift_bound,
+        )
+        for row in remaining
+    )
+    return best_remaining <= cutoff
+
