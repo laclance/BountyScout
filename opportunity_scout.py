@@ -927,8 +927,7 @@ def search_open_implementation_pr_reason(
 
     comments = issue_comments(item, token) if comments is None else comments
     context = "\n".join(
-        [str(item.get("body", ""))]
-        + [str(comment.get("body", "")) for comment in comments]
+        [str(item.get("body", ""))] + [str(comment.get("body", "")) for comment in comments]
     )
     if not re.search(
         r"\b(?:pr|pull request|draft fix|draft patch|"

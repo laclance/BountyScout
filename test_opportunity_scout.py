@@ -603,9 +603,7 @@ class CalibrationTests(unittest.TestCase):
             )
 
     def test_search_open_implementation_pr_reason_paths(self) -> None:
-        self.assertIsNone(
-            scout.search_open_implementation_pr_reason({"html_url": "bad"}, "t", [])
-        )
+        self.assertIsNone(scout.search_open_implementation_pr_reason({"html_url": "bad"}, "t", []))
 
         with patch.object(bounty, "github_get") as getter:
             self.assertIsNone(
