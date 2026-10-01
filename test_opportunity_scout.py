@@ -1575,9 +1575,7 @@ class DiscoveryTests(unittest.TestCase):
             found, _, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
         self.assertEqual([item["url"] for item in found], [best["html_url"]])
-        self.assertTrue(
-            any("top-15 inspection pool" in item["reason"] for item in audit)
-        )
+        self.assertTrue(any("top-15 inspection pool" in item["reason"] for item in audit))
         self.assertFalse(any(item["url"] == dirty_weak["html_url"] for item in audit))
         self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
 
