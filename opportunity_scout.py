@@ -782,7 +782,11 @@ def discover_paid(
 
 def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     """Flag strong raw results that deserve scrutiny when filters discard them."""
-    if automated_tracking_issue_reason(item) or release_tracking_reason(item):
+    if (
+        manual_tracking_issue_reason(item)
+        or automated_tracking_issue_reason(item)
+        or release_tracking_reason(item)
+    ):
         return False
 
     _, _, labels, text = issue_text(item)
