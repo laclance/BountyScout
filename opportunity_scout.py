@@ -1158,11 +1158,7 @@ def verify(
         if fresh is None:
             return None, "could not refresh upstream issue from aggregator wrapper"
 
-    clean = (
-        bounty.is_clean_candidate(fresh)
-        if require_paid
-        else strategic_basic_candidate(fresh)
-    )
+    clean = bounty.is_clean_candidate(fresh) if require_paid else strategic_basic_candidate(fresh)
     if not clean:
         return None, "failed basic eligibility filter after source refresh"
 
