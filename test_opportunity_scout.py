@@ -662,6 +662,8 @@ class CalibrationTests(unittest.TestCase):
             "This looks straightforward to fix.",
             "I investigated this and the problem is in X.",
             "One solution might be to change X.",
+            "Someone else is planning a fix.",
+            "The maintainer is currently implementing this.",
             "Feel free to submit a PR.",
             "We would welcome a PR for this.",
         )
@@ -751,6 +753,18 @@ class CalibrationTests(unittest.TestCase):
             "active claim by @recent-dev",
         )
         self.assertIsNone(scout.strategic_claim_reason(issue(), [stale_comment]))
+        self.assertIsNone(
+            scout.strategic_claim_reason(
+                issue(),
+                [
+                    {
+                        "body": "I reproduced this on Linux.",
+                        "created_at": recent,
+                        "user": {"login": "reporter"},
+                    }
+                ],
+            )
+        )
 
         recent_body = issue(
             created_at=recent,
