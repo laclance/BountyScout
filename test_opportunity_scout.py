@@ -1844,6 +1844,60 @@ class VerificationTests(unittest.TestCase):
             "maintainer indicates the proposed implementation approach is not wanted",
         )
 
+    def test_fresh_1128_run_false_positive_regressions(self) -> None:
+        prometheus = issue(
+            title="storage/remote: ensure metadata instrumentation make sense for PRW2",
+            body=(
+                "This issue is to decide what these metrics should mean "
+                "(or whether they should exist) for PRW2 before we call PRW2 stable."
+            ),
+            author_association="MEMBER",
+            labels=[{"name": "component/remote storage"}],
+            comments=3,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(prometheus, "t", []),
+            "maintainer-authored issue is still deciding implementation semantics",
+        )
+
+        external_dns = issue(
+            html_url="https://github.com/kubernetes-sigs/external-dns/issues/6718",
+            title="TXT records are write-once",
+            body=(
+                "PR https://github.com/kubernetes-sigs/external-dns/pull/6293 "
+                "fixes exactly this and has been open for six months."
+            ),
+            labels=[],
+            comments=0,
+        )
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "open",
+                "html_url": "https://github.com/kubernetes-sigs/external-dns/pull/6293",
+            },
+        ):
+            self.assertEqual(
+                scout.strategic_rejection(external_dns, "t", []),
+                "existing open implementation PR: "
+                "https://github.com/kubernetes-sigs/external-dns/pull/6293",
+            )
+
+        cmux = issue(
+            title="cmux NIGHTLY build is failing on main",
+            body="This issue closes itself on the next successful publish.",
+            labels=[{"name": "bug"}, {"name": "nightly-failure"}, {"name": "help wanted"}],
+            user={"login": "github-actions[bot]"},
+            comments=178,
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self.assertEqual(
+            scout.strategic_rejection(cmux, "t", []),
+            "automated CI/release incident, not an implementation task",
+        )
+        self.assertFalse(scout.possible_miss_signal(cmux))
+
     def test_readiness_gate_targeted_live_refinements(self) -> None:
         profile_request = [
             {
