@@ -226,8 +226,6 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
             "not the right approach",
             "should not be implemented",
             "shouldn't be implemented",
-            "we do not want to support",
-            "we don't want to support",
         )
     ):
         return "maintainer indicates the proposed implementation approach is not wanted", False
