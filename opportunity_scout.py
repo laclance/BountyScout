@@ -13,6 +13,7 @@ from typing import Any, Mapping, cast
 
 import scout_bounties as bounty
 import strategic_competition as competition_policy
+from strategic_claims import strategic_claim_text as strategic_claim_text
 from strategic_readiness import (
     TRUSTED_ASSOCIATIONS as TRUSTED_ASSOCIATIONS,
     abandoned_lifecycle_reason as abandoned_lifecycle_reason,
@@ -361,6 +362,7 @@ def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str,
 
 TRIAGE_PENDING_LABELS = {"needs-triage"}
 TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
+STRATEGIC_CLAIM_MAX_AGE_DAYS = competition_policy.STRATEGIC_CLAIM_MAX_AGE_DAYS
 
 
 def claim_source_is_recent(
