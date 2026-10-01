@@ -796,6 +796,10 @@ class CalibrationTests(unittest.TestCase):
             "I have one ready and tested on a 2.2 node.",
             "If so, I would be happy to submit the PR for review.",
             "I can start working on a Pull Request for it.",
+            "Claiming this DBIP. Plan: validator rule in json-tools.",
+            "Claiming this issue.",
+            "I'm claiming this task.",
+            "I'll claim this.",
         )
         for body in claims:
             with self.subTest(body=body):
@@ -817,6 +821,12 @@ class CalibrationTests(unittest.TestCase):
             "We would welcome a PR for this.",
             "I can start reviewing a Pull Request for it.",
             "We have prepared reproduction steps and logs.",
+            "The docs claim this behavior is supported.",
+            "The claimable balance is zero.",
+            "This is an insurance claim.",
+            "This issue claims that the parser is broken.",
+            "Someone claimed this was fixed already.",
+            "I am claiming this was fixed already.",
         )
         for body in non_claims:
             with self.subTest(body=body):
