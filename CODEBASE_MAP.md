@@ -21,39 +21,39 @@
 - **function** `github_get_optional()` — line 322
 - **function** `fetch_text()` — line 338
 - **function** `issue_comments()` — line 350
-- **function** `claim_source_is_recent()` — line 380
-- **function** `strategic_claim_reason()` — line 394
-- **function** `linked_open_pr_reason()` — line 413
-- **function** `search_open_implementation_pr_reason()` — line 464
-- **function** `timeline_open_pr_reason()` — line 519
-- **function** `supplemental_claim_reason()` — line 548
-- **function** `extended_competition_reason()` — line 565
-- **function** `strategic_competition_reason()` — line 598
-- **function** `supplemental_payment_signal()` — line 624
-- **function** `comment_payment_signal()` — line 652
-- **function** `issue_from_github_url()` — line 711
-- **function** `issuehunt_platform_refs()` — line 727
-- **function** `opire_platform_refs()` — line 754
-- **function** `bountyhub_platform_refs()` — line 808
-- **function** `platform_paid_refs()` — line 858
-- **function** `contribution_guide()` — line 872
-- **function** `build_candidate()` — line 883
-- **function** `refresh_issue()` — line 1178
-- **function** `upstream_wrapper_issue_url()` — line 1194
-- **function** `non_actionable_diagnostic_reason()` — line 1212
-- **function** `strategic_rejection()` — line 1241
-- **function** `verify()` — line 1306
-- **function** `add_reject()` — line 1399
-- **function** `discover_paid()` — line 1407
-- **function** `possible_miss_signal()` — line 1497
-- **function** `basic_rejection_audit_reason()` — line 1518
-- **function** `add_audit()` — line 1558
-- **function** `strategic_inspection_items()` — line 1574
-- **function** `discover_strategic()` — line 1591
-- **function** `github_report_ref()` — line 1811
-- **function** `markdown_candidate()` — line 1824
-- **function** `notification_candidate()` — line 1874
-- **function** `main()` — line 1895
+- **function** `claim_source_is_recent()` — line 366
+- **function** `strategic_claim_reason()` — line 375
+- **function** `linked_open_pr_reason()` — line 383
+- **function** `search_open_implementation_pr_reason()` — line 393
+- **function** `timeline_open_pr_reason()` — line 407
+- **function** `supplemental_claim_reason()` — line 412
+- **function** `extended_competition_reason()` — line 422
+- **function** `strategic_competition_reason()` — line 442
+- **function** `supplemental_payment_signal()` — line 459
+- **function** `comment_payment_signal()` — line 487
+- **function** `issue_from_github_url()` — line 546
+- **function** `issuehunt_platform_refs()` — line 562
+- **function** `opire_platform_refs()` — line 589
+- **function** `bountyhub_platform_refs()` — line 643
+- **function** `platform_paid_refs()` — line 693
+- **function** `contribution_guide()` — line 707
+- **function** `build_candidate()` — line 718
+- **function** `refresh_issue()` — line 1013
+- **function** `upstream_wrapper_issue_url()` — line 1029
+- **function** `non_actionable_diagnostic_reason()` — line 1047
+- **function** `strategic_rejection()` — line 1076
+- **function** `verify()` — line 1141
+- **function** `add_reject()` — line 1234
+- **function** `discover_paid()` — line 1242
+- **function** `possible_miss_signal()` — line 1332
+- **function** `basic_rejection_audit_reason()` — line 1353
+- **function** `add_audit()` — line 1393
+- **function** `strategic_inspection_items()` — line 1409
+- **function** `discover_strategic()` — line 1426
+- **function** `github_report_ref()` — line 1646
+- **function** `markdown_candidate()` — line 1659
+- **function** `notification_candidate()` — line 1709
+- **function** `main()` — line 1730
 
 ## `scout_bounties.py`
 
@@ -84,6 +84,17 @@
 - **function** `pr_intent_claim()` — line 55
 - **function** `concrete_first_person_plan_claim()` — line 72
 - **function** `strategic_claim_text()` — line 85
+
+## `strategic_competition.py`
+
+- **function** `claim_source_is_recent()` — line 39
+- **function** `strategic_claim_reason()` — line 53
+- **function** `linked_open_pr_reason()` — line 72
+- **function** `search_open_implementation_pr_reason()` — line 124
+- **function** `timeline_open_pr_reason()` — line 175
+- **function** `supplemental_claim_reason()` — line 204
+- **function** `extended_competition_reason()` — line 221
+- **function** `strategic_competition_reason()` — line 252
 
 ## `strategic_readiness.py`
 
