@@ -885,6 +885,19 @@ class CalibrationTests(unittest.TestCase):
             "issue author already has an implementation/fix in progress",
         )
 
+        omi_prepared = issue(
+            comments=0,
+            created_at=recent,
+            body=(
+                "I prepared a focused candidate that requires a complete explicit decision "
+                "payload. If approved, I can provide the prepared patch and tests for review."
+            ),
+        )
+        self.assertEqual(
+            scout.strategic_claim_reason(omi_prepared, []),
+            "issue author already has an implementation/fix in progress",
+        )
+
         client_golang_2129 = [
             {
                 "body": (
@@ -1964,6 +1977,21 @@ class VerificationTests(unittest.TestCase):
                 "issue author already has an implementation/fix in progress",
             )
 
+    def test_fresh_1153_run_release_regression(self) -> None:
+        missing_release = issue(
+            title="Version 3.13.4 missing release",
+            body=(
+                "The version update was merged in #19862. The release action failed, "
+                "so the release step then never triggered. We have a v3.13.4 tag, "
+                "but no release with downloads."
+            ),
+            comments=0,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(missing_release, "t", []),
+            "implementation already merged; only release/tagging remains",
+        )
+
     def test_readiness_gate_targeted_live_refinements(self) -> None:
         profile_request = [
             {
@@ -2393,6 +2421,22 @@ class VerificationTests(unittest.TestCase):
             patch.object(scout, "build_candidate", return_value={"ok": True}),
         ):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True), ({"ok": True}, None))
+
+    def test_verify_paid_rejects_recent_issue_author_prepared_patch(self) -> None:
+        fresh = issue(
+            body=(
+                "**Bounty proposal**\n\n"
+                "I prepared a focused candidate implementation with regression tests. "
+                "Would you approve **US$100 cash upon acceptance and merge**?"
+            ),
+            created_at=datetime.now(timezone.utc).isoformat(),
+            comments=0,
+        )
+        with patch.object(scout, "refresh_issue", return_value=(fresh, None)):
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {}, require_paid=True)[1],
+                "issue author already has an implementation/fix in progress",
+            )
 
     def test_verify_comment_or_override_runs_competition_checks(self) -> None:
         fresh = issue(body="", title="Task", comments=1)
