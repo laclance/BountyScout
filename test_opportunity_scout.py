@@ -1430,9 +1430,7 @@ class DiscoveryTests(unittest.TestCase):
                 ),
             ),
         ):
-            found, rejected, examples, audit = scout.discover_strategic(
-                "t", set(), set(), {}, {}
-            )
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
         self.assertEqual(found, [])
         self.assertEqual(audit, [])
@@ -1540,9 +1538,7 @@ class DiscoveryTests(unittest.TestCase):
                 ),
             ),
         ):
-            found, rejected, examples, audit = scout.discover_strategic(
-                "t", set(), set(), {}, {}
-            )
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
         self.assertEqual([x["url"] for x in found], [good["html_url"]])
         self.assertEqual(audit, [])
         self.assertEqual(rejected["reject"], 1)
