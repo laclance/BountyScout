@@ -263,15 +263,8 @@ def contribution_guide(
     token: str | None,
     getter: Callable[[str, str | None], Any] = github_get_optional,
 ) -> str | None:
-    """Return the first contribution guide found at common repository paths."""
-    for path in ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"):
-        data = getter(
-            f"https://api.github.com/repos/{repo}/contents/{urllib.parse.quote(path)}",
-            token,
-        )
-        if isinstance(data, dict) and data.get("html_url"):
-            return str(data["html_url"])
-    return None
+    """Compatibility wrapper for contribution-guide GitHub access."""
+    return github.contribution_guide(repo, token, getter)
 
 
 def strategic_inspection_items(
