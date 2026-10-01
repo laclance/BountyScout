@@ -2638,6 +2638,7 @@ class VerificationTests(unittest.TestCase):
         supplied = [{"body": "Maintainer context"}]
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(scout, "strategic_basic_candidate", return_value=True),
             patch.object(bounty, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(scout, "strategic_rejection", return_value=None) as rejection,
