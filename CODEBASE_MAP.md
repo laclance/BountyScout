@@ -36,14 +36,14 @@
 - **function** `documentation_microfix()` — line 52
 - **class** `EffortEstimate` — line 125
 - **function** `estimate_effort_details()` — line 132
-- **function** `estimate_effort()` — line 273
-- **function** `effort_hours()` — line 278
-- **function** `competition()` — line 288
-- **function** `payment_confidence()` — line 299
-- **function** `reward_text()` — line 317
-- **function** `repo_activity()` — line 324
-- **function** `strategic_priority_score()` — line 340
-- **function** `build_candidate()` — line 385
+- **function** `estimate_effort()` — line 275
+- **function** `effort_hours()` — line 280
+- **function** `competition()` — line 290
+- **function** `payment_confidence()` — line 301
+- **function** `reward_text()` — line 319
+- **function** `repo_activity()` — line 326
+- **function** `strategic_priority_score()` — line 342
+- **function** `build_candidate()` — line 387
 
 ## `opportunity_scout.py`
 

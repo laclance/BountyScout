@@ -205,6 +205,19 @@ class EffortCalibrationTests(unittest.TestCase):
         )
         self.assertIn("target infrastructure/domain fit", backend["career_reasons"])
 
+    def test_architecture_environment_metadata_is_not_design_scope(self) -> None:
+        cloudflared = issue(
+            title="QUIC Hijack() skips the status-written check that HTTP/2 enforces",
+            body=(
+                "HTTP/2 refuses Hijack when status has not been written, but QUIC does not. "
+                "Both transports should enforce the same precondition. "
+                "OS: Linux. Architecture: AMD64. Version: 2026.9.1."
+            ),
+        )
+        estimate = scoring.estimate_effort_details(cloudflared)
+        self.assertEqual(estimate.bucket, "3–6h")
+        self.assertEqual(estimate.reasons, ("moderate implementation scope",))
+
     def test_existing_broad_scope_signals_remain_conservative(self) -> None:
         cases = (
             (issue(title="Architecture rewrite"), "1d+"),
