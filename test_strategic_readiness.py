@@ -110,7 +110,7 @@ class MaintainerReadinessTests(unittest.TestCase):
         ]
         self.assertEqual(
             readiness.maintainer_readiness_comment_state(issue(), comments),
-            (False, "maintainer requested diagnostics before implementation"),
+            (False, "maintainer is waiting for requested diagnostic evidence"),
         )
 
     def test_requested_diagnostic_is_cleared_when_evidence_arrives(self) -> None:
