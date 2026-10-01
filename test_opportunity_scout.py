@@ -2633,6 +2633,28 @@ class VerificationTests(unittest.TestCase):
             )
         rejection.assert_not_called()
 
+    def test_verify_strategic_uses_supplied_comments_and_handles_missing_repo(self) -> None:
+        fresh = issue(body="", title="Feature", comments=1)
+        supplied = [{"body": "Maintainer context"}]
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(scout, "strategic_rejection", return_value=None) as rejection,
+            patch.object(bounty, "issue_repo_and_number", return_value=(None, None)),
+        ):
+            self.assertEqual(
+                scout.verify(
+                    fresh,
+                    "t",
+                    {},
+                    {},
+                    activity_comments=supplied,
+                )[1],
+                "could not identify repository/issue number",
+            )
+        rejection.assert_called_once_with(fresh, supplied)
+
     def test_verify_non_payment_rejection_and_strategic_success(self) -> None:
         paid = issue(body="bounty $100", comments=0)
         with (
@@ -3079,6 +3101,42 @@ class DiscoveryTests(unittest.TestCase):
         self.assertTrue(
             any("verification coverage incomplete for g/g" in item["reason"] for item in audit)
         )
+
+    def test_discover_strategic_coverage_breaker_can_trip_on_last_row(self) -> None:
+        only = issue(
+            html_url="https://github.com/g/g/issues/1",
+            title="Regression",
+            labels=[{"name": "bug"}, {"name": "help wanted"}],
+        )
+        with (
+            patch.object(scout, "TARGET_REPOS", ["g/g"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(scout, "target_repo_issue_pool", return_value=([only], None)),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(scout, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(
+                scout,
+                "build_candidate",
+                return_value=candidate(
+                    url=only["html_url"],
+                    paid=False,
+                    priority_score=90,
+                    career_score=90,
+                ),
+            ),
+            patch.object(
+                scout,
+                "verify",
+                return_value=(None, "could not refresh source issue"),
+            ),
+            patch.object(scout, "STRATEGIC_REFRESH_FAILURE_LIMIT", 1),
+        ):
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual(found, [])
+        self.assertEqual(rejected["could not refresh source issue"], 1)
+        self.assertEqual(len(examples), 1)
+        self.assertEqual(audit, [])
 
     def test_discover_strategic_audits_target_source_failure(self) -> None:
         with (
