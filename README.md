@@ -47,9 +47,10 @@ Strategic discovery starts with a curated target list covering AWS/Kubernetes, c
 For each curated repository, the scout activity-inspects the top 15 plausible issues, then spends a small global overflow budget on strong recent bug or contributor-ready candidates that narrowly miss that cutoff. It ranks the full inspection pool from list metadata, then deep-verifies candidates in order until the top three verified slots are mathematically settled; the stopping bound includes the maximum score uplift from contribution-guide and recent-maintainer evidence. This preserves broad inspection while avoiding comment + refresh requests for candidates that cannot enter the kept set. Search depth is intentionally broader than the final queue. Verification refreshes the source issue and checks:
 
 - issue is still open and unassigned
-- no obvious active claim, including explicit "pick this up" or "willing to contribute a PR" ownership
+- no obvious active claim, including explicit ownership, concrete local implementation work, or an issue-numbered work branch linked by its author
 - no open implementation PR, including implementation links already present in the issue body
-- no explicit multi-child umbrella/tracking issue masquerading as one implementation task
+- no explicit multi-child umbrella/tracking issue masquerading as one implementation task, including maintainer-declared umbrella issues
+- no reporter-authored diagnostic/guidance questionnaire that still needs triage before implementation
 - no trusted maintainer-authored decision-stage or explicit no-PR hold
 - no automated CI/release tracking incident
 - no reporter-confirmed already-resolved issue
@@ -77,7 +78,7 @@ Each reported candidate includes:
 - scoring reasons
 - contribution-guide link when found
 
-The GitHub issue report also includes examples rejected during final verification. Repeated source/comment refresh failures produce a prominent incomplete-coverage warning, and incomplete runs do not advance seen-state.
+The GitHub issue report also includes examples rejected during final verification. Repeated source/comment/competition-verification failures produce a prominent incomplete-coverage warning, and incomplete runs do not advance seen-state.
 
 ## Workflow
 
