@@ -1695,7 +1695,7 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value=set()),
             patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
-            patch.object(scout, "discover_strategic", return_value=([], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             patch.object(bounty, "send_telegram_notification", return_value=False),
             patch.object(bounty, "save_seen_bounties") as save,
         ):
@@ -1930,10 +1930,11 @@ class CoverageGapTests(unittest.TestCase):
                 return_value=(candidate(url=cached["html_url"]), None),
             ),
         ):
-            found, rejected, examples = scout.discover_strategic(
+            found, rejected, examples, audit = scout.discover_strategic(
                 "t", {seen_item["html_url"]}, set(), cache, {}
             )
         self.assertEqual([x["url"] for x in found], [cached["html_url"]])
+        self.assertEqual(audit, [])
         fetch_meta.assert_not_called()
         self.assertEqual(rejected, {})
         self.assertEqual(examples, [])
@@ -1946,7 +1947,7 @@ class CoverageGapTests(unittest.TestCase):
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value=set()),
             patch.object(scout, "discover_paid", return_value=([high, low], {}, [])),
-            patch.object(scout, "discover_strategic", return_value=([], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
             patch.object(bounty, "save_seen_bounties", return_value=True),
         ):
@@ -1961,7 +1962,7 @@ class CoverageGapTests(unittest.TestCase):
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value=set()),
             patch.object(scout, "discover_paid", return_value=([item_], {}, [])),
-            patch.object(scout, "discover_strategic", return_value=([], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             patch.object(bounty, "send_telegram_notification") as tg,
             patch.object(bounty, "create_github_issue") as gh,
             patch.object(bounty, "save_seen_bounties") as save,
