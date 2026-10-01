@@ -391,6 +391,28 @@ def maintainer_issue_decision_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
+def manual_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
+    """Reject explicit umbrella issues that track multiple child implementation tasks."""
+    body = str(item.get("body", ""))
+    tracking_intent = bool(
+        re.search(
+            r"\b(?:track and resolve|track the following|tracking issue for)\b",
+            body,
+            re.IGNORECASE,
+        )
+    )
+    if not tracking_intent:
+        return None
+
+    child_issue_refs = re.findall(
+        r"(?m)^\s*[-*]\s*\[[ xX]\]\s*#\d+\b",
+        body,
+    )
+    if len(child_issue_refs) >= 3:
+        return "umbrella tracking issue, not a single implementation task"
+    return None
+
+
 def automated_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
     """Reject bot-maintained dashboards/trackers that are not contributor tasks."""
     title = str(item.get("title", ""))
