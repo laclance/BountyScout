@@ -21,6 +21,7 @@ from strategic_readiness import (
     issue_label_set as issue_label_set,
     maintainer_comment_authority as maintainer_comment_authority,
     maintainer_issue_decision_reason as maintainer_issue_decision_reason,
+    manual_tracking_issue_reason as manual_tracking_issue_reason,
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
     proposal_stage_signal as proposal_stage_signal,
     readiness_pending_label_reason as readiness_pending_label_reason,
@@ -554,6 +555,10 @@ def strategic_rejection(
     pending = bool(TRIAGE_PENDING_LABELS & label_set) or triage_pending_signal(labels_text)
     if pending and not accepted:
         return "awaiting maintainer triage"
+
+    manual_tracking_reason = manual_tracking_issue_reason(item)
+    if manual_tracking_reason:
+        return manual_tracking_reason
 
     tracking_reason = automated_tracking_issue_reason(item)
     if tracking_reason:
