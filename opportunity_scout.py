@@ -362,6 +362,120 @@ SUPPLEMENTAL_CLAIM_PATTERNS = [
 TRIAGE_PENDING_LABELS = {"needs-triage"}
 TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
 
+STRATEGIC_CLAIM_MAX_AGE_DAYS = 365
+
+
+def normalized_claim_text(text: str) -> str:
+    """Normalize apostrophes so common contractions share the same match path."""
+    return text.replace("’", "'").replace("‘", "'")
+
+
+def explicit_ownership_claim(text: str) -> bool:
+    """Recognize first-person statements that take ownership of implementation."""
+    patterns = (
+        r"\bi(?:'d| would) like to (?:work on|take|handle|implement|fix|resolve)\b",
+        r"\bi(?:'m| am) interested in working on\b",
+        r"\bi(?:'m| am) (?:taking|working on) (?:this|it|an independent pass)\b",
+        r"\bi can (?:take|work on|handle|implement|fix|resolve)\b",
+        r"\bi(?:'ll| will) (?:take|work on|handle|implement|fix|resolve)\b",
+        r"\bi(?:'ll| will) take a look at implementing\b",
+        r"\bbefore i (?:write|start writing) code\b",
+        r"\b(?:please|kindly) assign(?: it| this issue)? to me\b",
+        r"\bassign (?:this|it) to me\b",
+        r"/attempt\b",
+    )
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
+def implementation_underway_claim(text: str) -> bool:
+    """Recognize first-person evidence that implementation already exists or is underway."""
+    patterns = (
+        r"\bi(?:'ve| have) implemented\b",
+        r"\bi(?:'ve got| have(?: got)?) (?:a |the )?(?:fix|patch)\b",
+        r"\bi(?:'ve| have) added (?:unit |e2e |regression )?tests?\b",
+        r"\bi(?:'ve| have) tests? ready\b",
+        r"\bi(?:'m| am) (?:currently )?implementing\b",
+        r"\bi(?:'m| am) working on (?:a |the )?fix\b",
+        r"^\s*(?:currently implementing|working on (?:a |the )?fix)\b",
+        r"\bplanning (?:a |the )?fix\b",
+        r"\b(?:planning|plan) to (?:fix|work on|implement|handle)\b",
+        r"\bstarting (?:work on|a fix for)\b",
+        r"\bdelivered in pr\b",
+        r"\bsubmitted (?:a )?pr\b",
+    )
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
+def pr_intent_claim(text: str) -> bool:
+    """Recognize language that says the author intends to submit implementation work."""
+    patterns = (
+        r"\bi(?:'ll| will) open (?:a |the )?(?:pr|pull request)\b",
+        r"\bi can (?:send|open|submit) (?:a |the )?(?:pr|pull request)\b",
+        r"\bbefore i (?:open|submit) (?:a |the )?(?:pr|pull request)\b",
+        r"\bbefore submitting (?:a |the )?(?:pr|pull request)\b",
+        r"\bi(?:'m| am) preparing (?:a |the )?(?:pr|pull request)\b",
+        r"^\s*preparing (?:a |the )?(?:pr|pull request)\b",
+        r"\bwould (?:the )?(?:team|maintainers|you) welcome (?:a |the )?(?:pr|pull request)\b",
+        r"\bcan i submit (?:this|it|(?:a |the )?(?:pr|pull request))\b",
+    )
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
+def concrete_first_person_plan_claim(text: str) -> bool:
+    """Recognize a concrete implementation plan only when the author owns the work."""
+    return bool(
+        re.search(r"\bmy plan is to\b", text, re.IGNORECASE)
+        or re.search(
+            r"\bi(?:'m| am) going to "
+            r"(?:add|change|modify|update|implement|fix|refactor|write|remove|move|introduce)\b",
+            text,
+            re.IGNORECASE,
+        )
+    )
+
+
+def strategic_claim_text(text: str) -> bool:
+    """Return True only for language that clearly claims or performs implementation work."""
+    normalized = normalized_claim_text(text)
+    return (
+        explicit_ownership_claim(normalized)
+        or implementation_underway_claim(normalized)
+        or pr_intent_claim(normalized)
+        or concrete_first_person_plan_claim(normalized)
+    )
+
+
+def claim_source_is_recent(source: Mapping[str, Any], *, issue_body: bool = False) -> bool:
+    """Keep old claims from permanently suppressing strategic opportunities."""
+    timestamp = source.get("created_at") if issue_body else (
+        source.get("updated_at") or source.get("created_at")
+    )
+    stamp = bounty.parse_github_datetime(timestamp)
+    if stamp is None:
+        return True
+    age_days = max(0, (datetime.now(timezone.utc) - stamp).days)
+    return age_days <= STRATEGIC_CLAIM_MAX_AGE_DAYS
+
+
+def strategic_claim_reason(
+    item: Mapping[str, Any],
+    comments: list[dict[str, Any]],
+) -> str | None:
+    """Detect active implementation ownership in the issue body and recent comments."""
+    body = str(item.get("body", ""))
+    if body and claim_source_is_recent(item, issue_body=True) and strategic_claim_text(body):
+        return "issue author already has an implementation/fix in progress"
+
+    for comment in comments:
+        if not claim_source_is_recent(comment):
+            continue
+        body = str(comment.get("body", ""))
+        if strategic_claim_text(body):
+            author = (comment.get("user") or {}).get("login", "someone")
+            return f"active claim by @{author}"
+    return None
+
+
 
 def triage_pending_signal(labels_text: str) -> bool:
     """Recognize pending-triage label dialects used by target repositories."""
@@ -757,6 +871,28 @@ def extended_competition_reason(
         return reason
 
     return None
+
+
+def strategic_competition_reason(
+    item: Mapping[str, Any],
+    token: str | None,
+    comments: list[dict[str, Any]] | None = None,
+) -> str | None:
+    """Apply strategic-only competition checks without changing paid-bounty behavior."""
+    repo, number = bounty.issue_repo_and_number(item)
+    if not repo or not number:
+        return "could not identify repository/issue number"
+
+    reason = bounty.has_existing_implementation_pr(repo, number, token)
+    if reason:
+        return reason
+
+    comments = issue_comments(item, token) if comments is None else comments
+    reason = linked_open_pr_reason(item, token, comments)
+    if reason:
+        return reason
+
+    return strategic_claim_reason(item, comments)
 
 
 def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
@@ -1433,7 +1569,7 @@ def strategic_rejection(
     if diagnostic_reason:
         return diagnostic_reason
 
-    return extended_competition_reason(item, token, comments)
+    return strategic_competition_reason(item, token, comments)
 
 
 def verify(
