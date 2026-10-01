@@ -1,0 +1,23 @@
+name: One-shot Deep Scout Preview
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/scout-rerun-deep-once.yml
+      - scout_preview_once.py
+
+jobs:
+  scout:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Run deep scout preview
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scout_preview_once.py
