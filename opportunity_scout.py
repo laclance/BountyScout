@@ -1331,8 +1331,6 @@ def discover_strategic(
 
     for items in source_batches:
         for item in items:
-            if not isinstance(item, dict):
-                continue
             url = item.get("html_url")
             if not url or url in seen or url in paid_urls or url in touched:
                 continue
