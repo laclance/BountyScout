@@ -353,4 +353,3 @@ def strategic_repo_slots_settled(
         for row in remaining
     )
     return best_remaining <= cutoff
-
