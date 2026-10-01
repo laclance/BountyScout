@@ -187,6 +187,21 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
     docs_signal = bool(
         re.search(r"\b(?:docs?|documentation|readme)\b", f"{title}\n{labels}", re.IGNORECASE)
     )
+    broad_docs = bool(
+        docs_signal
+        and (
+            re.search(
+                r"\b(?:all|every|each)\s+(?:the\s+)?(?:grpc\s+)?services?\b|"
+                r"\b(?:generated?|generate)\s+(?:docs?|documentation)\b|"
+                r"\bdocs?\s+(?:generated|generation)\b|"
+                r"\bhost(?:ed|ing)?\s+(?:them\s+)?on\s+(?:the\s+)?website\b|"
+                r"\ball\s+in\s+one\s+place\b",
+                text,
+            )
+        )
+    )
+    if broad_docs:
+        return EffortEstimate("6–12h", ("cross-service documentation/generation scope",))
     if docs_signal and file_refs == 0 and len(prose) < 4500:
         return EffortEstimate("1–3h", ("bounded documentation change",))
 
