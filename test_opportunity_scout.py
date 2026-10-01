@@ -127,11 +127,14 @@ class BasicHeuristicTests(unittest.TestCase):
         ):
             items, error = scout.target_repo_issue_pool("grpc/grpc-go", "t")
         self.assertIsNone(error)
-        self.assertEqual([item["html_url"] for item in items], [
-            i1["html_url"],
-            i2["html_url"],
-            i3["html_url"],
-        ])
+        self.assertEqual(
+            [item["html_url"] for item in items],
+            [
+                i1["html_url"],
+                i2["html_url"],
+                i3["html_url"],
+            ],
+        )
         self.assertEqual(getter.call_count, 2)
         self.assertIn("page=2", getter.call_args.args[0])
 
