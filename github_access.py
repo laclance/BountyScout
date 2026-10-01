@@ -103,9 +103,7 @@ def contribution_guide(
     getter: Callable[[str, str | None], Any] | None = None,
 ) -> str | None:
     """Return the first contribution guide found at common repository paths."""
-    load = getter or (
-        lambda url, auth: github_get(url, auth, timeout=10, log_errors=False)
-    )
+    load = getter or (lambda url, auth: github_get(url, auth, timeout=10, log_errors=False))
     for path in ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"):
         data = load(
             f"https://api.github.com/repos/{repo}/contents/{urllib.parse.quote(path)}",
