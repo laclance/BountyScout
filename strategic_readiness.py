@@ -557,6 +557,11 @@ def manual_tracking_issue_reason(
     comments: list[dict[str, Any]] | None = None,
 ) -> str | None:
     """Reject explicit umbrella issues that track multiple child implementation tasks."""
+    author_association = str(item.get("author_association", "")).upper()
+    normalized_issue_body = normalized_claim_text(str(item.get("body", ""))).lower()
+    if author_association in TRUSTED_ASSOCIATIONS and "umbrella issue" in normalized_issue_body:
+        return "umbrella tracking issue, not a single implementation task"
+
     for comment in comments or []:
         association = str(comment.get("author_association", "")).upper()
         body = normalized_claim_text(str(comment.get("body", ""))).lower()
@@ -661,6 +666,7 @@ def release_tracking_reason(
     if re.search(
         r"\brelease(?:\s+\S+){0,2}\s+(?:tracking|tracker|checklist|planning)\b|"
         r"\b(?:tracking|tracker|checklist)\s+(?:for\s+)?release\b|"
+        r"\bplan(?:ned|ning)?\s+to\s+release\b|"
         r"\bplanned(?:\s+\S+){0,3}\s+release\b",
         tracking_text,
     ) or ("announcement" in labels and "release" in tracking_text):
