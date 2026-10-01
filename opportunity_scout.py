@@ -756,6 +756,7 @@ def maintainer_readiness_comment_state(
 
     return state, reason
 
+
 def readiness_pending_label_reason(
     item: Mapping[str, Any],
     ready_override: bool = False,
@@ -780,7 +781,6 @@ def readiness_pending_label_reason(
     return None
 
 
-
 def abandoned_lifecycle_reason(
     item: Mapping[str, Any],
     ready_override: bool = False,
@@ -791,6 +791,7 @@ def abandoned_lifecycle_reason(
     if "lifecycle/rotten" in issue_label_set(item):
         return "issue is in an abandoned/rotten lifecycle state"
     return None
+
 
 def automated_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
     """Reject bot-maintained dashboards/trackers that are not contributor tasks."""
