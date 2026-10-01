@@ -20,6 +20,7 @@ from strategic_readiness import (
     automated_tracking_issue_reason as automated_tracking_issue_reason,
     issue_label_set as issue_label_set,
     maintainer_comment_authority as maintainer_comment_authority,
+    maintainer_issue_decision_reason as maintainer_issue_decision_reason,
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
     proposal_stage_signal as proposal_stage_signal,
     readiness_pending_label_reason as readiness_pending_label_reason,
@@ -562,6 +563,10 @@ def strategic_rejection(
     if release_reason:
         return release_reason
 
+    decision_reason = maintainer_issue_decision_reason(item)
+    if decision_reason:
+        return decision_reason
+
     if comment_hold_reason:
         return comment_hold_reason
 
@@ -772,6 +777,9 @@ def discover_paid(
 
 def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     """Flag strong raw results that deserve scrutiny when filters discard them."""
+    if automated_tracking_issue_reason(item) or release_tracking_reason(item):
+        return False
+
     _, _, labels, text = issue_text(item)
     updated = bounty.parse_github_datetime(item.get("updated_at"))
     recent = bool(updated and (datetime.now(timezone.utc) - updated).days <= 60)
