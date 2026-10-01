@@ -589,7 +589,46 @@ def build_candidate(
         created = bounty.parse_github_datetime(item.get("created_at"))
         updated = bounty.parse_github_datetime(item.get("updated_at"))
         created_days = max(0, (now - created).days) if created else None
-        updated_days = max(0, (now - updated).days) if updated else None
+
+        recent_comment_days: int | None = None
+        recent_maintainer_days: int | None = None
+        latest_bot_comment: datetime | None = None
+        latest_human_comment: datetime | None = None
+        for comment in activity_comments or []:
+            stamp = bounty.parse_github_datetime(
+                comment.get("updated_at") or comment.get("created_at")
+            )
+            if not stamp:
+                continue
+
+            login = str((comment.get("user") or {}).get("login", "")).lower()
+            if login.endswith("[bot]"):
+                if latest_bot_comment is None or stamp > latest_bot_comment:
+                    latest_bot_comment = stamp
+                continue
+
+            if latest_human_comment is None or stamp > latest_human_comment:
+                latest_human_comment = stamp
+            days = max(0, (now - stamp).days)
+            if recent_comment_days is None or days < recent_comment_days:
+                recent_comment_days = days
+            association = str(comment.get("author_association", "")).upper()
+            if association in TRUSTED_ASSOCIATIONS and (
+                recent_maintainer_days is None or days < recent_maintainer_days
+            ):
+                recent_maintainer_days = days
+
+        effective_updated = updated
+        if (
+            updated is not None
+            and latest_bot_comment is not None
+            and abs((updated - latest_bot_comment).total_seconds()) <= 300
+            and (latest_human_comment is None or latest_human_comment < latest_bot_comment)
+        ):
+            effective_updated = latest_human_comment or created
+        updated_days = (
+            max(0, (now - effective_updated).days) if effective_updated else None
+        )
 
         if updated_days is not None:
             if updated_days <= 14:
@@ -601,23 +640,6 @@ def build_candidate(
             elif updated_days <= 180:
                 career += 2
                 career_reasons.append("issue active in last 180d")
-
-        recent_comment_days: int | None = None
-        recent_maintainer_days: int | None = None
-        for comment in activity_comments or []:
-            stamp = bounty.parse_github_datetime(
-                comment.get("updated_at") or comment.get("created_at")
-            )
-            if not stamp:
-                continue
-            days = max(0, (now - stamp).days)
-            if recent_comment_days is None or days < recent_comment_days:
-                recent_comment_days = days
-            association = str(comment.get("author_association", "")).upper()
-            if association in TRUSTED_ASSOCIATIONS and (
-                recent_maintainer_days is None or days < recent_maintainer_days
-            ):
-                recent_maintainer_days = days
 
         if recent_maintainer_days is not None and recent_maintainer_days <= 90:
             career += 8
