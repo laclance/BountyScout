@@ -34,7 +34,7 @@
 - **function** `issue_text()` — line 32
 - **function** `code_reference_count()` — line 48
 - **function** `documentation_microfix()` — line 52
-- **class** `EffortEstimate()` — line 163
+- **class** `EffortEstimate` — line 163
 - **function** `estimate_effort_details()` — line 170
 - **function** `estimate_effort()` — line 334
 - **function** `effort_hours()` — line 339
