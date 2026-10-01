@@ -135,6 +135,18 @@ def code_reference_count(text: str) -> int:
     return len({match.group(0).lower() for match in CODE_FILE_RE.finditer(text)})
 
 
+def strategic_basic_candidate(item: Mapping[str, Any]) -> bool:
+    """Apply basic eligibility without treating comment volume as disqualifying."""
+    if bounty.is_clean_candidate(item):
+        return True
+    if int(item.get("comments") or 0) <= bounty.MAX_COMMENTS:
+        return False
+
+    relaxed = dict(item)
+    relaxed["comments"] = bounty.MAX_COMMENTS
+    return bounty.is_clean_candidate(relaxed)
+
+
 def documentation_microfix(item: Mapping[str, Any]) -> bool:
     """Detect tiny docs-only edits that should not outrank substantive code work."""
     title, body, labels, text = issue_text(item)
@@ -1082,7 +1094,7 @@ def strategic_rejection(
     token: str | None,
     comments: list[dict[str, Any]] | None = None,
 ) -> str | None:
-    if not bounty.is_clean_candidate(item):
+    if not strategic_basic_candidate(item):
         return "failed basic eligibility filter"
     _, _, labels, text = issue_text(item)
     if "oss opportunity queue" in text:
@@ -1146,7 +1158,12 @@ def verify(
         if fresh is None:
             return None, "could not refresh upstream issue from aggregator wrapper"
 
-    if not bounty.is_clean_candidate(fresh):
+    clean = (
+        bounty.is_clean_candidate(fresh)
+        if require_paid
+        else strategic_basic_candidate(fresh)
+    )
+    if not clean:
         return None, "failed basic eligibility filter after source refresh"
 
     issue_signal = bounty.payment_signal(fresh) or supplemental_payment_signal(fresh)
@@ -1340,11 +1357,6 @@ def basic_rejection_audit_reason(item: Mapping[str, Any]) -> str | None:
         )
     ):
         return None
-    if int(item.get("comments") or 0) > bounty.MAX_COMMENTS:
-        return (
-            f"strong-looking result rejected because thread has more than "
-            f"{bounty.MAX_COMMENTS} comments; review competition cutoff"
-        )
     if any(
         term in title or term in body
         for term in (
@@ -1439,7 +1451,7 @@ def discover_strategic(
             if not url or url in seen or url in paid_urls or url in touched:
                 continue
             touched.add(url)
-            if not bounty.is_clean_candidate(item):
+            if not strategic_basic_candidate(item):
                 audit_reason = (
                     basic_rejection_audit_reason(item) if possible_miss_signal(item) else None
                 )
