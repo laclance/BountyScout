@@ -84,12 +84,9 @@ class FakeResponse:
 
 
 class BasicHeuristicTests(unittest.TestCase):
-    def test_target_repo_queries_chunk_all_targets(self) -> None:
+    def test_target_repo_queries_give_each_target_its_own_budget(self) -> None:
         queries = scout.target_repo_queries()
-        expected = (
-            len(scout.TARGET_REPOS) + scout.TARGET_REPO_QUERY_CHUNK - 1
-        ) // scout.TARGET_REPO_QUERY_CHUNK
-        self.assertEqual(len(queries), expected)
+        self.assertEqual(len(queries), len(scout.TARGET_REPOS))
         joined = " ".join(queries)
         for repo in scout.TARGET_REPOS:
             self.assertIn(f"repo:{repo}", joined)
@@ -863,7 +860,7 @@ class CalibrationTests(unittest.TestCase):
 
 
 class CandidateTests(unittest.TestCase):
-    def test_strategic_age_penalties_skip_maintainer_ready_work(self) -> None:
+    def test_strategic_freshness_uses_issue_and_comment_activity(self) -> None:
         now = datetime.now(timezone.utc)
         old = scout.build_candidate(
             issue(
@@ -871,6 +868,7 @@ class CandidateTests(unittest.TestCase):
                 body="network regression",
                 comments=0,
                 created_at=(now - timedelta(days=900)).isoformat(),
+                updated_at=(now - timedelta(days=500)).isoformat(),
             ),
             "strategic",
             None,
@@ -883,11 +881,52 @@ class CandidateTests(unittest.TestCase):
                 body="network regression",
                 comments=0,
                 created_at=(now - timedelta(days=500)).isoformat(),
+                updated_at=(now - timedelta(days=250)).isoformat(),
             ),
             "strategic",
             None,
             repo_meta(),
             None,
+        )
+        active_old = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=2,
+                created_at=(now - timedelta(days=900)).isoformat(),
+                updated_at=(now - timedelta(days=20)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            [
+                {
+                    "body": "Still worth fixing.",
+                    "created_at": (now - timedelta(days=10)).isoformat(),
+                    "author_association": "MEMBER",
+                }
+            ],
+        )
+        discussion = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=2,
+                created_at=(now - timedelta(days=900)).isoformat(),
+                updated_at=(now - timedelta(days=120)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            [
+                {
+                    "body": "Reproduced.",
+                    "created_at": (now - timedelta(days=5)).isoformat(),
+                    "author_association": "NONE",
+                }
+            ],
         )
         ready = scout.build_candidate(
             issue(
@@ -895,6 +934,7 @@ class CandidateTests(unittest.TestCase):
                 body="network regression",
                 comments=0,
                 created_at=(now - timedelta(days=900)).isoformat(),
+                updated_at=(now - timedelta(days=500)).isoformat(),
                 labels=[{"name": "help wanted"}],
             ),
             "strategic",
@@ -908,6 +948,7 @@ class CandidateTests(unittest.TestCase):
                 body="network regression",
                 comments=0,
                 created_at=(now - timedelta(days=900)).isoformat(),
+                updated_at=(now - timedelta(days=500)).isoformat(),
             ),
             "paid",
             "payment term + amount: $25",
@@ -920,6 +961,7 @@ class CandidateTests(unittest.TestCase):
                 body="network regression",
                 comments=0,
                 created_at=(now - timedelta(days=30)).isoformat(),
+                updated_at=(now - timedelta(days=3)).isoformat(),
             ),
             "strategic",
             None,
@@ -927,12 +969,16 @@ class CandidateTests(unittest.TestCase):
             None,
         )
 
-        self.assertIn("stale backlog age penalty", old["career_reasons"])
-        self.assertIn("older backlog age penalty", middle["career_reasons"])
-        self.assertNotIn("stale backlog age penalty", ready["career_reasons"])
-        self.assertNotIn("stale backlog age penalty", paid["career_reasons"])
-        self.assertNotIn("older backlog age penalty", fresh["career_reasons"])
-        self.assertLess(old["career_score"], ready["career_score"])
+        self.assertIn("stale inactive backlog penalty", old["career_reasons"])
+        self.assertIn("older inactive backlog penalty", middle["career_reasons"])
+        self.assertIn("issue active in last 60d", active_old["career_reasons"])
+        self.assertIn("recent maintainer activity", active_old["career_reasons"])
+        self.assertIn("recent active discussion", discussion["career_reasons"])
+        self.assertNotIn("stale inactive backlog penalty", active_old["career_reasons"])
+        self.assertNotIn("stale inactive backlog penalty", ready["career_reasons"])
+        self.assertNotIn("stale inactive backlog penalty", paid["career_reasons"])
+        self.assertIn("issue active in last 14d", fresh["career_reasons"])
+        self.assertLess(old["career_score"], active_old["career_score"])
 
     def test_build_paid_candidate_scoring(self) -> None:
         item_ = issue(
@@ -1308,31 +1354,54 @@ class VerificationTests(unittest.TestCase):
 
 
 class DiscoveryTests(unittest.TestCase):
-    def test_strategic_verification_items_diversifies_and_caps(self) -> None:
+    def test_strategic_inspection_items_keeps_top_fifteen_per_repo(self) -> None:
         rows = [
-            (100, 100, 0, issue(html_url="bad")),
-            (99, 99, 0, issue(html_url="https://github.com/a/a/issues/1")),
-            (98, 98, 0, issue(html_url="https://github.com/a/a/issues/2")),
-            (97, 97, 0, issue(html_url="https://github.com/a/a/issues/3")),
-            (96, 96, 0, issue(html_url="https://github.com/b/b/issues/1")),
-            (95, 95, 0, issue(html_url="https://github.com/b/b/issues/2")),
-            (94, 94, 0, issue(html_url="https://github.com/c/c/issues/1")),
+            (
+                100 - i,
+                100 - i,
+                0,
+                issue(html_url=f"https://github.com/a/a/issues/{i + 1}"),
+            )
+            for i in range(18)
         ]
-        with (
-            patch.object(scout, "STRATEGIC_VERIFY_PER_REPO", 2),
-            patch.object(scout, "STRATEGIC_VERIFY_LIMIT", 4),
-        ):
-            selected = scout.strategic_verification_items(rows)
-
-        self.assertEqual(
-            [item["html_url"] for item in selected],
+        rows.extend(
             [
-                "https://github.com/a/a/issues/1",
-                "https://github.com/a/a/issues/2",
-                "https://github.com/b/b/issues/1",
-                "https://github.com/b/b/issues/2",
-            ],
+                (90, 90, 0, issue(html_url="https://github.com/b/b/issues/1")),
+                (89, 89, 0, issue(html_url="https://github.com/b/b/issues/2")),
+                (120, 120, 0, issue(html_url="bad")),
+            ]
         )
+        selected = scout.strategic_inspection_items(rows)
+
+        self.assertEqual(len(selected["a/a"]), 15)
+        self.assertEqual(len(selected["b/b"]), 2)
+        self.assertEqual(
+            selected["a/a"][0]["html_url"],
+            "https://github.com/a/a/issues/1",
+        )
+        self.assertNotIn("bad", selected)
+
+    def test_possible_miss_signal_and_audit_cap(self) -> None:
+        now = datetime.now(timezone.utc)
+        strong = issue(
+            title="Regression in proxy",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+            updated_at=(now - timedelta(days=3)).isoformat(),
+        )
+        stale = issue(
+            title="Old bug",
+            labels=[{"name": "bug"}],
+            updated_at=(now - timedelta(days=200)).isoformat(),
+        )
+        self.assertTrue(scout.possible_miss_signal(strong))
+        self.assertFalse(scout.possible_miss_signal(stale))
+
+        audit: list[dict[str, Any]] = []
+        with patch.object(scout, "STRATEGIC_AUDIT_LIMIT", 2):
+            scout.add_audit(audit, strong, "one")
+            scout.add_audit(audit, strong, "two")
+            scout.add_audit(audit, strong, "three")
+        self.assertEqual(len(audit), 2)
 
     def test_discover_strategic_rejects_below_quality_floor(self) -> None:
         low = issue(html_url="https://github.com/g/g/issues/3", title="Feature")
@@ -1361,9 +1430,12 @@ class DiscoveryTests(unittest.TestCase):
                 ),
             ),
         ):
-            found, rejected, examples = scout.discover_strategic("t", set(), set(), {}, {})
+            found, rejected, examples, audit = scout.discover_strategic(
+                "t", set(), set(), {}, {}
+            )
 
         self.assertEqual(found, [])
+        self.assertEqual(audit, [])
         reason = "career score 40/100 below strategic threshold 55/100"
         self.assertEqual(rejected[reason], 1)
         self.assertEqual(examples[0]["reason"], reason)
@@ -1454,7 +1526,7 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(
                 scout,
                 "build_candidate",
-                side_effect=lambda item_, lane, signal, meta_, guide: candidate(
+                side_effect=lambda item_, lane, signal, meta_, guide, *rest: candidate(
                     url=item_["html_url"],
                     paid=(lane == "paid"),
                     priority_score=90 if item_ is paid else 80,
@@ -1468,8 +1540,11 @@ class DiscoveryTests(unittest.TestCase):
                 ),
             ),
         ):
-            found, rejected, examples = scout.discover_strategic("t", set(), set(), {}, {})
+            found, rejected, examples, audit = scout.discover_strategic(
+                "t", set(), set(), {}, {}
+            )
         self.assertEqual([x["url"] for x in found], [good["html_url"]])
+        self.assertEqual(audit, [])
         self.assertEqual(rejected["reject"], 1)
         self.assertEqual(examples[0]["url"], paid["html_url"])
 
@@ -1531,7 +1606,7 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.dict(os.environ, {}, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value=set()),
             patch.object(scout, "discover_paid", return_value=([], {}, [])),
-            patch.object(scout, "discover_strategic", return_value=([], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             io.StringIO() as buf,
             redirect_stdout(buf),
         ):
@@ -1567,7 +1642,22 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value={"old"}),
             patch.object(scout, "discover_paid", return_value=([low, high], {"r1": 1}, [reject])),
-            patch.object(scout, "discover_strategic", return_value=([strategic], {"r2": 2}, [])),
+            patch.object(
+                scout,
+                "discover_strategic",
+                return_value=(
+                    [strategic],
+                    {"r2": 2},
+                    [],
+                    [
+                        {
+                            "url": "https://github.com/acme/missed/issues/9",
+                            "title": "Possible miss",
+                            "reason": "strong-looking near miss",
+                        }
+                    ],
+                ),
+            ),
             patch.object(bounty, "send_telegram_notification", return_value=True) as tg,
             patch.object(bounty, "send_discord_notification", return_value=False) as dc,
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
