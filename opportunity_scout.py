@@ -956,7 +956,7 @@ def build_candidate(
 
     if lane == "strategic" and documentation_microfix(item):
         career = min(career, 45)
-        career_reasons.append("documentation-only micro-fix cap")
+        career_reasons.insert(0, "documentation-only micro-fix cap")
 
     career = max(0, min(100, career))
 
@@ -1342,7 +1342,7 @@ def basic_rejection_audit_reason(item: Mapping[str, Any]) -> str | None:
         )
     ):
         return None
-    return "strong-looking result rejected by an unrecognized basic eligibility rule"
+    return "strong-looking result rejected by an unrecognized basic eligibility filter rule"
 
 
 def add_audit(
