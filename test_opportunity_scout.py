@@ -2312,7 +2312,8 @@ class DiscoveryTests(unittest.TestCase):
                 (120, 120, 0, issue(html_url="bad")),
             ]
         )
-        selected = scout.strategic_inspection_items(rows)
+        with patch.object(scout, "STRATEGIC_ADAPTIVE_INSPECT_BUDGET", 0):
+            selected = scout.strategic_inspection_items(rows)
 
         self.assertEqual(len(selected["a/a"]), 15)
         self.assertEqual(len(selected["b/b"]), 2)
@@ -2321,6 +2322,39 @@ class DiscoveryTests(unittest.TestCase):
             "https://github.com/a/a/issues/1",
         )
         self.assertNotIn("bad", selected)
+
+    def test_strategic_inspection_adaptively_adds_contributor_wanted_overflow(self) -> None:
+        old = datetime.now(timezone.utc) - timedelta(days=300)
+        rows = [
+            (
+                100 - i,
+                100 - i,
+                0,
+                issue(
+                    html_url=f"https://github.com/a/a/issues/{i + 1}",
+                    title="ordinary task",
+                    updated_at=old.isoformat(),
+                ),
+            )
+            for i in range(15)
+        ]
+        strong = issue(
+            html_url="https://github.com/a/a/issues/16",
+            title="Add query parameter middleware",
+            labels=[{"name": "contributor/wanted"}],
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        rows.append((70, 70, 0, strong))
+
+        with (
+            patch.object(scout, "STRATEGIC_INSPECT_PER_REPO", 15),
+            patch.object(scout, "STRATEGIC_ADAPTIVE_INSPECT_BUDGET", 1),
+        ):
+            selected = scout.strategic_inspection_items(rows)
+
+        self.assertEqual(len(selected["a/a"]), 16)
+        self.assertEqual(selected["a/a"][-1]["html_url"], strong["html_url"])
+        self.assertTrue(scout.possible_miss_signal(strong))
 
     def test_basic_rejection_audit_reason_filters_known_noise(self) -> None:
         self.assertIsNone(scout.basic_rejection_audit_reason(issue(pull_request={"url": "x"})))
@@ -2527,11 +2561,12 @@ class DiscoveryTests(unittest.TestCase):
                 return_value=(candidate(url=best["html_url"], paid=False, career_score=90), None),
             ),
             patch.object(scout, "STRATEGIC_INSPECT_PER_REPO", 1),
+            patch.object(scout, "STRATEGIC_ADAPTIVE_INSPECT_BUDGET", 0),
         ):
             found, _, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
         self.assertEqual([item["url"] for item in found], [best["html_url"]])
-        self.assertTrue(any("top-15 inspection pool" in item["reason"] for item in audit))
+        self.assertTrue(any("adaptive repo inspection pool" in item["reason"] for item in audit))
         self.assertFalse(any(item["url"] == dirty_weak["html_url"] for item in audit))
         self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
 
