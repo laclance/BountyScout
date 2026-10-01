@@ -342,6 +342,8 @@ class BasicHeuristicTests(unittest.TestCase):
     def test_reward_text_and_repo_activity(self) -> None:
         self.assertIsNone(scout.reward_text(None))
         self.assertEqual(scout.reward_text("reward 25 CAD"), "25 CAD")
+        self.assertEqual(scout.reward_text("20 USDC bounty"), "20 USDC")
+        self.assertIsNone(scout.reward_text("Ethereum-mainnet ERC-20 USDC/USDT address"))
         self.assertIsNone(scout.reward_text("funded externally"))
 
         self.assertEqual(scout.repo_activity({}), "unknown")
@@ -396,6 +398,16 @@ class HttpAndPlatformTests(unittest.TestCase):
             scout.supplemental_payment_signal(issue(body="See https://bountyhub.dev/x — $90")),
             "named bounty platform + amount (BountyHub): $90",
         )
+        self.assertIsNone(
+            scout.supplemental_payment_signal(
+                issue(
+                    body=(
+                        "See https://bountyhub.dev/x — Ethereum-mainnet "
+                        "ERC-20 USDC/USDT address"
+                    )
+                )
+            )
+        )
         self.assertIsNone(scout.supplemental_payment_signal(issue(body="maybe paid someday")))
 
     def test_comment_payment_confirmations_and_commands(self) -> None:
@@ -449,6 +461,17 @@ class HttpAndPlatformTests(unittest.TestCase):
         ):
             self.assertEqual(
                 scout.comment_payment_signal(issue(), "t"), "explicit /bounty comment: $88"
+            )
+
+        with patch.object(
+            scout,
+            "issue_comments",
+            return_value=[
+                {"body": "/bounty 50 USDT", "author_association": "MEMBER", "user": {"login": "m"}}
+            ],
+        ):
+            self.assertEqual(
+                scout.comment_payment_signal(issue(), "t"), "explicit /bounty comment: 50 USDT"
             )
 
         with patch.object(
