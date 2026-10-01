@@ -26,6 +26,7 @@ from strategic_readiness import (
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
     proposal_stage_signal as proposal_stage_signal,
     reporter_resolution_reason as reporter_resolution_reason,
+    reporter_support_triage_reason as reporter_support_triage_reason,
     reward_history_reason as reward_history_reason,
     security_disclosure_reason as security_disclosure_reason,
     readiness_pending_label_reason as readiness_pending_label_reason,
@@ -567,7 +568,11 @@ def strategic_rejection(
     if security_reason:
         return security_reason
 
-    manual_tracking_reason = manual_tracking_issue_reason(item)
+    support_reason = reporter_support_triage_reason(item)
+    if support_reason:
+        return support_reason
+
+    manual_tracking_reason = manual_tracking_issue_reason(item, comments)
     if manual_tracking_reason:
         return manual_tracking_reason
 
@@ -1045,6 +1050,7 @@ def discover_strategic(
     source_failure_reasons = {
         "could not refresh source issue",
         "could not refresh issue comments",
+        "could not verify open implementation PR search",
     }
 
     def verify_repo(
@@ -1237,13 +1243,14 @@ def main() -> None:
         for reason in (
             "could not refresh source issue",
             "could not refresh issue comments",
+            "could not verify open implementation PR search",
         )
     )
     coverage_warning = None
     if source_failures >= STRATEGIC_COVERAGE_WARNING_THRESHOLD:
         coverage_warning = (
             "Strategic verification coverage is incomplete: "
-            f"{source_failures} source/comment refreshes failed, so this ranking may omit "
+            f"{source_failures} source/comment/competition checks failed, so this ranking may omit "
             "stronger candidates. Seen-state will not be advanced for this run."
         )
         print(f"WARNING: {coverage_warning}")
