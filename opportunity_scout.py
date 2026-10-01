@@ -1514,17 +1514,8 @@ def discover_strategic(
             )
 
         ranked.sort(key=lambda row: row[:3], reverse=True)
-        kept = 0
+        verified_repo: list[dict[str, Any]] = []
         for _, _, _, item, comments in ranked:
-            if kept >= STRATEGIC_KEEP_PER_REPO:
-                if possible_miss_signal(item):
-                    add_audit(
-                        audit,
-                        item,
-                        "not fully verified because three stronger candidates from this repo already survived",
-                    )
-                continue
-
             candidate, reason = verify(
                 item,
                 token,
@@ -1553,8 +1544,18 @@ def discover_strategic(
                 print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
                 continue
 
-            found.append(candidate)
-            kept += 1
+            verified_repo.append(candidate)
+
+        verified_repo.sort(
+            key=lambda item: (
+                item["priority_score"],
+                item["career_score"],
+                item["cash_score"],
+                -item["comments"],
+            ),
+            reverse=True,
+        )
+        found.extend(verified_repo[:STRATEGIC_KEEP_PER_REPO])
 
     return found, rejected, examples, audit
 
