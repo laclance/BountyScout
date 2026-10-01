@@ -14,6 +14,7 @@ from typing import Any, Collection, Mapping
 import scout_bounties as bounty
 from strategic_readiness import TRUSTED_ASSOCIATIONS
 
+
 def maintainer_ready_signal(labels_text: str) -> bool:
     """Recognize common contributor-ready label dialects."""
     normalized = re.sub(r"[-_]+", " ", labels_text.lower())
@@ -314,8 +315,6 @@ def repo_activity(repo_meta: Mapping[str, Any]) -> str:
     return f"{bucket} ({repo_meta.get('pushed_at')})"
 
 
-
-
 def build_candidate(
     item: Mapping[str, Any],
     lane: str,
@@ -614,5 +613,3 @@ def build_candidate(
         "updated_at": item.get("updated_at"),
         "rejection_reason": None,
     }
-
-
