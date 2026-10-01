@@ -500,6 +500,27 @@ def security_disclosure_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
+def reward_history_reason(item: Mapping[str, Any]) -> str | None:
+    """Reject payout summaries/leaderboards that are not open paid work."""
+    title = str(item.get("title", "")).lower()
+    body = str(item.get("body", "")).lower()
+    labels = _labels_text(item)
+
+    leaderboard = "hall-of-fame" in labels or "hall of fame" in title
+    payout_summary = any(
+        marker in body
+        for marker in (
+            "total bounty distributed",
+            "top contributors",
+            "fastest fixes",
+            "monthly stats",
+        )
+    )
+    if leaderboard and payout_summary:
+        return "bounty history/leaderboard, not an open paid task"
+    return None
+
+
 def manual_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
     """Reject explicit umbrella issues that track multiple child implementation tasks."""
     body = str(item.get("body", ""))
