@@ -236,6 +236,10 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
             "need more discussion",
             "need to discuss this first",
             "should discuss this first",
+            "being discussed on spec level",
+            "being discussed at the spec level",
+            "spec-level discussion",
+            "specification discussion is ongoing",
         )
     ):
         return "maintainer says issue still needs discussion", False
@@ -388,6 +392,84 @@ def maintainer_issue_decision_reason(item: Mapping[str, Any]) -> str | None:
         body,
     ):
         return "maintainer-authored issue is still deciding implementation semantics"
+    return None
+
+
+def maintainer_submission_hold_reason(item: Mapping[str, Any]) -> str | None:
+    """Reject trusted maintainer-authored issues that explicitly tell contributors not to PR."""
+    association = str(item.get("author_association", "")).upper()
+    if association not in TRUSTED_ASSOCIATIONS:
+        return None
+
+    body = normalized_claim_text(str(item.get("body", ""))).lower()
+    if any(
+        marker in body
+        for marker in (
+            "do not open a pr for this issue",
+            "don't open a pr for this issue",
+            "do not submit a pr for this issue",
+            "don't submit a pr for this issue",
+            "do not open a pull request for this issue",
+            "don't open a pull request for this issue",
+        )
+    ) or re.search(
+        r"\b(?:a |the )?(?:pr|pull request).{0,80}\bwill be closed\b",
+        body,
+        re.DOTALL,
+    ):
+        return "maintainer explicitly says not to open a PR for this issue"
+    return None
+
+
+def reporter_resolution_reason(
+    item: Mapping[str, Any],
+    comments: list[dict[str, Any]] | None,
+) -> str | None:
+    """Use the issue reporter's latest explicit status to reject already-resolved reports."""
+    reporter = str((item.get("user") or {}).get("login", "")).lower()
+    if not reporter:
+        return None
+
+    latest_state: bool | None = None
+    for comment in comments or []:
+        login = str((comment.get("user") or {}).get("login", "")).lower()
+        if login != reporter:
+            continue
+        body = normalized_claim_text(str(comment.get("body", ""))).lower()
+
+        if any(
+            marker in body
+            for marker in (
+                "still reproduces",
+                "still reproducible",
+                "not fixed",
+                "isn't fixed",
+                "issue is still present",
+                "problem is still present",
+            )
+        ):
+            latest_state = False
+            continue
+
+        if any(
+            marker in body
+            for marker in (
+                "issue got fixed",
+                "issue is fixed",
+                "problem got fixed",
+                "problem is fixed",
+                "no longer reproduces",
+                "can't reproduce anymore",
+                "cannot reproduce anymore",
+            )
+        ) or (
+            "don't see it" in body
+            and any(marker in body for marker in ("latest version", "latest release", "current version"))
+        ):
+            latest_state = True
+
+    if latest_state is True:
+        return "issue reporter says the problem is already resolved"
     return None
 
 
