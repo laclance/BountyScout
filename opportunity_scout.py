@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import json
 import os
 import re
-import urllib.parse
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from threading import Lock
 from time import monotonic
-from typing import Any, Mapping, cast
+from typing import Any, Mapping
 
 import scout_bounties as bounty
 import opportunity_scoring as scoring
