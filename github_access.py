@@ -81,20 +81,33 @@ def repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def issue_comments(
+def issue_comments_checked(
     item: Mapping[str, Any],
     token: str | None,
-) -> list[dict[str, Any]]:
-    """Fetch all currently exposed issue comments used by strategic verification."""
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Fetch issue comments and distinguish source failure from a real empty thread."""
     repo, number = bounty.issue_repo_and_number(item)
-    if not repo or not number or not int(item.get("comments") or 0):
-        return []
+    if not repo or not number:
+        return [], "could not identify repository/issue number"
+    if not int(item.get("comments") or 0):
+        return [], None
 
     comments = github_get(
         f"https://api.github.com/repos/{repo}/issues/{number}/comments?per_page=100",
         token,
     )
-    return comments if isinstance(comments, list) else []
+    if not isinstance(comments, list):
+        return [], "could not refresh issue comments"
+    return comments, None
+
+
+def issue_comments(
+    item: Mapping[str, Any],
+    token: str | None,
+) -> list[dict[str, Any]]:
+    """Compatibility helper returning an empty list when comment fetching fails."""
+    comments, _ = issue_comments_checked(item, token)
+    return comments
 
 
 def contribution_guide(
