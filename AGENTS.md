@@ -28,6 +28,7 @@ This file is the canonical working agreement for coding agents and human contrib
 - Docstrings should explain intent, invariants, or surprising behavior. Do not add ceremonial `Args`/`Returns` sections that only repeat obvious type hints.
 - Preserve behavior during refactors. Move code first; change behavior in a separate, test-backed step when possible.
 - Add regression tests for every functional bug or scanner false positive/negative that motivates a change.
+- Scanner policy modules should have direct unit regressions for their decision boundaries, plus orchestration-level coverage when composition changes.
 - Unit tests must not depend on live network access.
 
 ## Change protocol
