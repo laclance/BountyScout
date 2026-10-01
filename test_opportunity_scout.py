@@ -3248,6 +3248,7 @@ class DiscoveryTests(unittest.TestCase):
             )
         )
 
+    # Keep score-pruned rows report-compatible while proving they never hit the network.
     def test_discover_strategic_prunes_preflight_and_impossible_score_before_network(self) -> None:
         winner = issue(
             html_url="https://github.com/g/g/issues/1",
