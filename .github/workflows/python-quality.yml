@@ -73,7 +73,7 @@ jobs:
         run: python scripts/generate_codebase_map.py --check
 
       - name: Compile Python
-        run: python -m py_compile scout_bounties.py opportunity_scout.py strategic_claims.py scripts/generate_codebase_map.py test_scout_bounties.py test_opportunity_scout.py
+        run: python -m py_compile *.py scripts/*.py
 
       - name: Type check with mypy
         run: mypy
