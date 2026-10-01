@@ -201,11 +201,17 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
         )
     )
     suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", body))
+    mobile_or_desktop = any(
+        marker in labels.lower()
+        for marker in ("os-android", "os-ios", "os-macos", "os-windows")
+    )
+    missing_reproduction = "_no response_" in text or "no response" in text
 
     if (
         file_refs >= 4
         or feature
         or len(prose) > 6500
+        or (mobile_or_desktop and missing_reproduction)
         or (re.search(r"\bsuggested fix(?:es)?\b", text) and suggested_fix_bullets >= 3)
     ):
         reasons: list[str] = []
@@ -217,6 +223,8 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
             reasons.append("large narrative scope")
         if suggested_fix_bullets >= 3:
             reasons.append("multi-step suggested implementation")
+        if mobile_or_desktop and missing_reproduction:
+            reasons.append("platform-specific reproduction is missing")
         return EffortEstimate("6–12h", tuple(reasons[:3]) or ("broader implementation scope",))
 
     if concurrency_risk:
