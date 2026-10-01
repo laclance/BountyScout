@@ -72,8 +72,8 @@ def documentation_microfix(item: Mapping[str, Any]) -> bool:
 
 def _prose_body(body: str) -> str:
     """Remove fenced diagnostics/code so dump size does not masquerade as implementation scope."""
-    fenced = re.compile(r"\\x60{3}.*?\\x60{3}|~~~.*?~~~", re.DOTALL)
-    return re.sub(r"\\s+", " ", fenced.sub(" ", body)).strip()
+    fenced = re.compile(r"\x60{3}.*?\x60{3}|~~~.*?~~~", re.DOTALL)
+    return re.sub(r"\s+", " ", fenced.sub(" ", body)).strip()
 
 
 def _normalized_labels(labels: str) -> str:
@@ -93,7 +93,7 @@ def _feature_signal(title: str, labels: str, text: str) -> bool:
                 "enhancement",
             )
         )
-        or re.search(r"\\bfeature request\\b", text)
+        or re.search(r"\bfeature request\b", text)
     )
 
 
@@ -140,8 +140,8 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
 
     explicit_large_scope = bool(
         re.search(
-            r"\\b(?:epic|roadmap|redesign|rewrite|multi-phase|architecture|"
-            r"large refactor|rfc|connection pool|explore publishing)\\b",
+            r"\b(?:epic|roadmap|redesign|rewrite|multi-phase|architecture|"
+            r"large refactor|rfc|connection pool|explore publishing)\b",
             text,
         )
         or title.lower().startswith(("fr:", "feature request:"))
@@ -149,25 +149,25 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
     )
     compatibility_risk = bool(
         re.search(
-            r"\\b(?:backward[- ]incompatible|backwards? compatibility|"
+            r"\b(?:backward[- ]incompatible|backwards? compatibility|"
             r"compatibility (?:risk|break|constraint)|persisted (?:state|data)|"
-            r"existing deployments?|wire format|on-disk format)\\b",
+            r"existing deployments?|wire format|on-disk format)\b",
             text,
         )
         or (
-            re.search(r"\\b(?:wal|snapshot|handshake)\\b", text)
-            and re.search(r"\\b(?:persist|compatib|existing cluster|rejoin|recover)\\w*\\b", text)
+            re.search(r"\b(?:wal|snapshot|handshake)\b", text)
+            and re.search(r"\b(?:persist|compatib|existing cluster|rejoin|recover)\w*\b", text)
         )
     )
     environment_heavy = bool(
         re.search(
-            r"\\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\\b",
+            r"\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\b",
             text,
         )
         or re.search(
-            r"\\b(?:unable to reproduce|cannot reproduce|can't reproduce|"
+            r"\b(?:unable to reproduce|cannot reproduce|can't reproduce|"
             r"haven't been able to reproduce|have not been able to reproduce|"
-            r"low-probability race|non[- ]deterministic repro)\\b",
+            r"low-probability race|non[- ]deterministic repro)\b",
             text,
         )
     )
@@ -184,28 +184,28 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
         return EffortEstimate("1d+", ("large narrative implementation scope",))
 
     docs_signal = bool(
-        re.search(r"\\b(?:docs?|documentation|readme)\\b", f"{title}\\n{labels}", re.IGNORECASE)
+        re.search(r"\b(?:docs?|documentation|readme)\b", f"{title}\n{labels}", re.IGNORECASE)
     )
     if docs_signal and file_refs == 0 and len(prose) < 4500:
         return EffortEstimate("1–3h", ("bounded documentation change",))
 
     concurrency_risk = bool(
-        re.search(r"\\b(?:data race|race condition|deadlock|concurren\\w*)\\b", text)
+        re.search(r"\b(?:data race|race condition|deadlock|concurren\w*)\b", text)
     )
     upstream_dependency = bool(
         re.search(
-            r"\\b(?:may be related to|upstream (?:issue|dependency)|"
-            r"vendor(?:ed)? dependency|third[- ]party dependency)\\b",
+            r"\b(?:may be related to|upstream (?:issue|dependency)|"
+            r"vendor(?:ed)? dependency|third[- ]party dependency)\b",
             text,
         )
     )
-    suggested_fix_bullets = len(re.findall(r"(?m)^\\s*-\\s+", body))
+    suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", body))
 
     if (
         file_refs >= 4
         or feature
         or len(prose) > 6500
-        or (re.search(r"\\bsuggested fix(?:es)?\\b", text) and suggested_fix_bullets >= 3)
+        or (re.search(r"\bsuggested fix(?:es)?\b", text) and suggested_fix_bullets >= 3)
     ):
         reasons: list[str] = []
         if feature:
@@ -225,14 +225,14 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
 
     localized_todo = bool(
         file_refs <= 2
-        and re.search(r"\\btodo\\b", text)
-        and re.search(r"\\b(?:method|function|handler|header|path|codebase)\\b", text)
+        and re.search(r"\btodo\b", text)
+        and re.search(r"\b(?:method|function|handler|header|path|codebase)\b", text)
     )
     bounded = bool(
         re.search(
-            r"\\b(?:regression|deterministic|panics?|segfault|nil pointer|"
+            r"\b(?:regression|deterministic|panics?|segfault|nil pointer|"
             r"leaks?|incorrect|failing tests?|unit tests?|single|small|narrow|"
-            r"no-op|stale)\\b|\\bnever closes\\b|\\bevery sync\\b",
+            r"no-op|stale)\b|\bnever closes\b|\bevery sync\b",
             f"{title.lower()} {labels} {text[:4500]}",
         )
     )
