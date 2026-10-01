@@ -45,7 +45,7 @@ STRATEGIC_INSPECT_PER_REPO = 15
 STRATEGIC_KEEP_PER_REPO = 3
 STRATEGIC_MIN_CAREER_SCORE = 55
 STRATEGIC_AUDIT_LIMIT = 20
-# Keep discovery searches below GitHub's authenticated Search API burst budget.
+PAID_MIN_CASH_SCORE = 55
 REPORT_LIMIT = 8
 
 PAID_DISCOVERY_QUERIES = [
@@ -64,9 +64,23 @@ ISSUEHUNT_PAGES = 2
 TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
-def target_repo_queries() -> list[str]:
-    """Give every curated repository its own result budget."""
-    return [f"is:issue is:open no:assignee repo:{repo} sort:updated-desc" for repo in TARGET_REPOS]
+def target_repo_issue_pool(repo: str, token: str | None) -> tuple[list[dict[str, Any]], str | None]:
+    """Fetch a target repo's freshest open issues without using GitHub Search API."""
+    params = urllib.parse.urlencode(
+        {
+            "state": "open",
+            "sort": "updated",
+            "direction": "desc",
+            "per_page": STRATEGIC_SEARCH_PER_PAGE,
+        }
+    )
+    data = bounty.github_get(
+        f"https://api.github.com/repos/{repo}/issues?{params}",
+        token,
+    )
+    if not isinstance(data, list):
+        return [], f"target repo discovery failed for {repo}; scan coverage incomplete"
+    return [item for item in data if isinstance(item, dict)], None
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
@@ -110,6 +124,7 @@ def estimate_effort(item: Mapping[str, Any]) -> str:
 
     if (
         "kind/feature" in labels
+        or "feature request" in labels
         or title.lower().startswith(("fr:", "feature request:"))
         or re.search(
             r"\b(?:propos(?:e|ed|ing|al)|epic|roadmap|redesign|rewrite|"
@@ -119,6 +134,12 @@ def estimate_effort(item: Mapping[str, Any]) -> str:
         )
         or re.search(
             r"\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\b",
+            text,
+        )
+        or re.search(
+            r"\b(?:unable to reproduce|cannot reproduce|can't reproduce|"
+            r"haven't been able to reproduce|have not been able to reproduce|"
+            r"low-probability race|non[- ]deterministic repro)\b",
             text,
         )
         or len(body) > 12000
@@ -139,6 +160,7 @@ def estimate_effort(item: Mapping[str, Any]) -> str:
     suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", body))
     if (
         file_refs >= 4
+        or "enhancement" in labels
         or len(body) > 8500
         or (mobile_or_desktop and missing_reproduction)
         or (re.search(r"\bsuggested fix(?:es)?\b", text) and suggested_fix_bullets >= 3)
@@ -1168,7 +1190,15 @@ def discover_paid(
                 print(f"Skipping paid candidate {url}: {reason}")
             else:
                 assert candidate is not None
-                found.append(candidate)
+                if candidate["cash_score"] < PAID_MIN_CASH_SCORE:
+                    reason = (
+                        f"cash score {candidate['cash_score']}/100 below paid threshold "
+                        f"{PAID_MIN_CASH_SCORE}/100"
+                    )
+                    add_reject(rejected, examples, item, reason)
+                    print(f"Skipping paid candidate {url}: {reason}")
+                else:
+                    found.append(candidate)
 
     # Official platform feeds can expose funded issues that contain no bounty
     # keywords on GitHub at all. Source GitHub issue still gets final authority.
@@ -1195,7 +1225,15 @@ def discover_paid(
             print(f"Skipping platform candidate {source_url}: {reason}")
         else:
             assert candidate is not None
-            found.append(candidate)
+            if candidate["cash_score"] < PAID_MIN_CASH_SCORE:
+                reason = (
+                    f"cash score {candidate['cash_score']}/100 below paid threshold "
+                    f"{PAID_MIN_CASH_SCORE}/100"
+                )
+                add_reject(rejected, examples, item, reason)
+                print(f"Skipping platform candidate {source_url}: {reason}")
+            else:
+                found.append(candidate)
 
     return found, rejected, examples
 
@@ -1272,10 +1310,27 @@ def discover_strategic(
     examples: list[dict[str, Any]] = []
     audit: list[dict[str, Any]] = []
 
-    for query in target_repo_queries() + STRATEGIC_GLOBAL_QUERIES:
-        for item in bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE).get(
-            "items", []
-        ):
+    source_batches: list[list[dict[str, Any]]] = []
+    for target_repo in TARGET_REPOS:
+        items, source_error = target_repo_issue_pool(target_repo, token)
+        if source_error:
+            add_audit(
+                audit,
+                {
+                    "html_url": f"https://github.com/{target_repo}/issues",
+                    "title": target_repo,
+                },
+                source_error,
+            )
+        source_batches.append(items)
+
+    for query in STRATEGIC_GLOBAL_QUERIES:
+        source_batches.append(
+            bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE).get("items", [])
+        )
+
+    for items in source_batches:
+        for item in items:
             url = item.get("html_url")
             if not url or url in seen or url in paid_urls or url in touched:
                 continue

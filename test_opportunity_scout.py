@@ -84,12 +84,26 @@ class FakeResponse:
 
 
 class BasicHeuristicTests(unittest.TestCase):
-    def test_target_repo_queries_give_each_target_its_own_budget(self) -> None:
-        queries = scout.target_repo_queries()
-        self.assertEqual(len(queries), len(scout.TARGET_REPOS))
-        joined = " ".join(queries)
-        for repo in scout.TARGET_REPOS:
-            self.assertIn(f"repo:{repo}", joined)
+    def test_target_repo_pool_uses_core_api_and_search_budget_is_small(self) -> None:
+        with patch.object(
+            bounty,
+            "github_get",
+            return_value=[issue(), "not-an-issue"],
+        ) as getter:
+            items, error = scout.target_repo_issue_pool("grpc/grpc-go", "t")
+        self.assertIsNone(error)
+        self.assertEqual(len(items), 1)
+        url = getter.call_args.args[0]
+        self.assertIn("/repos/grpc/grpc-go/issues?", url)
+        self.assertIn("state=open", url)
+        self.assertIn("sort=updated", url)
+        self.assertIn("per_page=20", url)
+
+        with patch.object(bounty, "github_get", return_value=None):
+            items, error = scout.target_repo_issue_pool("grpc/grpc-go", "t")
+        self.assertEqual(items, [])
+        self.assertIn("scan coverage incomplete", str(error))
+
         for repo in (
             "grpc/grpc-go",
             "etcd-io/etcd",
@@ -106,10 +120,8 @@ class BasicHeuristicTests(unittest.TestCase):
         ):
             self.assertTrue(any(query_fragment in q for q in scout.STRATEGIC_GLOBAL_QUERIES))
         self.assertLessEqual(
-            len(scout.TARGET_REPOS)
-            + len(scout.PAID_DISCOVERY_QUERIES)
-            + len(scout.STRATEGIC_GLOBAL_QUERIES),
-            29,
+            len(scout.PAID_DISCOVERY_QUERIES) + len(scout.STRATEGIC_GLOBAL_QUERIES),
+            10,
         )
 
     def test_issue_text_handles_dict_and_string_labels(self) -> None:
@@ -137,6 +149,27 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertEqual(
             scout.estimate_effort(
                 issue(title="Android DNS regression", body="dual SIM device reproduction")
+            ),
+            "1d+",
+        )
+        self.assertEqual(
+            scout.estimate_effort(
+                issue(title="Support multi-homed pods", labels=["feature request"])
+            ),
+            "1d+",
+        )
+        self.assertEqual(
+            scout.estimate_effort(
+                issue(title="Move iptables initialization into batch", labels=["enhancement"])
+            ),
+            "6–12h",
+        )
+        self.assertEqual(
+            scout.estimate_effort(
+                issue(
+                    title="Intermittent ENI race",
+                    body="We haven't been able to reproduce on demand; low-probability race.",
+                )
             ),
             "1d+",
         )
@@ -1478,9 +1511,13 @@ class DiscoveryTests(unittest.TestCase):
             updated_at=(datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),
         )
         with (
-            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "TARGET_REPOS", ["g/g"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
-            patch.object(bounty, "search_github", return_value={"items": [low, weak_low]}),
+            patch.object(
+                scout,
+                "target_repo_issue_pool",
+                return_value=([low, weak_low], None),
+            ),
             patch.object(bounty, "is_clean_candidate", return_value=True),
             patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
             patch.object(
@@ -1557,12 +1594,12 @@ class DiscoveryTests(unittest.TestCase):
             )
 
         with (
-            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "TARGET_REPOS", ["g/g"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
             patch.object(
-                bounty,
-                "search_github",
-                return_value={"items": [dirty_weak, archived_weak, best, overflow]},
+                scout,
+                "target_repo_issue_pool",
+                return_value=([dirty_weak, archived_weak, best, overflow], None),
             ),
             patch.object(
                 bounty,
@@ -1626,12 +1663,12 @@ class DiscoveryTests(unittest.TestCase):
             )
 
         with (
-            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "TARGET_REPOS", ["g/g"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
             patch.object(
-                bounty,
-                "search_github",
-                return_value={"items": [winner, strong_extra, weak_extra]},
+                scout,
+                "target_repo_issue_pool",
+                return_value=([winner, strong_extra, weak_extra], None),
             ),
             patch.object(bounty, "is_clean_candidate", return_value=True),
             patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
@@ -1654,6 +1691,25 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(len(audit), 1)
         self.assertEqual(audit[0]["url"], strong_extra["html_url"])
         self.assertIn("three stronger candidates", audit[0]["reason"])
+
+    def test_discover_strategic_audits_target_source_failure(self) -> None:
+        with (
+            patch.object(scout, "TARGET_REPOS", ["a/a"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", ["global-q"]),
+            patch.object(
+                scout,
+                "target_repo_issue_pool",
+                return_value=([], "target repo discovery failed for a/a; scan coverage incomplete"),
+            ),
+            patch.object(bounty, "search_github", return_value={"items": []}),
+        ):
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
+        self.assertEqual(found, [])
+        self.assertEqual(rejected, {})
+        self.assertEqual(examples, [])
+        self.assertEqual(len(audit), 1)
+        self.assertEqual(audit[0]["url"], "https://github.com/a/a/issues")
+        self.assertIn("coverage incomplete", audit[0]["reason"])
 
     def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
@@ -1706,6 +1762,38 @@ class DiscoveryTests(unittest.TestCase):
         selfEqual(rejected, {})
         selfEqual(examples, [])
 
+    def test_discover_paid_rejects_low_value_direct_and_platform_candidates(self) -> None:
+        direct = issue(html_url="https://github.com/a/a/issues/1")
+        platform = issue(html_url="https://github.com/p/p/issues/2")
+        low_direct = candidate(url=direct["html_url"], cash_score=41, priority_score=41)
+        low_platform = candidate(url=platform["html_url"], cash_score=42, priority_score=42)
+
+        with (
+            patch.object(bounty, "search_github", return_value={"items": [direct]}),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(
+                scout,
+                "verify",
+                side_effect=[(low_direct, None), (low_platform, None)],
+            ),
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value={
+                    platform["html_url"]: "confirmed bounty platform feed (IssueHunt): $2"
+                },
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=platform),
+        ):
+            found, rejected, examples = scout.discover_paid("t", set(), {}, {})
+
+        self.assertEqual(found, [])
+        direct_reason = "cash score 41/100 below paid threshold 55/100"
+        platform_reason = "cash score 42/100 below paid threshold 55/100"
+        self.assertEqual(rejected[direct_reason], 1)
+        self.assertEqual(rejected[platform_reason], 1)
+        self.assertEqual({item["reason"] for item in examples}, {direct_reason, platform_reason})
+
     def test_discover_paid_records_rejections_and_seen(self) -> None:
         seen = issue(html_url="https://github.com/a/a/issues/1")
         bad = issue(html_url="https://github.com/a/a/issues/2")
@@ -1733,9 +1821,9 @@ class DiscoveryTests(unittest.TestCase):
             return repo_meta()
 
         with (
-            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "TARGET_REPOS", ["example/project"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
-            patch.object(bounty, "search_github", return_value={"items": items}),
+            patch.object(scout, "target_repo_issue_pool", return_value=(items, None)),
             patch.object(bounty, "is_clean_candidate", return_value=True),
             patch.object(bounty, "fetch_repo_metadata", side_effect=meta),
             patch.object(
@@ -2125,12 +2213,12 @@ class CoverageGapTests(unittest.TestCase):
         cached = issue(html_url="https://github.com/a/a/issues/3", title="Feature")
         cache = {"a/a": repo_meta()}
         with (
-            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "TARGET_REPOS", ["a/a"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
             patch.object(
-                bounty,
-                "search_github",
-                return_value={"items": [seen_item, dirty, cached]},
+                scout,
+                "target_repo_issue_pool",
+                return_value=([seen_item, dirty, cached], None),
             ),
             patch.object(
                 bounty,
