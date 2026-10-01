@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import opportunity_scoring as scoring
+import opportunity_scout as scout
 
 
 AMOUNT_RE = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
@@ -63,6 +64,17 @@ class EffortCalibrationTests(unittest.TestCase):
             estimate.reasons,
             ("feature spans multiple runtime/configuration components",),
         )
+
+    def test_feature_with_multiple_file_refs_is_cross_component(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Add scoped feature flag",
+                labels=[{"name": "type/feature"}],
+                body="pkg/a.go pkg/b.go pkg/c.go",
+            )
+        )
+        self.assertEqual(estimate.bucket, "1d+")
+        self.assertIn("multiple runtime/configuration components", estimate.reasons[0])
 
     def test_compatibility_sensitive_persisted_state_is_large_scope(self) -> None:
         estimate = scoring.estimate_effort_details(
@@ -199,6 +211,26 @@ class EffortCalibrationTests(unittest.TestCase):
 
 
 class ScoringRegressionTests(unittest.TestCase):
+    def test_opportunity_scout_wrapper_and_report_expose_effort_basis(self) -> None:
+        item = issue(
+            title="TCP mode leaks upstream connection",
+            body="Deterministic leak: the upstream connection never closes.",
+        )
+        details = scout.estimate_effort_details(item)
+        self.assertEqual(details.bucket, "1–3h")
+
+        result = scoring.build_candidate(
+            item,
+            "strategic",
+            None,
+            repo_meta(),
+            "guide",
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        rendered = scout.markdown_candidate(result, 1)
+        self.assertIn("**Effort basis:** bounded deterministic bug signal", rendered)
+
     def test_candidate_exposes_effort_reasons(self) -> None:
         result = scoring.build_candidate(
             issue(
