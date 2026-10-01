@@ -47,7 +47,9 @@ For each curated repository, the scout activity-inspects the top 15 plausible is
 
 - issue is still open and unassigned
 - no obvious active claim
-- no open implementation PR
+- no open implementation PR, including implementation links already present in the issue body
+- no trusted maintainer-authored decision-stage hold
+- no automated CI/release tracking incident
 - repository is available and not archived
 - contribution guide at common repository locations
 
