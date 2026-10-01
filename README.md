@@ -9,14 +9,15 @@ The scout runs hourly, ranks new opportunities, creates a GitHub issue report, a
 
 ## Architecture
 
-The fork-specific change is intentionally small:
+The paid scanner remains intentionally close to upstream, while fork-specific strategic behavior is being split into focused modules:
 
 - `scout_bounties.py` — upstream-compatible paid bounty discovery and strict payment/competition filters.
-- `opportunity_scout.py` — dual-lane discovery, scoring, effort estimation, target-repo bonuses, verification, and ranked reporting.
+- `opportunity_scout.py` — application orchestration and strategic scanner composition.
+- `strategic_claims.py` — pure contributor ownership/implementation claim detection.
 - `seen_bounties.json` — shared notification state.
 - `.github/workflows/bounty-scout.yml` — hourly runner.
 
-Keeping the original paid scanner intact makes future upstream merges much less conflict-prone.
+See `ARCHITECTURE.md` for data flow and module boundaries, `AGENTS.md` for AI/human implementation rules, and `CODEBASE_MAP.md` for the generated structural index.
 
 ## Paid lane
 
@@ -94,17 +95,12 @@ The GitHub Action runs hourly and can also be triggered manually from **Actions 
 Locally:
 
 ```bash
-python -m pip install ruff==0.16.9 mypy coverage
-ruff format .
-ruff check .
-python -m py_compile scout_bounties.py opportunity_scout.py
-mypy
-coverage run --branch -m unittest -v
-coverage report
+python -m pip install -r requirements-dev.txt
+make quality
 GITHUB_TOKEN=... GITHUB_REPOSITORY=laclance/BountyScout python opportunity_scout.py
 ```
 
-Ruff is the canonical Python formatter. Branch pushes in this repository are auto-formatted by GitHub Actions; pull requests also verify that committed Python is already Ruff-formatted.
+Run `make format` after Python edits and `make map` when production modules or top-level symbols change. Ruff is the canonical Python formatter; strict mypy, the generated code map, and 100% statement + branch coverage are enforced in CI.
 
 Optional notification secrets remain supported:
 

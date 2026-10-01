@@ -7,6 +7,9 @@ on:
       - ".coveragerc"
       - "mypy.ini"
       - "ruff.toml"
+      - "requirements-dev.txt"
+      - "Makefile"
+      - "CODEBASE_MAP.md"
       - ".github/workflows/python-quality.yml"
       - ".github/workflows/bounty-scout.yml"
   push:
@@ -15,6 +18,9 @@ on:
       - ".coveragerc"
       - "mypy.ini"
       - "ruff.toml"
+      - "requirements-dev.txt"
+      - "Makefile"
+      - "CODEBASE_MAP.md"
       - ".github/workflows/python-quality.yml"
       - ".github/workflows/bounty-scout.yml"
 
@@ -37,7 +43,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install validation dependencies
-        run: python -m pip install coverage mypy ruff==0.16.9
+        run: python -m pip install -r requirements-dev.txt
 
       - name: Format with Ruff
         if: github.event_name == 'push' && github.ref != 'refs/heads/main'
@@ -63,8 +69,11 @@ jobs:
       - name: Lint with Ruff
         run: ruff check .
 
+      - name: Check generated codebase map
+        run: python scripts/generate_codebase_map.py --check
+
       - name: Compile Python
-        run: python -m py_compile scout_bounties.py opportunity_scout.py test_scout_bounties.py test_opportunity_scout.py
+        run: python -m py_compile scout_bounties.py opportunity_scout.py strategic_claims.py scripts/generate_codebase_map.py test_scout_bounties.py test_opportunity_scout.py
 
       - name: Type check with mypy
         run: mypy
