@@ -52,10 +52,11 @@ For each curated repository, the scout activity-inspects the top 15 plausible is
 - no trusted maintainer-authored decision-stage or explicit no-PR hold
 - no automated CI/release tracking incident
 - no reporter-confirmed already-resolved issue
+- no public security disclosure treated as ordinary contributor work
 - repository is available and not archived
 - contribution guide at common repository locations
 
-Career score considers repository reputation/activity, target-repo bonus, language/domain fit, technical depth, tests/contributor signals, scope, effort, competition, issue freshness, and recent maintainer/discussion activity. Old issues are penalized only when they are actually inactive rather than merely old; bot-only stale/automation comments do not count as fresh human activity. Strategic priority is then derived separately from career score with a stronger execution-fit adjustment: lower effort and lower visible competition receive bonuses, while broad work and crowded issues receive penalties. Active implementation claims remain hard rejections rather than merely high competition.
+Career score considers repository reputation/activity, target-repo bonus, language/domain fit, technical depth, tests/contributor signals, scope, effort, competition, issue freshness, and recent maintainer/discussion activity. Old issues are penalized only when they are actually inactive rather than merely old; bot-only stale/automation comments do not count as fresh human activity. Infrastructure/domain fit uses specific infrastructure and API-context signals rather than generic UI/API mentions. Strategic priority is then derived separately from career score with a stronger execution-fit adjustment: lower effort and lower visible competition receive bonuses, while broad work and crowded issues receive penalties. Active implementation claims remain hard rejections rather than merely high competition.
 
 The scout also emits potential scanner misses: strong-looking items that were filtered early, fell just outside a repo's inspection pool, or narrowly missed the quality floor. These are intended as feedback for tuning false-negative and false-positive behavior over time.
 

@@ -172,6 +172,39 @@ class EffortCalibrationTests(unittest.TestCase):
         self.assertEqual(scoring.estimate_effort(micro), "<1h")
         self.assertEqual(scoring.estimate_effort(broader), "1–3h")
 
+    def test_generic_clipboard_api_does_not_count_as_infrastructure_domain_fit(self) -> None:
+        ui = scoring.build_candidate(
+            issue(
+                title="Show Copied only after clipboard write succeeds",
+                body=(
+                    "navigator.clipboard.writeText may reject when the clipboard API "
+                    "is unavailable. Keep the UI usable and add a Vitest regression."
+                ),
+                labels=[{"name": "bug"}, {"name": "good first issue"}],
+            ),
+            "strategic",
+            None,
+            repo_meta(stargazers_count=18, language="TypeScript"),
+            "guide",
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertNotIn("target infrastructure/domain fit", ui["career_reasons"])
+
+        backend = scoring.build_candidate(
+            issue(
+                title="Validate REST API endpoint input",
+                body="The REST API endpoint should reject malformed addresses.",
+            ),
+            "strategic",
+            None,
+            repo_meta(stargazers_count=18, language="TypeScript"),
+            "guide",
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertIn("target infrastructure/domain fit", backend["career_reasons"])
+
     def test_existing_broad_scope_signals_remain_conservative(self) -> None:
         cases = (
             (issue(title="Architecture rewrite"), "1d+"),

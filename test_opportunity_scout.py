@@ -2067,6 +2067,51 @@ class VerificationTests(unittest.TestCase):
             "maintainer says issue still needs discussion",
         )
 
+    def test_fresh_1218_run_false_positive_regressions(self) -> None:
+        security = issue(
+            html_url="https://github.com/kubernetes-sigs/external-dns/issues/6780",
+            title="[Security Disclosure] Annotation-driven DNS record injection in external-dns",
+            body=(
+                "Severity: HIGH. CWE: CWE-285. CVSS 3.1: 8.1. "
+                "Disclosure timeline: vulnerability discovered today."
+            ),
+            comments=0,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(security, "t", []),
+            "security disclosure, not a normal contributor task",
+        )
+        self.assertFalse(scout.possible_miss_signal(security))
+
+        terraform = issue(
+            title="Generic deepmerge() function",
+            comments=1,
+        )
+        terraform_comments = [
+            {
+                "body": (
+                    "The prevailing wisdom on the maintainer team is that there is no "
+                    "correct answer for one perfect implementation of a deep merge. "
+                    "This is a use case for provider functions."
+                ),
+                "author_association": "CONTRIBUTOR",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(terraform, "t", terraform_comments),
+            "maintainer indicates the proposed implementation approach is not wanted",
+        )
+
+        release_announcement = issue(
+            title="Planned SDK 3.0 Release (Important Dates and Information)",
+            labels=[{"name": "announcement 📢"}],
+            comments=1,
+        )
+        self.assertEqual(
+            scout.strategic_rejection(release_announcement, "t", []),
+            "release planning/tracking issue, not implementation work",
+        )
+
     def test_readiness_gate_targeted_live_refinements(self) -> None:
         profile_request = [
             {

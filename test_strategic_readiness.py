@@ -215,6 +215,22 @@ class MaintainerReadinessTests(unittest.TestCase):
                 "maintainer indicates the proposed implementation approach is not wanted",
             ),
         )
+        provider_direction = [
+            {
+                "body": (
+                    "The prevailing wisdom on the maintainer team is that there is no "
+                    "one correct deep merge. This is a use case for provider functions."
+                ),
+                "author_association": "CONTRIBUTOR",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), provider_direction),
+            (
+                False,
+                "maintainer indicates the proposed implementation approach is not wanted",
+            ),
+        )
 
         untrusted = [
             {
@@ -373,6 +389,39 @@ class MaintainerIssueDecisionTests(unittest.TestCase):
         )
 
 
+class SecurityDisclosureTests(unittest.TestCase):
+    def test_explicit_and_structured_security_disclosures_are_not_normal_tasks(self) -> None:
+        self.assertEqual(
+            readiness.security_disclosure_reason(
+                issue(
+                    title="[Security Disclosure] DNS record injection",
+                    body="Public vulnerability report.",
+                )
+            ),
+            "security disclosure, not a normal contributor task",
+        )
+        self.assertEqual(
+            readiness.security_disclosure_reason(
+                issue(
+                    title="DNS authorization issue",
+                    body=(
+                        "Severity high. CVSS 3.1: 8.1. CWE-285. "
+                        "Disclosure timeline: discovered today."
+                    ),
+                )
+            ),
+            "security disclosure, not a normal contributor task",
+        )
+        self.assertIsNone(
+            readiness.security_disclosure_reason(
+                issue(
+                    title="Security hardening: validate hostname",
+                    body="Add validation and tests for a normal public hardening task.",
+                )
+            )
+        )
+
+
 class ManualTrackingIssueTests(unittest.TestCase):
     def test_multi_child_umbrella_tracker_is_not_single_implementation_task(self) -> None:
         tracker = issue(
@@ -447,6 +496,15 @@ class LifecycleClassificationTests(unittest.TestCase):
     def test_release_tracking_and_release_only_work_are_distinct(self) -> None:
         self.assertEqual(
             readiness.release_tracking_reason(issue(title="Release 2.0 tracking checklist")),
+            "release planning/tracking issue, not implementation work",
+        )
+        self.assertEqual(
+            readiness.release_tracking_reason(
+                issue(
+                    title="Planned SDK 3.0 Release (Important Dates and Information)",
+                    labels=[{"name": "announcement 📢"}],
+                )
+            ),
             "release planning/tracking issue, not implementation work",
         )
 
