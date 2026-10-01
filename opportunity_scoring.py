@@ -202,8 +202,7 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
     )
     suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", body))
     mobile_or_desktop = any(
-        marker in labels.lower()
-        for marker in ("os-android", "os-ios", "os-macos", "os-windows")
+        marker in labels.lower() for marker in ("os-android", "os-ios", "os-macos", "os-windows")
     )
     missing_reproduction = "_no response_" in text or "no response" in text
 
