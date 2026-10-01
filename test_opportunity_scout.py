@@ -631,6 +631,205 @@ class CalibrationTests(unittest.TestCase):
                     "active claim by @dev",
                 )
 
+    def test_strategic_claim_matcher_required_phrases(self) -> None:
+        claims = (
+            "I'd like to work on this.",
+            "I would like to work on this for check config.",
+            "Before I write code, I'd like to agree on the shape.",
+            "I'm interested in working on this and can send a PR.",
+            "My plan is to add X, update Y, and open a PR.",
+            "I'll take a look at implementing this.",
+            "I've implemented this locally and added tests.",
+            "I have implemented this locally and added tests.",
+            "I have a fix with tests and can open a PR.",
+            "I've got a fix ready; would you welcome a PR?",
+            "I’ve implemented this locally.",
+            "I'm going to change X and add Y.",
+            "Before submitting the PR, I want to confirm the API.",
+            "Currently implementing this.",
+            "I have tests ready.",
+        )
+        for body in claims:
+            with self.subTest(body=body):
+                self.assertTrue(scout.strategic_claim_text(body))
+
+    def test_strategic_claim_matcher_avoids_non_claims(self) -> None:
+        non_claims = (
+            "I'd like to see this fixed.",
+            "I think we should implement this using X.",
+            "Someone could add a test here.",
+            "I reproduced this on Linux.",
+            "This looks straightforward to fix.",
+            "I investigated this and the problem is in X.",
+            "One solution might be to change X.",
+            "Someone else is planning a fix.",
+            "The maintainer is currently implementing this.",
+            "Feel free to submit a PR.",
+            "We would welcome a PR for this.",
+        )
+        for body in non_claims:
+            with self.subTest(body=body):
+                self.assertFalse(scout.strategic_claim_text(body))
+
+    def test_strategic_claim_live_regression_snippets(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        terraform = [
+            {
+                "body": (
+                    "I've implemented this locally and verified the reproduction now passes, "
+                    "and added unit + e2e regression tests. Would the team welcome a PR for this?"
+                ),
+                "created_at": recent,
+                "user": {"login": "adisivaprasad"},
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_claim_reason(issue(), terraform),
+            "active claim by @adisivaprasad",
+        )
+
+        moby = issue(
+            comments=0,
+            created_at=recent,
+            body=(
+                "I found this with Claude Code while I worked on another issue, and I checked "
+                "the analysis myself. I have a fix with tests, and I can open a PR if you agree."
+            ),
+        )
+        self.assertEqual(
+            scout.strategic_claim_reason(moby, []),
+            "issue author already has an implementation/fix in progress",
+        )
+
+        prometheus = [
+            {
+                "body": (
+                    "I would like to work on this for check config. "
+                    "Proposal for check config: read the config from standard input."
+                ),
+                "created_at": recent,
+                "user": {"login": "LudwigJMarx"},
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_claim_reason(issue(), prometheus),
+            "active claim by @LudwigJMarx",
+        )
+
+        traefik = [
+            {
+                "body": (
+                    "I'd like to work on this, since it was marked contributor/wanted after triage. "
+                    "Before I write code, I'd like to agree on the shape. "
+                    "First PR: a middleware that only edits the query string."
+                ),
+                "created_at": recent,
+                "user": {"login": "IslamElsayed"},
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_claim_reason(issue(), traefik),
+            "active claim by @IslamElsayed",
+        )
+
+    def test_strategic_claim_recency_does_not_permanently_suppress(self) -> None:
+        recent = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        stale = (
+            datetime.now(timezone.utc) - timedelta(days=scout.STRATEGIC_CLAIM_MAX_AGE_DAYS + 30)
+        ).isoformat()
+
+        recent_comment = {
+            "body": "I'm working on this.",
+            "created_at": recent,
+            "user": {"login": "recent-dev"},
+        }
+        stale_comment = {
+            "body": "I'm working on this.",
+            "created_at": stale,
+            "user": {"login": "old-dev"},
+        }
+        self.assertEqual(
+            scout.strategic_claim_reason(issue(), [recent_comment]),
+            "active claim by @recent-dev",
+        )
+        self.assertIsNone(scout.strategic_claim_reason(issue(), [stale_comment]))
+        self.assertIsNone(
+            scout.strategic_claim_reason(
+                issue(),
+                [
+                    {
+                        "body": "I reproduced this on Linux.",
+                        "created_at": recent,
+                        "user": {"login": "reporter"},
+                    }
+                ],
+            )
+        )
+
+        recent_body = issue(
+            created_at=recent,
+            body="I have a patch and can open a PR.",
+        )
+        stale_body = issue(
+            created_at=stale,
+            body="I have a patch and can open a PR.",
+        )
+        self.assertEqual(
+            scout.strategic_claim_reason(recent_body, []),
+            "issue author already has an implementation/fix in progress",
+        )
+        self.assertIsNone(scout.strategic_claim_reason(stale_body, []))
+
+        self.assertEqual(
+            scout.strategic_claim_reason(
+                issue(),
+                [{"body": "Planning a fix", "user": {"login": "dev"}}],
+            ),
+            "active claim by @dev",
+        )
+
+    def test_strategic_competition_reason_paths(self) -> None:
+        self.assertEqual(
+            scout.strategic_competition_reason({"html_url": "bad"}, "t", []),
+            "could not identify repository/issue number",
+        )
+
+        with patch.object(
+            bounty,
+            "has_existing_implementation_pr",
+            return_value="search pr",
+        ):
+            self.assertEqual(
+                scout.strategic_competition_reason(issue(), "t", []),
+                "search pr",
+            )
+
+        with (
+            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
+            patch.object(scout, "linked_open_pr_reason", return_value="linked pr"),
+        ):
+            self.assertEqual(
+                scout.strategic_competition_reason(issue(), "t", []),
+                "linked pr",
+            )
+
+        with (
+            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
+            patch.object(scout, "linked_open_pr_reason", return_value=None),
+        ):
+            claimed = issue(
+                comments=0,
+                body="I have a fix with tests and can open a PR.",
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+            self.assertEqual(
+                scout.strategic_competition_reason(claimed, "t", []),
+                "issue author already has an implementation/fix in progress",
+            )
+            self.assertIsNone(
+                scout.strategic_competition_reason(issue(body="", comments=0), "t", [])
+            )
+
     def test_timeline_open_pr_reason(self) -> None:
         self.assertIsNone(scout.timeline_open_pr_reason({"html_url": "bad"}, "t"))
 
@@ -1339,9 +1538,9 @@ class VerificationTests(unittest.TestCase):
             ),
             "could not identify repository/issue number",
         )
-        with patch.object(scout, "extended_competition_reason", return_value="pr"):
+        with patch.object(scout, "strategic_competition_reason", return_value="pr"):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "pr")
-        with patch.object(scout, "extended_competition_reason", return_value="claim"):
+        with patch.object(scout, "strategic_competition_reason", return_value="claim"):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "claim")
         with patch.object(
             scout,
@@ -1362,7 +1561,7 @@ class VerificationTests(unittest.TestCase):
             scout.strategic_rejection(issue(labels=["kind/bug/possible"]), "t"),
             "awaiting maintainer triage",
         )
-        with patch.object(scout, "extended_competition_reason", return_value=None):
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
             self.assertIsNone(
                 scout.strategic_rejection(
                     issue(labels=[{"name": "needs-triage"}, {"name": "good first issue"}]),
@@ -1458,7 +1657,7 @@ class VerificationTests(unittest.TestCase):
             labels=[{"name": "kind/proposal"}],
         )
 
-        with patch.object(scout, "extended_competition_reason", return_value=None):
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
             self.assertIsNone(scout.strategic_rejection(pending, "t", ready_comments))
             self.assertIsNone(scout.strategic_rejection(feature, "t", []))
             self.assertIsNone(scout.strategic_rejection(proposal_without_hold, "t", []))
