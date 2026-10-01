@@ -16,23 +16,17 @@ print(f"clean candidates before inspection cap: {len(tailscale_clean)}")
 print(f"inspection cap: {scout.STRATEGIC_INSPECT_PER_REPO}")
 print(f"source error: {tailscale_error or 'none'}")
 
-paid, paid_rejects, paid_examples = scout.discover_paid(
-    token, seen, repo_cache, guide_cache
-)
-strategic, strategic_rejects, strategic_examples, strategic_audit = (
-    scout.discover_strategic(
-        token,
-        seen,
-        {candidate["url"] for candidate in paid},
-        repo_cache,
-        guide_cache,
-    )
+paid, paid_rejects, paid_examples = scout.discover_paid(token, seen, repo_cache, guide_cache)
+strategic, strategic_rejects, strategic_examples, strategic_audit = scout.discover_strategic(
+    token,
+    seen,
+    {candidate["url"] for candidate in paid},
+    repo_cache,
+    guide_cache,
 )
 
 tailscale_found = [
-    candidate
-    for candidate in strategic
-    if candidate["repo"] == "tailscale/tailscale"
+    candidate for candidate in strategic if candidate["repo"] == "tailscale/tailscale"
 ]
 tailscale_found.sort(
     key=lambda item: (
