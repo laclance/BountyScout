@@ -1795,6 +1795,43 @@ class VerificationTests(unittest.TestCase):
             "awaiting reproduction confirmation",
         )
 
+
+        undici = issue(
+            title="HTTP/1.1 304 with Content-Length closes the connection",
+            labels=[{"name": "bug"}],
+        )
+        undici_comments = [
+            {
+                "body": (
+                    "Looks like this was fixed on main by #5864. "
+                    "It's just not released yet. Should be good with the next release."
+                ),
+                "author_association": "NONE",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(undici, "t", undici_comments),
+            "implementation already merged; only release/tagging remains",
+        )
+
+        flux = issue(
+            title="ResourceSet and kustomize.toolkit.fluxcd.io/ssa",
+            labels=[],
+        )
+        flux_comments = [
+            {
+                "body": (
+                    "A merge option would be the wrong solution for this. "
+                    "The profile should be defined in Git instead."
+                ),
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(flux, "t", flux_comments),
+            "maintainer indicates the proposed implementation approach is not wanted",
+        )
+
     def test_readiness_gate_targeted_live_refinements(self) -> None:
         profile_request = [
             {
