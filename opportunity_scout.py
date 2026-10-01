@@ -1090,9 +1090,7 @@ def strategic_rejection(
         if (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip()
     }
     labels_text = " ".join(label_set)
-    accepted = bool(TRIAGE_ACCEPTED_LABELS & label_set) or maintainer_ready_signal(
-        labels_text
-    )
+    accepted = bool(TRIAGE_ACCEPTED_LABELS & label_set) or maintainer_ready_signal(labels_text)
     pending = bool(TRIAGE_PENDING_LABELS & label_set) or triage_pending_signal(labels_text)
     if pending and not accepted:
         return "awaiting maintainer triage"
@@ -1425,9 +1423,7 @@ def discover_strategic(
             touched.add(url)
             if not bounty.is_clean_candidate(item):
                 audit_reason = (
-                    basic_rejection_audit_reason(item)
-                    if possible_miss_signal(item)
-                    else None
+                    basic_rejection_audit_reason(item) if possible_miss_signal(item) else None
                 )
                 if audit_reason:
                     add_audit(audit, item, audit_reason)
