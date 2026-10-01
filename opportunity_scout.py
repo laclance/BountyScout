@@ -1018,106 +1018,148 @@ def discover_strategic(
                 "strong-looking result fell outside the adaptive repo inspection pool",
             )
 
-    inspection_rows = [(repo, item) for repo, items in inspected.items() for item in items]
-    with ThreadPoolExecutor(
-        max_workers=min(NETWORK_WORKERS, max(1, len(inspection_rows)))
-    ) as executor:
-        comment_batches = list(
-            executor.map(
-                lambda row: issue_comments(row[1], token),
-                inspection_rows,
-            )
-        )
-
-    ranked_by_repo: dict[
-        str,
-        list[tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]],
-    ] = {}
-    for (repo, item), comments in zip(inspection_rows, comment_batches, strict=True):
-        signal = bounty.payment_signal(item)
-        lane = "paid" if signal else "strategic"
-        preview = build_candidate(
-            item,
-            lane,
-            signal,
-            repo_cache[repo],
-            None,
-            comments,
-        )
-        ranked_by_repo.setdefault(repo, []).append(
-            (
-                preview["priority_score"],
-                preview["career_score"],
-                preview["cash_score"],
+    ranked_by_repo: dict[str, list[sources.IssueRow]] = {}
+    for repo, items in inspected.items():
+        ranked: list[sources.IssueRow] = []
+        for item in items:
+            signal = bounty.payment_signal(item)
+            lane = "paid" if signal else "strategic"
+            preview = build_candidate(
                 item,
-                comments,
+                lane,
+                signal,
+                repo_cache[repo],
+                None,
             )
-        )
-
-    verification_rows: list[
-        tuple[str, tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]]
-    ] = []
-    for repo in inspected:
-        ranked = ranked_by_repo.get(repo, [])
+            ranked.append(
+                (
+                    preview["priority_score"],
+                    preview["career_score"],
+                    preview["cash_score"],
+                    item,
+                )
+            )
         ranked.sort(key=lambda row: row[:3], reverse=True)
-        verification_rows.extend((repo, row) for row in ranked)
+        ranked_by_repo[repo] = ranked
 
-    def verify_row(
-        entry: tuple[
-            str,
-            tuple[int, int, int, dict[str, Any], list[dict[str, Any]]],
-        ],
+    source_failure_reasons = {
+        "could not refresh source issue",
+        "could not refresh issue comments",
+    }
+
+    def verify_repo(
+        entry: tuple[str, list[sources.IssueRow]],
     ) -> tuple[
-        tuple[
-            str,
-            tuple[int, int, int, dict[str, Any], list[dict[str, Any]]],
+        str,
+        list[
+            tuple[
+                sources.IssueRow,
+                dict[str, Any] | None,
+                str | None,
+            ]
         ],
-        tuple[dict[str, Any] | None, str | None],
+        bool,
     ]:
-        repo, row = entry
-        item = row[3]
-        comments = row[4]
-        return (
-            (repo, row),
-            verify(
+        repo, ranked = entry
+        outcomes: list[
+            tuple[
+                sources.IssueRow,
+                dict[str, Any] | None,
+                str | None,
+            ]
+        ] = []
+        accepted: list[dict[str, Any]] = []
+        consecutive_source_failures = 0
+
+        for index, row in enumerate(ranked):
+            item = row[3]
+            candidate, reason = verify(
                 item,
                 token,
                 repo_cache,
                 guide_cache,
-                activity_comments=comments,
-            ),
-        )
+            )
+            outcomes.append((row, candidate, reason))
 
+            if reason in source_failure_reasons:
+                consecutive_source_failures += 1
+            else:
+                consecutive_source_failures = 0
+
+            if (
+                candidate is not None
+                and reason is None
+                and candidate["career_score"] >= STRATEGIC_MIN_CAREER_SCORE
+            ):
+                accepted.append(candidate)
+
+            if consecutive_source_failures >= STRATEGIC_REFRESH_FAILURE_LIMIT:
+                return repo, outcomes, True
+
+            remaining = ranked[index + 1 :]
+            if sources.strategic_repo_slots_settled(
+                accepted,
+                remaining,
+                keep_per_repo=STRATEGIC_KEEP_PER_REPO,
+                score_uplift_bound=STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND,
+            ):
+                return repo, outcomes, False
+
+        return repo, outcomes, False
+
+    verification_inputs = list(ranked_by_repo.items())
     with ThreadPoolExecutor(
-        max_workers=min(NETWORK_WORKERS, max(1, len(verification_rows)))
+        max_workers=min(NETWORK_WORKERS, max(1, len(verification_inputs)))
     ) as executor:
-        verification_results = list(executor.map(verify_row, verification_rows))
+        repo_verification_results = list(executor.map(verify_repo, verification_inputs))
 
     verified_by_repo: dict[str, list[dict[str, Any]]] = {repo: [] for repo in inspected}
-    for (repo, row), (candidate, reason) in verification_results:
-        item = row[3]
-        if reason:
-            add_reject(rejected, examples, item, reason)
-            print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
-            continue
+    verified_rows = 0
+    selected_rows = sum(len(rows) for rows in ranked_by_repo.values())
+    for repo, outcomes, coverage_incomplete in repo_verification_results:
+        verified_rows += len(outcomes)
+        for row, candidate, reason in outcomes:
+            item = row[3]
+            if reason:
+                add_reject(rejected, examples, item, reason)
+                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+                continue
 
-        assert candidate is not None
-        if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
-            reason = (
-                f"career score {candidate['career_score']}/100 below strategic threshold "
-                f"{STRATEGIC_MIN_CAREER_SCORE}/100"
-            )
-            add_reject(rejected, examples, item, reason)
-            if possible_miss_signal(item):
+            assert candidate is not None
+            if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
+                reason = (
+                    f"career score {candidate['career_score']}/100 below strategic threshold "
+                    f"{STRATEGIC_MIN_CAREER_SCORE}/100"
+                )
+                add_reject(rejected, examples, item, reason)
+                if possible_miss_signal(item):
+                    add_audit(
+                        audit,
+                        item,
+                        f"strong-looking near miss: {reason}",
+                    )
+                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+                continue
+
+            verified_by_repo[repo].append(candidate)
+
+        if coverage_incomplete:
+            remaining = ranked_by_repo[repo][len(outcomes) :]
+            if remaining:
                 add_audit(
                     audit,
-                    item,
-                    f"strong-looking near miss: {reason}",
+                    remaining[0][3],
+                    f"verification coverage incomplete for {repo} after repeated source failures",
                 )
-            print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
-            continue
+            print(
+                "Strategic verification coverage incomplete for "
+                f"{repo}; stopped after {len(outcomes)} deep checks"
+            )
 
-        verified_by_repo[repo].append(candidate)
+    print(
+        "Strategic deep verification: "
+        f"{verified_rows}/{selected_rows} inspected rows required network checks"
+    )
 
     found: list[dict[str, Any]] = []
     for repo in inspected:
