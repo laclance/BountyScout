@@ -2009,8 +2009,7 @@ class VerificationTests(unittest.TestCase):
 
         cloudflared = issue(
             title=(
-                "Warning for no ingress rule when using remote managed tunnel "
-                "with credentials-file"
+                "Warning for no ingress rule when using remote managed tunnel with credentials-file"
             ),
             comments=2,
         )
