@@ -567,13 +567,13 @@ def manual_tracking_issue_reason(
     normalized_body = normalized_claim_text(body).lower()
     explicit_tracking_container = bool(
         re.search(
-            r"\\b(?:use|using)\\s+(?:this|the)\\s+issue\\s+for\\s+tracking\\b",
+            r"\b(?:use|using)\s+(?:this|the)\s+issue\s+for\s+tracking\b",
             normalized_body,
         )
     )
     child_issue_delegation = bool(
         re.search(
-            r"\\b(?:create|open|file)\\s+(?:sub[- ]?issues?|child issues?|separate issues?)\\b",
+            r"\b(?:create|open|file)\s+(?:sub[- ]?issues?|child issues?|separate issues?)\b",
             normalized_body,
         )
     )
