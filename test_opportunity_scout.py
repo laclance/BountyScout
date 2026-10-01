@@ -185,6 +185,20 @@ class BasicHeuristicTests(unittest.TestCase):
             10,
         )
 
+    def test_strategic_basic_candidate_allows_comment_volume_only(self) -> None:
+        clean = issue(comments=1)
+        crowded = issue(comments=bounty.MAX_COMMENTS + 5)
+        crowded_assigned = issue(
+            comments=bounty.MAX_COMMENTS + 5,
+            assignees=[{"login": "dev"}],
+        )
+        assigned = issue(assignees=[{"login": "dev"}])
+
+        self.assertTrue(scout.strategic_basic_candidate(clean))
+        self.assertTrue(scout.strategic_basic_candidate(crowded))
+        self.assertFalse(scout.strategic_basic_candidate(crowded_assigned))
+        self.assertFalse(scout.strategic_basic_candidate(assigned))
+
     def test_issue_text_handles_dict_and_string_labels(self) -> None:
         title, body, labels, text = scout.issue_text(
             issue(title="ABC", body="DEF", labels=[{"name": "Help Wanted"}, "Bug"])
@@ -1596,8 +1610,10 @@ class DiscoveryTests(unittest.TestCase):
         )
 
         crowded = scout.basic_rejection_audit_reason(issue(comments=bounty.MAX_COMMENTS + 1))
-        self.assertIsNotNone(crowded)
-        self.assertIn("review competition cutoff", str(crowded))
+        self.assertEqual(
+            crowded,
+            "strong-looking result rejected by an unrecognized basic eligibility filter rule",
+        )
 
         unknown = scout.basic_rejection_audit_reason(issue())
         self.assertEqual(
@@ -1626,6 +1642,46 @@ class DiscoveryTests(unittest.TestCase):
             scout.add_audit(audit, strong, "two")
             scout.add_audit(audit, strong, "three")
         self.assertEqual(len(audit), 2)
+
+    def test_discover_strategic_keeps_crowded_issue_for_real_competition_checks(self) -> None:
+        crowded = issue(
+            html_url="https://github.com/g/g/issues/9",
+            title="API compatibility regression",
+            labels=[{"name": "good first issue"}, {"name": "bug"}],
+            comments=bounty.MAX_COMMENTS + 2,
+        )
+        with (
+            patch.object(scout, "TARGET_REPOS", ["g/g"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(
+                scout,
+                "target_repo_issue_pool",
+                return_value=([crowded], None),
+            ),
+            patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(scout, "issue_comments", return_value=[]),
+            patch.object(
+                scout,
+                "verify",
+                return_value=(
+                    candidate(
+                        url=crowded["html_url"],
+                        paid=False,
+                        career_score=70,
+                        priority_score=70,
+                        comments=crowded["comments"],
+                    ),
+                    None,
+                ),
+            ) as verify_mock,
+        ):
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual([item["url"] for item in found], [crowded["html_url"]])
+        verify_mock.assert_called_once()
+        self.assertEqual(rejected, {})
+        self.assertEqual(examples, [])
+        self.assertEqual(audit, [])
 
     def test_discover_strategic_rejects_below_quality_floor(self) -> None:
         low = issue(
