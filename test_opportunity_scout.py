@@ -985,6 +985,62 @@ class CandidateTests(unittest.TestCase):
         self.assertIn("issue active in last 14d", fresh["career_reasons"])
         self.assertLess(old["career_score"], active_old["career_score"])
 
+        missing_dates = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=1,
+                created_at=None,
+                updated_at=None,
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            [{"body": "old", "created_at": "not-a-date"}],
+        )
+        self.assertNotIn("issue active in last", " ".join(missing_dates["career_reasons"]))
+
+        multiple_comments = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=2,
+                created_at=(now - timedelta(days=900)).isoformat(),
+                updated_at=(now - timedelta(days=120)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            [
+                {
+                    "created_at": (now - timedelta(days=5)).isoformat(),
+                    "author_association": "MEMBER",
+                },
+                {
+                    "created_at": (now - timedelta(days=20)).isoformat(),
+                    "author_association": "MEMBER",
+                },
+            ],
+        )
+        self.assertIn("recent maintainer activity", multiple_comments["career_reasons"])
+
+        young_inactive = scout.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=0,
+                created_at=(now - timedelta(days=300)).isoformat(),
+                updated_at=(now - timedelta(days=300)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+        )
+        self.assertNotIn("inactive backlog penalty", " ".join(young_inactive["career_reasons"]))
+
     def test_build_paid_candidate_scoring(self) -> None:
         item_ = issue(
             body="network concurrency regression tests",
@@ -1409,7 +1465,11 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(len(audit), 2)
 
     def test_discover_strategic_rejects_below_quality_floor(self) -> None:
-        low = issue(html_url="https://github.com/g/g/issues/3", title="Feature")
+        low = issue(
+            html_url="https://github.com/g/g/issues/3",
+            title="Proxy regression",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
         with (
             patch.object(scout, "target_repo_queries", return_value=["q"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
@@ -1438,10 +1498,157 @@ class DiscoveryTests(unittest.TestCase):
             found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
         self.assertEqual(found, [])
-        self.assertEqual(audit, [])
         reason = "career score 40/100 below strategic threshold 55/100"
+        self.assertEqual(len(audit), 1)
+        self.assertIn(reason, audit[0]["reason"])
         self.assertEqual(rejected[reason], 1)
         self.assertEqual(examples[0]["reason"], reason)
+
+    def test_discover_strategic_audits_early_misses_and_top_pool_overflow(self) -> None:
+        now = datetime.now(timezone.utc)
+        dirty_weak = issue(
+            html_url="https://github.com/d/d/issues/1",
+            title="Documentation cleanup",
+            body="",
+            updated_at=(now - timedelta(days=200)).isoformat(),
+        )
+        archived_weak = issue(
+            html_url="https://github.com/x/y/issues/2",
+            title="Documentation cleanup",
+            body="",
+            updated_at=(now - timedelta(days=200)).isoformat(),
+        )
+        best = issue(
+            html_url="https://github.com/g/g/issues/1",
+            title="Proxy regression",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        overflow = issue(
+            html_url="https://github.com/g/g/issues/2",
+            title="DNS regression",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+
+        def meta(repo: str, token: str | None) -> dict[str, Any]:
+            if repo == "x/y":
+                return repo_meta(archived=True)
+            return repo_meta()
+
+        def preview(
+            item_: dict[str, Any],
+            lane: str,
+            signal: str | None,
+            meta_: dict[str, Any],
+            guide: str | None,
+            *rest: Any,
+        ) -> dict[str, Any]:
+            return candidate(
+                url=item_["html_url"],
+                paid=False,
+                priority_score=90 if item_ is best else 80,
+                career_score=90 if item_ is best else 80,
+            )
+
+        with (
+            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(
+                bounty,
+                "search_github",
+                return_value={"items": [dirty_weak, archived_weak, best, overflow]},
+            ),
+            patch.object(
+                bounty,
+                "is_clean_candidate",
+                side_effect=lambda item_: item_ is not dirty_weak,
+            ),
+            patch.object(bounty, "fetch_repo_metadata", side_effect=meta),
+            patch.object(scout, "build_candidate", side_effect=preview),
+            patch.object(scout, "issue_comments", return_value=[]),
+            patch.object(
+                scout,
+                "verify",
+                return_value=(candidate(url=best["html_url"], paid=False, career_score=90), None),
+            ),
+            patch.object(scout, "STRATEGIC_INSPECT_PER_REPO", 1),
+        ):
+            found, _, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual([item["url"] for item in found], [best["html_url"]])
+        self.assertTrue(
+            any("top-15 inspection pool" in item["reason"] for item in audit)
+        )
+        self.assertFalse(any(item["url"] == dirty_weak["html_url"] for item in audit))
+        self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
+
+    def test_discover_strategic_audits_after_repo_has_winners(self) -> None:
+        winner = issue(
+            html_url="https://github.com/g/g/issues/1",
+            title="Proxy regression",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        strong_extra = issue(
+            html_url="https://github.com/g/g/issues/2",
+            title="DNS regression",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        weak_extra = issue(
+            html_url="https://github.com/g/g/issues/3",
+            title="Documentation cleanup",
+            body="",
+            updated_at=(datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),
+        )
+        scores = {
+            winner["html_url"]: 90,
+            strong_extra["html_url"]: 80,
+            weak_extra["html_url"]: 70,
+        }
+
+        def preview(
+            item_: dict[str, Any],
+            lane: str,
+            signal: str | None,
+            meta_: dict[str, Any],
+            guide: str | None,
+            *rest: Any,
+        ) -> dict[str, Any]:
+            score = scores[item_["html_url"]]
+            return candidate(
+                url=item_["html_url"],
+                paid=False,
+                priority_score=score,
+                career_score=score,
+            )
+
+        with (
+            patch.object(scout, "target_repo_queries", return_value=["q"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(
+                bounty,
+                "search_github",
+                return_value={"items": [winner, strong_extra, weak_extra]},
+            ),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(scout, "build_candidate", side_effect=preview),
+            patch.object(scout, "issue_comments", return_value=[]),
+            patch.object(
+                scout,
+                "verify",
+                return_value=(
+                    candidate(url=winner["html_url"], paid=False, career_score=90),
+                    None,
+                ),
+            ) as verify_mock,
+            patch.object(scout, "STRATEGIC_KEEP_PER_REPO", 1),
+        ):
+            found, _, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual([item["url"] for item in found], [winner["html_url"]])
+        verify_mock.assert_called_once()
+        self.assertEqual(len(audit), 1)
+        self.assertEqual(audit[0]["url"], strong_extra["html_url"])
+        self.assertIn("three stronger candidates", audit[0]["reason"])
 
     def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
