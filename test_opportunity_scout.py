@@ -120,8 +120,7 @@ class BasicHeuristicTests(unittest.TestCase):
         ):
             self.assertTrue(any(query_fragment in q for q in scout.STRATEGIC_GLOBAL_QUERIES))
         self.assertLessEqual(
-            len(scout.PAID_DISCOVERY_QUERIES)
-            + len(scout.STRATEGIC_GLOBAL_QUERIES),
+            len(scout.PAID_DISCOVERY_QUERIES) + len(scout.STRATEGIC_GLOBAL_QUERIES),
             10,
         )
 
@@ -1703,9 +1702,7 @@ class DiscoveryTests(unittest.TestCase):
                 return_value=([], "target repo discovery failed for a/a; scan coverage incomplete"),
             ),
         ):
-            found, rejected, examples, audit = scout.discover_strategic(
-                "t", set(), set(), {}, {}
-            )
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
         self.assertEqual(found, [])
         self.assertEqual(rejected, {})
         self.assertEqual(examples, [])
