@@ -419,8 +419,7 @@ class CompetitionVolumeTests(unittest.TestCase):
                     scoring.comment_contributes_to_competition(
                         {
                             "body": (
-                                "This bot triages issues after 90d of inactivity. "
-                                "/lifecycle stale"
+                                "This bot triages issues after 90d of inactivity. /lifecycle stale"
                             ),
                             "user": {"login": login},
                         }
