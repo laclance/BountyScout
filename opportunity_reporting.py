@@ -99,9 +99,7 @@ def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
         ]
     )
     if candidate["paid"]:
-        lines.append(
-            f"- **Cash reasons:** {', '.join(str(x) for x in candidate['cash_reasons'])}"
-        )
+        lines.append(f"- **Cash reasons:** {', '.join(str(x) for x in candidate['cash_reasons'])}")
     else:
         lines.append(
             f"- **Career reasons:** {', '.join(str(x) for x in candidate['career_reasons'])}"
