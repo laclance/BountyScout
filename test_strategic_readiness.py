@@ -290,6 +290,48 @@ class MaintainerIssueDecisionTests(unittest.TestCase):
         )
 
 
+class ManualTrackingIssueTests(unittest.TestCase):
+    def test_multi_child_umbrella_tracker_is_not_single_implementation_task(self) -> None:
+        tracker = issue(
+            body=(
+                "Track and resolve the following API refinements and bug fixes:\n\n"
+                "- [ ] #8314\n"
+                "- [ ] #9456\n"
+                "- [ ] #9457\n"
+                "- [ ] #9458\n"
+            )
+        )
+        self.assertEqual(
+            readiness.manual_tracking_issue_reason(tracker),
+            "umbrella tracking issue, not a single implementation task",
+        )
+
+    def test_normal_checklists_and_small_cross_references_stay_actionable(self) -> None:
+        self.assertIsNone(
+            readiness.manual_tracking_issue_reason(
+                issue(
+                    body=(
+                        "Implementation checklist:\n"
+                        "- [ ] update parser\n"
+                        "- [ ] add tests\n"
+                        "- [ ] update docs\n"
+                    )
+                )
+            )
+        )
+        self.assertIsNone(
+            readiness.manual_tracking_issue_reason(
+                issue(
+                    body=(
+                        "Track the following follow-up work:\n"
+                        "- [ ] #10\n"
+                        "- [ ] #11\n"
+                    )
+                )
+            )
+        )
+
+
 class LifecycleClassificationTests(unittest.TestCase):
     def test_dependency_dashboard_requires_automated_tracking_context(self) -> None:
         dashboard = issue(
