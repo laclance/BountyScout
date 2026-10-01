@@ -2940,6 +2940,49 @@ class VerificationTests(unittest.TestCase):
             )
         rejection.assert_called_once_with(fresh, "t", supplied)
 
+    def test_verify_strategic_reuses_fetched_comments_for_final_scoring(self) -> None:
+        fresh = issue(body="", title="Parser task", comments=2)
+        comments = [
+            {
+                "author_association": "MEMBER",
+                "body": "The previous implementation needs cancellation regression tests.",
+            }
+        ]
+        meta = repo_meta()
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=(comments, None),
+            ) as comments_fetch,
+            patch.object(scout, "strategic_rejection", return_value=None) as rejection,
+            patch.object(scout, "fetch_repo_metadata", return_value=meta),
+            patch.object(scout, "contribution_guide", return_value=None),
+            patch.object(
+                scout,
+                "build_candidate",
+                return_value={"lane": "strategic"},
+            ) as build,
+        ):
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {}),
+                ({"lane": "strategic"}, None),
+            )
+
+        comments_fetch.assert_called_once_with(fresh, "t")
+        rejection.assert_called_once_with(fresh, "t", comments)
+        build.assert_called_once_with(
+            fresh,
+            "strategic",
+            None,
+            meta,
+            None,
+            comments,
+        )
+
     def test_verify_non_payment_rejection_and_strategic_success(self) -> None:
         paid = issue(body="bounty $100", comments=0)
         with (
