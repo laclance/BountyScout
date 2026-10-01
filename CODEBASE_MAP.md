@@ -141,10 +141,10 @@
 
 - **function** `normalized_claim_text()` — line 12
 - **function** `explicit_ownership_claim()` — line 17
-- **function** `implementation_underway_claim()` — line 35
-- **function** `pr_intent_claim()` — line 58
-- **function** `concrete_first_person_plan_claim()` — line 76
-- **function** `strategic_claim_text()` — line 89
+- **function** `implementation_underway_claim()` — line 36
+- **function** `pr_intent_claim()` — line 59
+- **function** `concrete_first_person_plan_claim()` — line 77
+- **function** `strategic_claim_text()` — line 90
 
 ## `strategic_competition.py`
 
@@ -163,15 +163,15 @@
 - **function** `issue_label_set()` — line 40
 - **function** `proposal_stage_signal()` — line 49
 - **function** `maintainer_comment_authority()` — line 69
-- **function** `maintainer_readiness_comment_state()` — line 318
-- **function** `readiness_pending_label_reason()` — line 354
-- **function** `abandoned_lifecycle_reason()` — line 378
-- **function** `maintainer_issue_decision_reason()` — line 390
-- **function** `maintainer_submission_hold_reason()` — line 407
-- **function** `reporter_resolution_reason()` — line 433
-- **function** `security_disclosure_reason()` — line 487
-- **function** `reward_history_reason()` — line 506
-- **function** `reporter_support_triage_reason()` — line 527
-- **function** `manual_tracking_issue_reason()` — line 548
-- **function** `automated_tracking_issue_reason()` — line 579
-- **function** `release_tracking_reason()` — line 623
+- **function** `maintainer_readiness_comment_state()` — line 325
+- **function** `readiness_pending_label_reason()` — line 361
+- **function** `abandoned_lifecycle_reason()` — line 385
+- **function** `maintainer_issue_decision_reason()` — line 397
+- **function** `maintainer_submission_hold_reason()` — line 414
+- **function** `reporter_resolution_reason()` — line 440
+- **function** `security_disclosure_reason()` — line 494
+- **function** `reward_history_reason()` — line 513
+- **function** `reporter_support_triage_reason()` — line 534
+- **function** `manual_tracking_issue_reason()` — line 555
+- **function** `automated_tracking_issue_reason()` — line 586
+- **function** `release_tracking_reason()` — line 630
