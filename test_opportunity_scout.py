@@ -99,17 +99,18 @@ class BasicHeuristicTests(unittest.TestCase):
             "nodejs/undici",
         ):
             self.assertIn(repo, scout.TARGET_REPOS)
-        self.assertTrue(
-            any('label:"good first issue" bug' in q for q in scout.STRATEGIC_GLOBAL_QUERIES)
-        )
         for query_fragment in (
             'label:"help wanted" label:"bug"',
-            'label:"help wanted" label:"type/bug"',
-            'label:"Status: Help Wanted" label:"Type: Bug"',
-            'label:"Help-Wanted"',
-            'label:"contributor/help-wanted"',
+            'label:"good first issue" label:"bug"',
+            'label:"help wanted" regression',
         ):
             self.assertTrue(any(query_fragment in q for q in scout.STRATEGIC_GLOBAL_QUERIES))
+        self.assertLessEqual(
+            len(scout.TARGET_REPOS)
+            + len(scout.PAID_DISCOVERY_QUERIES)
+            + len(scout.STRATEGIC_GLOBAL_QUERIES),
+            29,
+        )
 
     def test_issue_text_handles_dict_and_string_labels(self) -> None:
         title, body, labels, text = scout.issue_text(
@@ -118,6 +119,10 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertEqual((title, body), ("ABC", "DEF"))
         self.assertEqual(labels, "help wanted bug")
         self.assertEqual(text, "abc\ndef")
+
+        self.assertTrue(scout.maintainer_ready_signal("Status: Help Wanted"))
+        self.assertTrue(scout.maintainer_ready_signal("contributor/help-wanted"))
+        self.assertFalse(scout.maintainer_ready_signal("bug"))
 
     def test_effort_all_buckets(self) -> None:
         self.assertEqual(scout.code_reference_count("a.go a.go pkg/b.sh docs/c.yaml"), 3)
