@@ -213,7 +213,7 @@ class EffortCalibrationTests(unittest.TestCase):
         estimate = scoring.estimate_effort_details(
             issue(
                 title=(
-                    'FR: [documentation] Explain how to configure MagicDNS manually for '
+                    "FR: [documentation] Explain how to configure MagicDNS manually for "
                     'tailscaled on macOS in the "Tailscaled-on-macOS"'
                 ),
                 body=TAILSCALE_19694_BODY,
