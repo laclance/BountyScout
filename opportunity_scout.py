@@ -136,7 +136,7 @@ def code_reference_count(text: str) -> int:
 
 
 def strategic_basic_candidate(item: Mapping[str, Any]) -> bool:
-    """Apply basic eligibility without treating comment volume as disqualifying."""
+    """Apply strategic eligibility without making comment volume disqualifying."""
     if bounty.is_clean_candidate(item):
         return True
     if int(item.get("comments") or 0) <= bounty.MAX_COMMENTS:
