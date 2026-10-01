@@ -923,10 +923,11 @@ def discover_strategic(
             repo, _ = bounty.issue_repo_and_number(item)
             if not repo:
                 continue
+            repo_key = repo
             meta = github.cached_value(
                 repo_cache,
-                repo,
-                lambda: fetch_repo_metadata(repo, token),
+                repo_key,
+                lambda: fetch_repo_metadata(repo_key, token),
                 CACHE_LOCKS,
                 namespace="repo",
             )
