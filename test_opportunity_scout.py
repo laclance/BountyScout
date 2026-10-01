@@ -1695,12 +1695,13 @@ class DiscoveryTests(unittest.TestCase):
     def test_discover_strategic_audits_target_source_failure(self) -> None:
         with (
             patch.object(scout, "TARGET_REPOS", ["a/a"]),
-            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", ["global-q"]),
             patch.object(
                 scout,
                 "target_repo_issue_pool",
                 return_value=([], "target repo discovery failed for a/a; scan coverage incomplete"),
             ),
+            patch.object(bounty, "search_github", return_value={"items": []}),
         ):
             found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
         self.assertEqual(found, [])
