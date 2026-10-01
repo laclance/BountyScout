@@ -3229,15 +3229,11 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_strategic_preflight_rejects_only_source_visible_states(self) -> None:
         self.assertEqual(
-            scout.strategic_preflight_rejection(
-                issue(labels=[{"name": "claimed"}], comments=2)
-            ),
+            scout.strategic_preflight_rejection(issue(labels=[{"name": "claimed"}], comments=2)),
             "issue is marked claimed by the project",
         )
         self.assertEqual(
-            scout.strategic_preflight_rejection(
-                issue(title="Plan to release v1.2.3", comments=1)
-            ),
+            scout.strategic_preflight_rejection(issue(title="Plan to release v1.2.3", comments=1)),
             "release planning/tracking issue, not implementation work",
         )
         self.assertEqual(

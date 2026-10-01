@@ -1264,7 +1264,9 @@ def discover_strategic(
             item = row[3]
             if reason:
                 add_reject(rejected, examples, item, reason)
-                if reason.startswith("pre-verification career upper bound") and possible_miss_signal(item):
+                if reason.startswith(
+                    "pre-verification career upper bound"
+                ) and possible_miss_signal(item):
                     add_audit(audit, item, f"strong-looking near miss: {reason}")
                 print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
                 continue
