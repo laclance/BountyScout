@@ -226,6 +226,11 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
             "not the right approach",
             "should not be implemented",
             "shouldn't be implemented",
+            "use case for provider functions",
+            "use case for a provider function",
+            "should be implemented as a provider function",
+            "should live in a provider",
+            "should be done in a provider",
         )
     ):
         return "maintainer indicates the proposed implementation approach is not wanted", False
@@ -475,6 +480,25 @@ def reporter_resolution_reason(
     return None
 
 
+def security_disclosure_reason(item: Mapping[str, Any]) -> str | None:
+    """Reject public vulnerability disclosures as normal contributor work."""
+    title = str(item.get("title", "")).lower()
+    body = str(item.get("body", "")).lower()
+
+    explicit = "security disclosure" in title
+    structured_disclosure = all(
+        marker in body
+        for marker in (
+            "cvss",
+            "cwe-",
+            "disclosure timeline",
+        )
+    )
+    if explicit or structured_disclosure:
+        return "security disclosure, not a normal contributor task"
+    return None
+
+
 def manual_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
     """Reject explicit umbrella issues that track multiple child implementation tasks."""
     body = str(item.get("body", ""))
@@ -549,11 +573,13 @@ def release_tracking_reason(
     title = str(item.get("title", ""))
     body = str(item.get("body", ""))
     tracking_text = title.lower()
+    labels = _labels_text(item)
     if re.search(
         r"\brelease(?:\s+\S+){0,2}\s+(?:tracking|tracker|checklist|planning)\b|"
-        r"\b(?:tracking|tracker|checklist)\s+(?:for\s+)?release\b",
+        r"\b(?:tracking|tracker|checklist)\s+(?:for\s+)?release\b|"
+        r"\bplanned(?:\s+\S+){0,3}\s+release\b",
         tracking_text,
-    ):
+    ) or ("announcement" in labels and "release" in tracking_text):
         return "release planning/tracking issue, not implementation work"
 
     comment_text = "\n".join(str(comment.get("body", "")) for comment in comments or [])
