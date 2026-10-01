@@ -959,9 +959,20 @@ def discover_strategic(
             source_batches.append(items)
 
     for query in STRATEGIC_GLOBAL_QUERIES:
-        source_batches.append(
-            bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE).get("items", [])
-        )
+        result = bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE)
+        items = result.get("items")
+        if not isinstance(items, list):
+            add_audit(
+                audit,
+                {
+                    "html_url": "https://github.com/issues",
+                    "title": f"Global GitHub Search: {query}",
+                },
+                f"global strategic discovery search failed for query: {query}; "
+                "scan coverage incomplete",
+            )
+            continue
+        source_batches.append(items)
 
     for items in source_batches:
         for item in items:
@@ -1238,7 +1249,7 @@ def main() -> None:
             print(f"- {item['url']}: {item['reason']}")
 
     rejects = reporting.rejection_summary(paid_rejects, strategic_rejects)
-    source_failures = sum(
+    verification_failures = sum(
         strategic_rejects.get(reason, 0)
         for reason in (
             "could not refresh source issue",
@@ -1246,12 +1257,19 @@ def main() -> None:
             "could not verify open implementation PR timeline",
         )
     )
+    discovery_failures = sum(
+        1
+        for item in strategic_audit
+        if "scan coverage incomplete" in str(item.get("reason", "")).lower()
+    )
+    coverage_failures = verification_failures + discovery_failures
     coverage_warning = None
-    if source_failures >= STRATEGIC_COVERAGE_WARNING_THRESHOLD:
+    if discovery_failures or verification_failures >= STRATEGIC_COVERAGE_WARNING_THRESHOLD:
         coverage_warning = (
             "Strategic verification coverage is incomplete: "
-            f"{source_failures} source/comment/competition checks failed, so this ranking may omit "
-            "stronger candidates. Seen-state will not be advanced for this run."
+            f"{coverage_failures} discovery/source/comment/competition checks failed, "
+            "so this ranking may omit stronger candidates. "
+            "Seen-state will not be advanced for this run."
         )
         print(f"WARNING: {coverage_warning}")
 
