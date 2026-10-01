@@ -321,7 +321,7 @@ TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
 
 
 def triage_pending_signal(labels_text: str) -> bool:
-    """Recognize common not-yet-ready triage label dialects."""
+    """Recognize pending-triage label dialects used by target repositories."""
     normalized = re.sub(r"[-_/:]+", " ", labels_text.lower())
     return any(
         marker in normalized
