@@ -356,7 +356,6 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
             (False, "maintainer says issue still needs discussion"),
         )
 
-
     def test_trusted_worth_discussion_and_community_feedback_are_holds(self) -> None:
         for body in (
             "Thanks for filing this. It is worth discussion.",
