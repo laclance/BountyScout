@@ -2147,8 +2147,7 @@ class VerificationTests(unittest.TestCase):
 
         aws_lbc = issue(
             html_url=(
-                "https://github.com/kubernetes-sigs/"
-                "aws-load-balancer-controller/issues/4870"
+                "https://github.com/kubernetes-sigs/aws-load-balancer-controller/issues/4870"
             ),
             title="manage controller CRD upgrades",
             comments=1,
