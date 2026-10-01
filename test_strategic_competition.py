@@ -144,7 +144,7 @@ class LinkedPullRequestTests(unittest.TestCase):
             {"body": ("submitted PR #10; implementation pull request #11; also submitted PR #10")}
         ]
         with patch.object(
-            bounty,
+            github,
             "github_get",
             side_effect=[
                 {"state": "closed", "html_url": "https://github.com/example/project/pull/10"},
@@ -175,7 +175,7 @@ class LinkedPullRequestTests(unittest.TestCase):
             }
         ]
         with patch.object(
-            bounty,
+            github,
             "github_get",
             return_value={"state": "open"},
         ):
@@ -275,7 +275,7 @@ class SearchPullRequestTests(unittest.TestCase):
             with (
                 self.subTest(response=response),
                 patch.object(
-                    bounty,
+                    github,
                     "github_get",
                     return_value=response,
                 ),
