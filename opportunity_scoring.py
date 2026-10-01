@@ -141,7 +141,9 @@ def estimate_effort_details(item: Mapping[str, Any]) -> EffortEstimate:
 
     explicit_large_scope = bool(
         re.search(
-            r"\b(?:epic|roadmap|redesign|rewrite|multi-phase|architecture|"
+            r"\b(?:epic|roadmap|redesign|rewrite|multi-phase|"
+            r"architecture (?:redesign|rewrite|overhaul|refactor|change)|"
+            r"architectural (?:redesign|rewrite|overhaul|refactor|change)|"
             r"large refactor|rfc|connection pool|explore publishing)\b",
             text,
         )
