@@ -1,0 +1,191 @@
+from __future__ import annotations
+
+import io
+import time
+import unittest
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import redirect_stdout
+from threading import Lock
+from typing import Any, Literal
+from unittest.mock import patch
+
+import github_access as github
+
+
+class FakeResponse:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self) -> "FakeResponse":
+        return self
+
+    def __exit__(self, *args: Any) -> Literal[False]:
+        return False
+
+    def read(self) -> bytes:
+        return self.body
+
+
+def issue(**overrides: Any) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "html_url": "https://github.com/example/project/issues/42",
+        "comments": 1,
+    }
+    item.update(overrides)
+    return item
+
+
+class GitHubHttpTests(unittest.TestCase):
+    def test_github_get_uses_standard_headers_and_auth(self) -> None:
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            return_value=FakeResponse(b'{"ok": true}'),
+        ) as opened:
+            self.assertEqual(github.github_get("https://api.github.com/x", "tok"), {"ok": True})
+
+        request = opened.call_args.args[0]
+        self.assertEqual(request.headers["Authorization"], "Bearer tok")
+        self.assertEqual(request.headers["Accept"], "application/vnd.github+json")
+        self.assertEqual(request.headers["User-agent"], "OSSOpportunityScout")
+        self.assertEqual(request.headers["X-github-api-version"], "2022-11-28")
+
+    def test_github_get_error_logging_can_be_suppressed(self) -> None:
+        with (
+            patch.object(urllib.request, "urlopen", side_effect=OSError("boom")),
+            io.StringIO() as output,
+            redirect_stdout(output),
+        ):
+            self.assertIsNone(github.github_get("https://api.github.com/x"))
+            self.assertIn("GitHub API Error", output.getvalue())
+
+        with (
+            patch.object(urllib.request, "urlopen", side_effect=OSError("boom")),
+            io.StringIO() as output,
+            redirect_stdout(output),
+        ):
+            self.assertIsNone(
+                github.github_get(
+                    "https://api.github.com/x",
+                    timeout=10,
+                    log_errors=False,
+                )
+            )
+            self.assertEqual(output.getvalue(), "")
+
+
+class CacheTests(unittest.TestCase):
+    def test_keyed_lock_pool_reuses_only_matching_keys(self) -> None:
+        locks = github.KeyedLockPool()
+        self.assertIs(locks.lock_for("repo:a"), locks.lock_for("repo:a"))
+        self.assertIsNot(locks.lock_for("repo:a"), locks.lock_for("repo:b"))
+
+    def test_cached_value_uses_existing_value_without_loading(self) -> None:
+        cache = {"a": 7}
+        calls = 0
+
+        def loader() -> int:
+            nonlocal calls
+            calls += 1
+            return 9
+
+        value = github.cached_value(
+            cache,
+            "a",
+            loader,
+            github.KeyedLockPool(),
+            namespace="repo",
+        )
+        self.assertEqual(value, 7)
+        self.assertEqual(calls, 0)
+
+    def test_cached_value_serializes_same_key_fill(self) -> None:
+        cache: dict[str, int] = {}
+        calls = 0
+        calls_lock = Lock()
+        locks = github.KeyedLockPool()
+
+        def loader() -> int:
+            nonlocal calls
+            with calls_lock:
+                calls += 1
+            time.sleep(0.01)
+            return 11
+
+        def load(_: int) -> int:
+            return github.cached_value(
+                cache,
+                "a",
+                loader,
+                locks,
+                namespace="repo",
+            )
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            values = list(executor.map(load, range(4)))
+
+        self.assertEqual(values, [11, 11, 11, 11])
+        self.assertEqual(calls, 1)
+        self.assertEqual(cache, {"a": 11})
+
+
+class GitHubResourceTests(unittest.TestCase):
+    def test_repo_metadata_requires_dict_shape(self) -> None:
+        with patch.object(github, "github_get", return_value={"stargazers_count": 10}):
+            self.assertEqual(github.repo_metadata("a/b", "t"), {"stargazers_count": 10})
+        with patch.object(github, "github_get", return_value=[]):
+            self.assertEqual(github.repo_metadata("a/b", "t"), {})
+
+    def test_issue_comments_short_circuit_and_shape(self) -> None:
+        self.assertEqual(github.issue_comments({"html_url": "bad", "comments": 1}, "t"), [])
+        self.assertEqual(github.issue_comments(issue(comments=0), "t"), [])
+
+        with patch.object(github, "github_get", return_value={"bad": "shape"}):
+            self.assertEqual(github.issue_comments(issue(), "t"), [])
+        with patch.object(github, "github_get", return_value=[{"body": "x"}]) as getter:
+            self.assertEqual(github.issue_comments(issue(), "t"), [{"body": "x"}])
+            self.assertIn("/issues/42/comments?per_page=100", getter.call_args.args[0])
+
+    def test_contribution_guide_checks_common_paths(self) -> None:
+        calls: list[str] = []
+
+        def getter(url: str, token: str | None) -> Any:
+            calls.append(url)
+            if "docs/CONTRIBUTING.md" in url:
+                return {"html_url": "guide"}
+            return None
+
+        self.assertEqual(github.contribution_guide("a/b", "t", getter), "guide")
+        self.assertEqual(len(calls), 3)
+        self.assertIsNone(github.contribution_guide("a/b", "t", lambda *_: None))
+
+    def test_contribution_guide_default_getter_uses_optional_http_semantics(self) -> None:
+        with patch.object(
+            github,
+            "github_get",
+            side_effect=[None, {"html_url": "guide"}],
+        ) as getter:
+            self.assertEqual(github.contribution_guide("a/b", "t"), "guide")
+        self.assertEqual(getter.call_count, 2)
+        self.assertEqual(getter.call_args.kwargs["timeout"], 10)
+        self.assertFalse(getter.call_args.kwargs["log_errors"])
+
+    def test_issue_from_github_url_validates_and_fetches(self) -> None:
+        self.assertIsNone(github.issue_from_github_url("bad", "t"))
+
+        with patch.object(github, "github_get", return_value=[]):
+            self.assertIsNone(
+                github.issue_from_github_url("https://github.com/a/b/issues/12", "t")
+            )
+
+        with patch.object(github, "github_get", return_value={"state": "open"}) as getter:
+            self.assertEqual(
+                github.issue_from_github_url("https://github.com/a/b/issues/12", "t"),
+                {"state": "open"},
+            )
+            self.assertIn("/repos/a/b/issues/12", getter.call_args.args[0])
+
+
+if __name__ == "__main__":
+    unittest.main()
