@@ -1301,9 +1301,7 @@ def discover_paid(
             )
         )
 
-    for (source_url, platform_signal), item in zip(
-        platform_sources, platform_items, strict=True
-    ):
+    for (source_url, platform_signal), item in zip(platform_sources, platform_items, strict=True):
         if item and bounty.is_clean_candidate(item):
             pending.append((item, platform_signal, True))
 
@@ -1326,9 +1324,7 @@ def discover_paid(
             ),
         )
 
-    with ThreadPoolExecutor(
-        max_workers=min(NETWORK_WORKERS, max(1, len(pending)))
-    ) as executor:
+    with ThreadPoolExecutor(max_workers=min(NETWORK_WORKERS, max(1, len(pending)))) as executor:
         verification_results = list(executor.map(verify_paid, pending))
 
     for (item, _, is_platform), (candidate, reason) in verification_results:
@@ -1352,6 +1348,7 @@ def discover_paid(
         found.append(candidate)
 
     return found, rejected, examples
+
 
 def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     """Flag strong raw results that deserve scrutiny when filters discard them."""
@@ -1549,11 +1546,7 @@ def discover_strategic(
                 "strong-looking result fell outside the repo top-15 inspection pool",
             )
 
-    inspection_rows = [
-        (repo, item)
-        for repo, items in inspected.items()
-        for item in items
-    ]
+    inspection_rows = [(repo, item) for repo, items in inspected.items() for item in items]
     with ThreadPoolExecutor(
         max_workers=min(NETWORK_WORKERS, max(1, len(inspection_rows)))
     ) as executor:
@@ -1628,9 +1621,7 @@ def discover_strategic(
     ) as executor:
         verification_results = list(executor.map(verify_row, verification_rows))
 
-    verified_by_repo: dict[str, list[dict[str, Any]]] = {
-        repo: [] for repo in inspected
-    }
+    verified_by_repo: dict[str, list[dict[str, Any]]] = {repo: [] for repo in inspected}
     for (repo, row), (candidate, reason) in verification_results:
         item = row[3]
         if reason:
@@ -1671,6 +1662,7 @@ def discover_strategic(
         found.extend(verified_repo[:STRATEGIC_KEEP_PER_REPO])
 
     return found, rejected, examples, audit
+
 
 def github_report_ref(text: Any) -> str:
     """Make GitHub issue/PR URLs clickable without creating backlinks."""
