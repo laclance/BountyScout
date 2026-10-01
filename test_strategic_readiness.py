@@ -279,6 +279,14 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
                 )
             )
         )
+        self.assertIsNone(
+            readiness.maintainer_submission_hold_reason(
+                issue(
+                    author_association="MEMBER",
+                    body="Please add validation in the arguments package.",
+                )
+            )
+        )
 
     def test_reporter_latest_resolution_state_wins(self) -> None:
         resolved = [
@@ -303,6 +311,17 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
             readiness.reporter_resolution_reason(
                 issue(),
                 [{"body": "Looks fixed to me.", "user": {"login": "someone-else"}}],
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_resolution_reason(
+                issue(),
+                [
+                    {
+                        "body": "Thanks for checking; I will test another configuration.",
+                        "user": {"login": "reporter"},
+                    }
+                ],
             )
         )
 
