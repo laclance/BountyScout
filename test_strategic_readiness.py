@@ -386,6 +386,19 @@ class LifecycleClassificationTests(unittest.TestCase):
         )
         self.assertIsNone(readiness.release_tracking_reason(issue(title="Bug in release parser")))
 
+        missing_release = issue(
+            title="Version 3.13.4 missing release",
+            body=(
+                "The version update was merged in #19862, however the release action "
+                "failed on Go testing. The release step then never triggered. "
+                "This leaves us with a v3.13.4 tag, but no release with downloads."
+            ),
+        )
+        self.assertEqual(
+            readiness.release_tracking_reason(missing_release),
+            "implementation already merged; only release/tagging remains",
+        )
+
         undici = issue(
             comments=2,
         )
