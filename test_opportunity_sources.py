@@ -44,7 +44,7 @@ class TargetRepoSourceTests(unittest.TestCase):
         }
         i1, i2, i3 = issue(1), issue(2), issue(3)
         with patch.object(
-            bounty,
+            github,
             "github_get",
             side_effect=[
                 [i1, pr, "bad", pr],
