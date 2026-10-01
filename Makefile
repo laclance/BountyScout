@@ -15,7 +15,7 @@ lint:
 	$(PYTHON) -m ruff check .
 
 compile:
-	$(PYTHON) -m py_compile scout_bounties.py opportunity_scout.py strategic_claims.py scripts/generate_codebase_map.py test_scout_bounties.py test_opportunity_scout.py
+	$(PYTHON) -m py_compile *.py scripts/*.py
 
 typecheck:
 	$(PYTHON) -m mypy
