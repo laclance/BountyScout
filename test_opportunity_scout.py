@@ -2654,7 +2654,7 @@ class VerificationTests(unittest.TestCase):
                 )[1],
                 "could not identify repository/issue number",
             )
-        rejection.assert_called_once_with(fresh, supplied)
+        rejection.assert_called_once_with(fresh, "t", supplied)
 
     def test_verify_non_payment_rejection_and_strategic_success(self) -> None:
         paid = issue(body="bounty $100", comments=0)
