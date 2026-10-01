@@ -350,7 +350,7 @@ def strategic_priority_score(
     reasons: list[str] = []
     if effort_adjustment > 0:
         reasons.append(f"{effort} execution bonus")
-    elif effort_adjustment < 0:
+    else:
         reasons.append(f"{effort} execution penalty")
 
     if competition_level == "none":
