@@ -458,7 +458,8 @@ class SearchPullRequestTests(unittest.TestCase):
         )
 
     def test_search_failure_fails_closed_when_pr_check_is_needed(self) -> None:
-        for response in (None, []):
+        responses: tuple[Any, ...] = (None, [])
+        for response in responses:
             with (
                 self.subTest(response=response),
                 patch.object(github, "github_get", return_value=response),
