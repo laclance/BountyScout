@@ -381,6 +381,12 @@ class ScoringRegressionTests(unittest.TestCase):
                     "user": {"login": "github-actions[bot]"},
                     "body": "This issue has been automatically marked as stale.",
                 },
+                {
+                    "created_at": (bot_time - timedelta(days=30)).isoformat(),
+                    "author_association": "CONTRIBUTOR",
+                    "user": {"login": "stale[bot]"},
+                    "body": "Older automated stale reminder.",
+                },
             ],
             target_repos={"example/project"},
             amount_pattern=AMOUNT_RE,
