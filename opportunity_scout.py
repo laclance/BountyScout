@@ -117,6 +117,28 @@ def code_reference_count(text: str) -> int:
     return len({match.group(0).lower() for match in CODE_FILE_RE.finditer(text)})
 
 
+def documentation_microfix(item: Mapping[str, Any]) -> bool:
+    """Detect tiny docs-only edits that should not outrank substantive code work."""
+    title, body, labels, text = issue_text(item)
+    docs_signal = bool(
+        re.search(
+            r"\b(?:docs?|documentation|readme|typo|spelling|broken image|broken link)\b",
+            f"{title}\n{labels}",
+            re.IGNORECASE,
+        )
+        or re.search(r"\b(?:docs?/|readme(?:\.[a-z]+)?\b)", body, re.IGNORECASE)
+    )
+    micro_signal = bool(
+        re.search(
+            r"\b(?:typo|spelling|broken image|broken link|link fix|image link|"
+            r"documentation cleanup|docs cleanup)\b",
+            text,
+            re.IGNORECASE,
+        )
+    )
+    return docs_signal and micro_signal and code_reference_count(body) == 0
+
+
 def estimate_effort(item: Mapping[str, Any]) -> str:
     title, body, labels, text = issue_text(item)
     comments = int(item.get("comments") or 0)
@@ -296,6 +318,21 @@ SUPPLEMENTAL_CLAIM_PATTERNS = [
 ]
 TRIAGE_PENDING_LABELS = {"needs-triage"}
 TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
+
+
+def triage_pending_signal(labels_text: str) -> bool:
+    """Recognize pending-triage label dialects used by target repositories."""
+    normalized = re.sub(r"[-_/:]+", " ", labels_text.lower())
+    return any(
+        marker in normalized
+        for marker in (
+            "needs triage",
+            "triage pending",
+            "bug possible",
+            "needs analysis",
+            "needs investigation",
+        )
+    )
 
 
 def linked_open_pr_reason(
@@ -917,6 +954,10 @@ def build_candidate(
                 career -= 8
                 career_reasons.append("older inactive backlog penalty")
 
+    if lane == "strategic" and documentation_microfix(item):
+        career = min(career, 45)
+        career_reasons.insert(0, "documentation-only micro-fix cap")
+
     career = max(0, min(100, career))
 
     priority = (
@@ -1048,10 +1089,10 @@ def strategic_rejection(
         for label in (item.get("labels") or [])
         if (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip()
     }
-    accepted = bool(TRIAGE_ACCEPTED_LABELS & label_set) or maintainer_ready_signal(
-        " ".join(label_set)
-    )
-    if TRIAGE_PENDING_LABELS & label_set and not accepted:
+    labels_text = " ".join(label_set)
+    accepted = bool(TRIAGE_ACCEPTED_LABELS & label_set) or maintainer_ready_signal(labels_text)
+    pending = bool(TRIAGE_PENDING_LABELS & label_set) or triage_pending_signal(labels_text)
+    if pending and not accepted:
         return "awaiting maintainer triage"
 
     diagnostic_reason = non_actionable_diagnostic_reason(item)
@@ -1259,6 +1300,51 @@ def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     return recent and (contributor_signal or bug_signal)
 
 
+def basic_rejection_audit_reason(item: Mapping[str, Any]) -> str | None:
+    """Return only tunable/unknown basic-filter reasons worth auditing."""
+    if "pull_request" in item:
+        return None
+    if item.get("assignees"):
+        return None
+
+    url = str(item.get("html_url", "")).lower()
+    title = str(item.get("title", "")).lower()
+    body = str(item.get("body", "")).lower()
+    if "/bountyscout/issues/" in url:
+        return None
+    if any(
+        marker in title or marker in body
+        for marker in (
+            "bounty alert:",
+            "active bounty scan results",
+            "new opportunities found",
+            "new opportunityies found",
+        )
+    ):
+        return None
+    if int(item.get("comments") or 0) > bounty.MAX_COMMENTS:
+        return (
+            f"strong-looking result rejected because thread has more than "
+            f"{bounty.MAX_COMMENTS} comments; review competition cutoff"
+        )
+    if any(
+        term in title or term in body
+        for term in (
+            "airdrop",
+            "referral",
+            "casino",
+            "gambling",
+            "trading bot",
+            "blog post",
+            "article writing",
+            "tutorial proposal",
+            "content creator",
+        )
+    ):
+        return None
+    return "strong-looking result rejected by an unrecognized basic eligibility filter rule"
+
+
 def add_audit(
     audit: list[dict[str, Any]],
     item: Mapping[str, Any],
@@ -1336,12 +1422,11 @@ def discover_strategic(
                 continue
             touched.add(url)
             if not bounty.is_clean_candidate(item):
-                if possible_miss_signal(item):
-                    add_audit(
-                        audit,
-                        item,
-                        "strong-looking result rejected by basic eligibility filter",
-                    )
+                audit_reason = (
+                    basic_rejection_audit_reason(item) if possible_miss_signal(item) else None
+                )
+                if audit_reason:
+                    add_audit(audit, item, audit_reason)
                 continue
             repo, _ = bounty.issue_repo_and_number(item)
             if not repo:

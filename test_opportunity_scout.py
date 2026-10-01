@@ -135,6 +135,9 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertTrue(scout.maintainer_ready_signal("Status: Help Wanted"))
         self.assertTrue(scout.maintainer_ready_signal("contributor/help-wanted"))
         self.assertFalse(scout.maintainer_ready_signal("bug"))
+        self.assertTrue(scout.triage_pending_signal("needs/triage"))
+        self.assertTrue(scout.triage_pending_signal("kind/bug/possible"))
+        self.assertFalse(scout.triage_pending_signal("triage/accepted"))
 
     def test_effort_all_buckets(self) -> None:
         self.assertEqual(scout.code_reference_count("a.go a.go pkg/b.sh docs/c.yaml"), 3)
@@ -1074,6 +1077,41 @@ class CandidateTests(unittest.TestCase):
         )
         self.assertNotIn("inactive backlog penalty", " ".join(young_inactive["career_reasons"]))
 
+    def test_documentation_microfix_is_capped_below_strategic_floor(self) -> None:
+        docs_issue = issue(
+            html_url="https://github.com/moby/moby/issues/53789",
+            title="docs(libnetwork): broken image link in design.md",
+            body=(
+                "The docs image is broken. Suggested fix: change "
+                "daemon/libnetwork/docs/design.md to use the local image link."
+            ),
+            comments=0,
+        )
+        substantive_docs = issue(
+            title="docs: explain proxy controller internals",
+            body="Update docs and pkg/proxy/controller.go for the new behavior.",
+            comments=0,
+        )
+        non_micro = issue(
+            title="docs: expand architecture guide",
+            body="Document controller behavior and operational tradeoffs.",
+            comments=0,
+        )
+
+        self.assertTrue(scout.documentation_microfix(docs_issue))
+        self.assertFalse(scout.documentation_microfix(substantive_docs))
+        self.assertFalse(scout.documentation_microfix(non_micro))
+
+        result = scout.build_candidate(
+            docs_issue,
+            "strategic",
+            None,
+            repo_meta(language="Go", stargazers_count=72000),
+            "guide",
+        )
+        self.assertEqual(result["career_score"], 45)
+        self.assertIn("documentation-only micro-fix cap", result["career_reasons"])
+
     def test_build_paid_candidate_scoring(self) -> None:
         item_ = issue(
             body="network concurrency regression tests",
@@ -1239,6 +1277,14 @@ class VerificationTests(unittest.TestCase):
 
         self.assertEqual(
             scout.strategic_rejection(issue(labels=["needs-triage"]), "t"),
+            "awaiting maintainer triage",
+        )
+        self.assertEqual(
+            scout.strategic_rejection(issue(labels=["needs/triage"]), "t"),
+            "awaiting maintainer triage",
+        )
+        self.assertEqual(
+            scout.strategic_rejection(issue(labels=["kind/bug/possible"]), "t"),
             "awaiting maintainer triage",
         )
         with patch.object(scout, "extended_competition_reason", return_value=None):
@@ -1474,6 +1520,29 @@ class DiscoveryTests(unittest.TestCase):
             "https://github.com/a/a/issues/1",
         )
         self.assertNotIn("bad", selected)
+
+    def test_basic_rejection_audit_reason_filters_known_noise(self) -> None:
+        self.assertIsNone(scout.basic_rejection_audit_reason(issue(pull_request={"url": "x"})))
+        self.assertIsNone(scout.basic_rejection_audit_reason(issue(assignees=[{"login": "dev"}])))
+        self.assertIsNone(
+            scout.basic_rejection_audit_reason(
+                issue(html_url="https://github.com/laclance/BountyScout/issues/1")
+            )
+        )
+        self.assertIsNone(scout.basic_rejection_audit_reason(issue(title="Bounty Alert: test")))
+        self.assertIsNone(
+            scout.basic_rejection_audit_reason(issue(body="article writing proposal"))
+        )
+
+        crowded = scout.basic_rejection_audit_reason(issue(comments=bounty.MAX_COMMENTS + 1))
+        self.assertIsNotNone(crowded)
+        self.assertIn("review competition cutoff", str(crowded))
+
+        unknown = scout.basic_rejection_audit_reason(issue())
+        self.assertEqual(
+            unknown,
+            "strong-looking result rejected by an unrecognized basic eligibility filter rule",
+        )
 
     def test_possible_miss_signal_and_audit_cap(self) -> None:
         now = datetime.now(timezone.utc)
