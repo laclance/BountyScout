@@ -14,6 +14,7 @@ The paid scanner remains intentionally close to upstream, while fork-specific st
 - `scout_bounties.py` — upstream-compatible paid bounty discovery and strict payment/competition filters.
 - `opportunity_scout.py` — application orchestration and strategic scanner composition.
 - `strategic_claims.py` — pure contributor ownership/implementation claim detection.
+- `strategic_competition.py` — active-claim and implementation-PR competition checks.
 - `strategic_readiness.py` — pure maintainer-readiness and lifecycle policy.
 - `seen_bounties.json` — shared notification state.
 - `.github/workflows/bounty-scout.yml` — hourly runner.
