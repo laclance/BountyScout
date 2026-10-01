@@ -274,8 +274,15 @@ def platform_paid_refs(
     refs: dict[str, str] = {}
     if not loaders:
         return refs
+    def load_source(loader: Callable[[], dict[str, str]]) -> dict[str, str]:
+        try:
+            return loader()
+        except Exception as exc:
+            print(f"Platform source loader failed: {exc}")
+            return {}
+
     with ThreadPoolExecutor(max_workers=min(network_workers, len(loaders))) as executor:
-        for source in executor.map(lambda loader: loader(), loaders):
+        for source in executor.map(load_source, loaders):
             refs.update(source)
     return refs
 
