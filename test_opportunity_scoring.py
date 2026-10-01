@@ -25,16 +25,38 @@ Existing rows can be corrected in bounded follow-up PRs after maintainers decide
 repeated destination is redundant or whether a better official docs/product URL exists.
 """
 
-TAILSCALE_19694_BODY = """The Tailscaled-on-macOS wiki already says MagicDNS works if users
-set 100.100.100.100 as their DNS server, but it does not explain how. Add a short section
-with the exact macOS setup:
+TAILSCALE_19694_BODY = """### What are you trying to do?
 
-1. Add 100.100.100.100 in System Settings -> Network -> Wi-Fi -> DNS.
-2. Create /etc/resolver/ts.net with nameserver 100.100.100.100.
-3. Flush the cache and HUP mDNSResponder.
+The "Comparison to GUI version" section of the [[Tailscaled-on-macOS](https://github.com/tailscale/tailscale/wiki/Tailscaled-on-macOS)](https://github.com/tailscale/tailscale/wiki/Tailscaled-on-macOS) wiki page already mentions that when running `tailscaled`, "MagicDNS works, but you need to set `100.100.100.100` as your DNS server yourself. It doesn't change your DNS config." — but it doesn't explain *how* to do that.
 
-This is documentation for the existing tailscaled behavior; no runtime change is requested.
-"""
+macOS has a little-known feature where files dropped into `/etc/resolver/` configure per-domain DNS resolvers. Each filename is a DNS domain, and the contents tell `mDNSResponder` which nameserver to use for that domain. The following steps are sufficient to make MagicDNS work with `tailscaled` on macOS:
+
+1. Go to **System Settings → Network → Wi-Fi → Details… → DNS** and add `100.100.100.100` to the DNS servers table.
+2. Run the following commands in your terminal:
+
+```sh
+sudo mkdir -p /etc/resolver
+sudo sh -c 'echo "nameserver 100.100.100.100" > /etc/resolver/ts.net'
+sudo dscacheutil -flushcache
+sudo killall -HUP mDNSResponder
+```
+
+This tells `mDNSResponder`: "for anything ending in `.ts.net`, ask `100.100.100.100` instead of the default resolver." Without it, `.ts.net` hostnames silently fail — the system asks the default nameserver (e.g. `1.1.1.1`), which has no knowledge of private tailnet nodes.
+
+### How should we solve this?
+
+By adding the above instructions to the "Tailscaled-on-macOS" wiki page, ideally as a short section underneath or expanding the existing MagicDNS bullet point in "Comparison to GUI version".
+
+### What is the impact of not solving this?
+
+Users running `tailscaled` who enable MagicDNS will find that `.ts.net` hostnames don't resolve, with no obvious explanation. Moreover, the note "...but you need to set `100.100.100.100` as your DNS server yourself..." means the user needs to figure out how to do this in MacOS. 
+
+They'll need to dig through issues and forum posts to discover the `/etc/resolver/` workaround. This could facilitate the process for users that would like to try `tailscaled` in MacOS without being advanced users with networking themselves.
+
+### Anything else?
+
+[tailscaled on macOS](https://github.com/tailscale/tailscale/wiki/Tailscaled-on-macOS)
+[Three ways to run Tailscale on macOS](https://tailscale.com/docs/concepts/macos-variants)"""
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
