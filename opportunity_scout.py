@@ -619,6 +619,10 @@ def verify(
     signal = issue_signal or comment_signal or payment_signal_override
 
     if require_paid or signal:
+        issue_author_claim = strategic_claim_reason(fresh, [])
+        if issue_author_claim:
+            return None, issue_author_claim
+
         reason, verified_issue_signal = bounty.candidate_rejection_reason(
             fresh,
             token,
