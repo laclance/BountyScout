@@ -298,6 +298,18 @@ class BasicHeuristicTests(unittest.TestCase):
             scout.estimate_effort(issue(title="Feature", body="normal", comments=4)), "3–6h"
         )
 
+    def test_shared_access_compatibility_wrappers(self) -> None:
+        first = scout.cache_lock_for("repo:compat")
+        second = scout.cache_lock_for("repo:compat")
+        self.assertIs(first, second)
+
+        with patch.object(github, "repo_metadata", return_value={"stargazers_count": 7}) as fetch:
+            self.assertEqual(
+                scout.fetch_repo_metadata("example/project", "t"),
+                {"stargazers_count": 7},
+            )
+        fetch.assert_called_once_with("example/project", "t")
+
     def test_effort_hours_and_competition(self) -> None:
         self.assertEqual(scout.effort_hours("<1h"), 0.75)
         self.assertEqual(scout.effort_hours("1–3h"), 2.0)
