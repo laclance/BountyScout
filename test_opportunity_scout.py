@@ -2941,7 +2941,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertFalse(any(item["url"] == dirty_weak["html_url"] for item in audit))
         self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
 
-    def test_discover_strategic_verifies_all_then_keeps_best(self) -> None:
+    def test_discover_strategic_stops_when_remaining_cannot_displace_kept_slot(self) -> None:
         winner = issue(
             html_url="https://github.com/g/g/issues/1",
             title="Proxy regression",
@@ -3014,8 +3014,62 @@ class DiscoveryTests(unittest.TestCase):
             found, _, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
         self.assertEqual([item["url"] for item in found], [winner["html_url"]])
-        self.assertEqual(verify_mock.call_count, 3)
+        self.assertEqual(verify_mock.call_count, 2)
         self.assertEqual(audit, [])
+
+    def test_discover_strategic_stops_repo_after_repeated_source_failures(self) -> None:
+        items = [
+            issue(
+                html_url=f"https://github.com/g/g/issues/{index}",
+                title=f"Regression {index}",
+                labels=[{"name": "bug"}, {"name": "help wanted"}],
+            )
+            for index in range(1, 6)
+        ]
+
+        def preview(
+            item_: dict[str, Any],
+            lane: str,
+            signal: str | None,
+            meta_: dict[str, Any],
+            guide: str | None,
+            *rest: Any,
+        ) -> dict[str, Any]:
+            score = 90 - int(str(item_["html_url"]).rsplit("/", 1)[-1])
+            return candidate(
+                url=item_["html_url"],
+                paid=False,
+                priority_score=score,
+                career_score=score,
+            )
+
+        with (
+            patch.object(scout, "TARGET_REPOS", ["g/g"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(scout, "target_repo_issue_pool", return_value=(items, None)),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(scout, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(scout, "build_candidate", side_effect=preview),
+            patch.object(
+                scout,
+                "verify",
+                side_effect=[
+                    (None, "could not refresh issue comments"),
+                    (None, "could not refresh source issue"),
+                ],
+            ) as verify_mock,
+            patch.object(scout, "STRATEGIC_REFRESH_FAILURE_LIMIT", 2),
+        ):
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual(found, [])
+        self.assertEqual(verify_mock.call_count, 2)
+        self.assertEqual(rejected["could not refresh issue comments"], 1)
+        self.assertEqual(rejected["could not refresh source issue"], 1)
+        self.assertEqual(len(examples), 2)
+        self.assertTrue(
+            any("verification coverage incomplete for g/g" in item["reason"] for item in audit)
+        )
 
     def test_discover_strategic_audits_target_source_failure(self) -> None:
         with (
