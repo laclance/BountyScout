@@ -1197,6 +1197,9 @@ def discover_strategic(
 
         for index, row in enumerate(ranked):
             item = row[3]
+            candidate: dict[str, Any] | None
+            reason: str | None
+            network_checked: bool
             preflight_reason = strategic_preflight_rejection(item)
             career_upper_bound = sources.strategic_verification_upper_bound(
                 row,

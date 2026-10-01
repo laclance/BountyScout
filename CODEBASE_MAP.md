@@ -97,10 +97,10 @@
 - **function** `strategic_global_search_results()` — line 988
 - **function** `prefetch_discovery_searches()` — line 1001
 - **function** `discover_strategic()` — line 1022
-- **function** `github_report_ref()` — line 1327
-- **function** `markdown_candidate()` — line 1332
-- **function** `notification_candidate()` — line 1337
-- **function** `main()` — line 1342
+- **function** `github_report_ref()` — line 1330
+- **function** `markdown_candidate()` — line 1335
+- **function** `notification_candidate()` — line 1340
+- **function** `main()` — line 1345
 
 ## `opportunity_sources.py`
 
