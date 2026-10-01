@@ -1292,6 +1292,10 @@ def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
             ]
         )
 
+    effort_reasons = candidate.get("effort_reasons") or []
+    if effort_reasons:
+        lines.append(f"- **Effort basis:** {', '.join(effort_reasons)}")
+
     lines.extend(
         [
             f"- **Competition:** {candidate['competition']}",
