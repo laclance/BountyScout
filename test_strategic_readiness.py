@@ -258,6 +258,38 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
 
+class MaintainerIssueDecisionTests(unittest.TestCase):
+    def test_trusted_issue_author_can_mark_semantics_as_still_undecided(self) -> None:
+        deciding = issue(
+            author_association="MEMBER",
+            body=(
+                "This issue is to decide what these metrics should mean "
+                "before the new protocol is called stable."
+            ),
+        )
+        self.assertEqual(
+            readiness.maintainer_issue_decision_reason(deciding),
+            "maintainer-authored issue is still deciding implementation semantics",
+        )
+
+        self.assertIsNone(
+            readiness.maintainer_issue_decision_reason(
+                issue(
+                    author_association="NONE",
+                    body="This issue is to decide what the API should mean.",
+                )
+            )
+        )
+        self.assertIsNone(
+            readiness.maintainer_issue_decision_reason(
+                issue(
+                    author_association="MEMBER",
+                    body="The implementation follows the decision from #123.",
+                )
+            )
+        )
+
+
 class LifecycleClassificationTests(unittest.TestCase):
     def test_dependency_dashboard_requires_automated_tracking_context(self) -> None:
         dashboard = issue(
@@ -278,6 +310,19 @@ class LifecycleClassificationTests(unittest.TestCase):
             readiness.automated_tracking_issue_reason(
                 issue(title="Nightly status", user={"login": "example[bot]"})
             )
+        )
+        nightly = issue(
+            title="cmux NIGHTLY build is failing on main",
+            labels=[{"name": "nightly-failure"}],
+            user={"login": "github-actions[bot]"},
+            body=(
+                "This issue closes itself on the next successful publish. "
+                "The next successful publication will update this incident."
+            ),
+        )
+        self.assertEqual(
+            readiness.automated_tracking_issue_reason(nightly),
+            "automated CI/release incident, not an implementation task",
         )
 
     def test_release_tracking_and_release_only_work_are_distinct(self) -> None:

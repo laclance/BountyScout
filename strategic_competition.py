@@ -75,13 +75,30 @@ def linked_open_pr_reason(
     token: str | None,
     comments: list[dict[str, Any]],
 ) -> str | None:
-    """Detect explicit implementation PR links in issue comments."""
+    """Detect explicit implementation PR links in the issue body or comments."""
     repo, number = bounty.issue_repo_and_number(item)
-    if not repo or not number or not int(item.get("comments") or 0):
+    if not repo or not number:
         return None
 
     repo_pattern = re.escape(repo)
     candidates: list[str] = []
+
+    issue_body = str(item.get("body", ""))
+    for match in re.finditer(
+        rf"https://github\.com/{repo_pattern}/pull/(\d+)",
+        issue_body,
+        re.IGNORECASE,
+    ):
+        start = max(0, match.start() - 160)
+        end = min(len(issue_body), match.end() + 160)
+        context = issue_body[start:end]
+        if re.search(
+            r"\b(?:fix(?:es|ed|ing)?|implementation|patch|solution|"
+            r"address(?:es|ed|ing)?|resolv(?:es|ed|ing)?)\b",
+            context,
+            re.IGNORECASE,
+        ):
+            candidates.append(match.group(1))
 
     for comment in comments:
         body = str(comment.get("body", ""))

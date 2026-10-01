@@ -145,6 +145,24 @@ class EffortCalibrationTests(unittest.TestCase):
         self.assertEqual(estimate.bucket, "1–3h")
         self.assertEqual(estimate.reasons, ("localized TODO/code-path change",))
 
+    def test_cross_service_generated_documentation_is_not_bounded_docs(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Fragmented gRPC services documentation",
+                labels=[{"name": "kind/feature"}],
+                body=(
+                    "Documentation is fragmented across proto files and the website. "
+                    "We want rich documentation for all gRPC services in one place. "
+                    "These could potentially be generated docs and hosted on the website."
+                ),
+            )
+        )
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertEqual(
+            estimate.reasons,
+            ("cross-service documentation/generation scope",),
+        )
+
     def test_docs_microfix_and_broader_docs_are_distinct(self) -> None:
         micro = issue(title="README typo", body="Fix spelling in the README.")
         broader = issue(
