@@ -158,6 +158,26 @@ class ClaimCompetitionTests(unittest.TestCase):
             )
         )
 
+    def test_working_branch_with_test_is_active_implementation_claim(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        self.assertEqual(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [
+                    {
+                        "body": (
+                            "The quick fix mirrors the token suppression, and I have that "
+                            "working with a test on a branch. I am not opening a PR yet because "
+                            "I want maintainer direction on the more accurate fix."
+                        ),
+                        "updated_at": recent,
+                        "user": {"login": "david"},
+                    }
+                ],
+            ),
+            "active claim by @david",
+        )
+
     def test_supplemental_claims_require_first_person_ownership_language(self) -> None:
         self.assertEqual(
             competition.supplemental_claim_reason(
