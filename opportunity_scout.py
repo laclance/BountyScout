@@ -397,11 +397,11 @@ def implementation_underway_claim(text: str) -> bool:
         r"\bi(?:'m| am) (?:currently )?implementing\b",
         r"\bi(?:'m| am) working on (?:a |the )?fix\b",
         r"^\s*(?:currently implementing|working on (?:a |the )?fix)\b",
-        r"\bplanning (?:a |the )?fix\b",
-        r"\b(?:planning|plan) to (?:fix|work on|implement|handle)\b",
-        r"\bstarting (?:work on|a fix for)\b",
-        r"\bdelivered in pr\b",
-        r"\bsubmitted (?:a )?pr\b",
+        r"^\s*planning (?:a |the )?fix\b",
+        r"^\s*(?:planning|plan) to (?:fix|work on|implement|handle)\b",
+        r"^\s*starting (?:work on|a fix for)\b",
+        r"^\s*delivered in pr\b",
+        r"^\s*submitted (?:a )?pr\b",
     )
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
 
