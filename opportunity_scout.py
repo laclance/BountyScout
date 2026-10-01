@@ -646,9 +646,7 @@ def opire_platform_refs() -> dict[str, str]:
     )[:PLATFORM_FETCH_LIMIT]
 
     if detail_paths:
-        with ThreadPoolExecutor(
-            max_workers=min(NETWORK_WORKERS, len(detail_paths))
-        ) as executor:
+        with ThreadPoolExecutor(max_workers=min(NETWORK_WORKERS, len(detail_paths))) as executor:
             details = executor.map(
                 lambda path: fetch_text("https://app.opire.dev" + path),
                 detail_paths,
@@ -701,9 +699,7 @@ def bountyhub_platform_refs() -> dict[str, str]:
     )[:PLATFORM_FETCH_LIMIT]
 
     if detail_paths:
-        with ThreadPoolExecutor(
-            max_workers=min(NETWORK_WORKERS, len(detail_paths))
-        ) as executor:
+        with ThreadPoolExecutor(max_workers=min(NETWORK_WORKERS, len(detail_paths))) as executor:
             details = executor.map(
                 lambda path: fetch_text("https://www.bountyhub.dev" + path),
                 detail_paths,
@@ -1449,9 +1445,7 @@ def discover_strategic(
 
     source_batches: list[list[dict[str, Any]]] = []
     if TARGET_REPOS:
-        with ThreadPoolExecutor(
-            max_workers=min(NETWORK_WORKERS, len(TARGET_REPOS))
-        ) as executor:
+        with ThreadPoolExecutor(max_workers=min(NETWORK_WORKERS, len(TARGET_REPOS))) as executor:
             repo_results = executor.map(
                 lambda target_repo: (
                     target_repo,
@@ -1535,9 +1529,7 @@ def discover_strategic(
     for repo, items in inspected.items():
         ranked: list[tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]] = []
         if items:
-            with ThreadPoolExecutor(
-                max_workers=min(NETWORK_WORKERS, len(items))
-            ) as executor:
+            with ThreadPoolExecutor(max_workers=min(NETWORK_WORKERS, len(items))) as executor:
                 comment_batches = list(
                     executor.map(lambda item: issue_comments(item, token), items)
                 )
@@ -1588,9 +1580,7 @@ def discover_strategic(
             )
 
         if ranked:
-            with ThreadPoolExecutor(
-                max_workers=min(NETWORK_WORKERS, len(ranked))
-            ) as executor:
+            with ThreadPoolExecutor(max_workers=min(NETWORK_WORKERS, len(ranked))) as executor:
                 verification_results = list(executor.map(verify_row, ranked))
         else:
             verification_results = []
