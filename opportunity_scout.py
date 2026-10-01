@@ -360,10 +360,6 @@ def extended_competition_reason(item: Mapping[str, Any], token: str | None) -> s
     if reason:
         return reason
 
-    reason = timeline_open_pr_reason(item, token)
-    if reason:
-        return reason
-
     comments = issue_comments(item, token)
     reason = linked_open_pr_reason(item, token, comments)
     if reason:
@@ -376,7 +372,11 @@ def extended_competition_reason(item: Mapping[str, Any], token: str | None) -> s
                 author = (comment.get("user") or {}).get("login", "someone")
                 return f"active claim by @{author}"
 
-    return supplemental_claim_reason(item, token, comments)
+    reason = supplemental_claim_reason(item, token, comments)
+    if reason:
+        return reason
+
+    return timeline_open_pr_reason(item, token)
 
 
 def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
