@@ -4,6 +4,7 @@ source =
     scout_bounties
     opportunity_scout
     strategic_claims
+    strategic_readiness
 
 [report]
 show_missing = True
