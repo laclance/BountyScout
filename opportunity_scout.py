@@ -89,6 +89,7 @@ EXTENDED_AMOUNT_RE = (
 PLATFORM_FETCH_LIMIT = 20
 ISSUEHUNT_PAGES = 2
 
+
 def target_repo_issue_pool(repo: str, token: str | None) -> tuple[list[dict[str, Any]], str | None]:
     """Fetch enough real issues even though GitHub mixes PRs into /issues."""
     issues: list[dict[str, Any]] = []
