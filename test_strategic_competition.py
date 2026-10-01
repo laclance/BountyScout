@@ -110,6 +110,54 @@ class ClaimCompetitionTests(unittest.TestCase):
             )
         )
 
+    def test_live_claim_wording_pick_up_and_willing_to_contribute_pr(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+
+        self.assertEqual(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [
+                    {
+                        "body": (
+                            "I'd like to pick this up. On current main, the stats are "
+                            "not retained. I'll wait for direction before publishing an implementation."
+                        ),
+                        "updated_at": recent,
+                        "user": {"login": "fzlzjerry"},
+                    }
+                ],
+            ),
+            "active claim by @fzlzjerry",
+        )
+
+        self.assertEqual(
+            competition.strategic_claim_reason(
+                issue(
+                    body=(
+                        "Contribution Intention (Optional)\n\n"
+                        "- [x] Yes, I am willing to contribute a PR to implement this feature\n"
+                        "- [ ] No, I cannot work on a PR at this time"
+                    ),
+                    created_at=recent,
+                ),
+                [],
+            ),
+            "issue author already has an implementation/fix in progress",
+        )
+
+        self.assertIsNone(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [
+                    {
+                        "body": "I'd like to see someone pick this up.",
+                        "updated_at": recent,
+                        "user": {"login": "observer"},
+                    }
+                ],
+            )
+        )
+
     def test_supplemental_claims_require_first_person_ownership_language(self) -> None:
         self.assertEqual(
             competition.supplemental_claim_reason(

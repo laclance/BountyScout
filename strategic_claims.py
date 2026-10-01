@@ -17,7 +17,7 @@ def normalized_claim_text(text: str) -> str:
 def explicit_ownership_claim(text: str) -> bool:
     """Recognize first-person statements that take ownership of implementation."""
     patterns = (
-        r"\bi(?:'d| would) like to (?:work on|take|handle|implement|fix|resolve)\b",
+        r"\bi(?:'d| would) like to (?:work on|take|handle|implement|fix|resolve|pick (?:this|it) up)\b",
         r"\bi(?:'d| would) love to (?:work on|take on|handle|implement|fix|resolve)\b",
         r"\bi(?:'m| am) interested in working on\b",
         r"\bi(?:'m| am) (?:taking|working on) (?:this|it|an independent pass)\b",
@@ -57,6 +57,7 @@ def pr_intent_claim(text: str) -> bool:
     patterns = (
         r"\bi(?:'ll| will) open (?:a |the )?(?:pr|pull request)\b",
         r"\bi(?:'d| would) be happy to (?:send|open|submit) (?:a |the )?(?:pr|pull request)\b",
+        r"\bi(?:'m| am) willing to contribute (?:a |the )?(?:pr|pull request)\b",
         r"\bi can (?:send|open|submit) (?:a |the )?(?:pr|pull request)\b",
         r"\bi can start (?:working on|preparing) (?:a |the )?(?:pr|pull request)\b",
         r"\bbefore i (?:open|submit) (?:a |the )?(?:pr|pull request)\b",
