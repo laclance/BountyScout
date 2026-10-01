@@ -585,6 +585,78 @@ class CalibrationTests(unittest.TestCase):
                 )
             )
 
+        with patch.object(
+            bounty,
+            "github_get",
+            return_value={
+                "state": "open",
+                "html_url": "https://github.com/example/project/pull/21804",
+            },
+        ):
+            self.assertEqual(
+                scout.linked_open_pr_reason(
+                    issue(comments=1),
+                    "t",
+                    [{"body": "There is also a related draft fix in #21804 waiting for review."}],
+                ),
+                "existing open implementation PR: https://github.com/example/project/pull/21804",
+            )
+
+    def test_search_open_implementation_pr_reason_paths(self) -> None:
+        self.assertIsNone(
+            scout.search_open_implementation_pr_reason({"html_url": "bad"}, "t", [])
+        )
+
+        with patch.object(bounty, "github_get") as getter:
+            self.assertIsNone(
+                scout.search_open_implementation_pr_reason(
+                    issue(body="No competing work is known.", comments=0),
+                    "t",
+                    [],
+                )
+            )
+            getter.assert_not_called()
+
+        search_result = {
+            "items": [
+                {
+                    "pull_request": {"url": "x"},
+                    "title": "membership: support FIPS mode",
+                    "body": "Closes #42",
+                    "html_url": "https://github.com/example/project/pull/99",
+                }
+            ]
+        }
+        with patch.object(bounty, "github_get", return_value=search_result) as getter:
+            self.assertEqual(
+                scout.search_open_implementation_pr_reason(
+                    issue(body="There may already be a PR for this.", comments=0),
+                    "t",
+                    [],
+                ),
+                "existing open implementation PR: https://github.com/example/project/pull/99",
+            )
+            self.assertIn("search/issues?", getter.call_args.args[0])
+
+        unrelated = {
+            "items": [
+                {
+                    "pull_request": {"url": "x"},
+                    "title": "docs cleanup",
+                    "body": "Related to #42 but does not implement it.",
+                    "html_url": "https://github.com/example/project/pull/100",
+                }
+            ]
+        }
+        with patch.object(bounty, "github_get", return_value=unrelated):
+            self.assertIsNone(
+                scout.search_open_implementation_pr_reason(
+                    issue(body="A pull request may exist.", comments=0),
+                    "t",
+                    [],
+                )
+            )
+
     def test_supplemental_claim_reason_paths(self) -> None:
         self.assertIsNone(scout.supplemental_claim_reason(issue(comments=0), "t"))
 
@@ -635,6 +707,7 @@ class CalibrationTests(unittest.TestCase):
         claims = (
             "I'd like to work on this.",
             "I would like to work on this for check config.",
+            "I would love to work on implementing this refactoring.",
             "Before I write code, I'd like to agree on the shape.",
             "I'm interested in working on this and can send a PR.",
             "My plan is to add X, update Y, and open a PR.",
@@ -648,6 +721,9 @@ class CalibrationTests(unittest.TestCase):
             "Before submitting the PR, I want to confirm the API.",
             "Currently implementing this.",
             "I have tests ready.",
+            "I have one ready and tested on a 2.2 node.",
+            "If so, I would be happy to submit the PR for review.",
+            "I can start working on a Pull Request for it.",
         )
         for body in claims:
             with self.subTest(body=body):
@@ -656,6 +732,7 @@ class CalibrationTests(unittest.TestCase):
     def test_strategic_claim_matcher_avoids_non_claims(self) -> None:
         non_claims = (
             "I'd like to see this fixed.",
+            "I'd love to see this fixed.",
             "I think we should implement this using X.",
             "Someone could add a test here.",
             "I reproduced this on Linux.",
@@ -666,6 +743,8 @@ class CalibrationTests(unittest.TestCase):
             "The maintainer is currently implementing this.",
             "Feel free to submit a PR.",
             "We would welcome a PR for this.",
+            "I can start reviewing a Pull Request for it.",
+            "We have prepared reproduction steps and logs.",
         )
         for body in non_claims:
             with self.subTest(body=body):
@@ -730,6 +809,50 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(
             scout.strategic_claim_reason(issue(), traefik),
             "active claim by @IslamElsayed",
+        )
+
+        terraform_35703 = [
+            {
+                "body": (
+                    "We have prepared a deterministic unit test for pagination. "
+                    "If so, I would be happy to submit the PR for review."
+                ),
+                "created_at": recent,
+                "user": {"login": "rksharma-owg"},
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_claim_reason(issue(), terraform_35703),
+            "active claim by @rksharma-owg",
+        )
+
+        containerd_14275 = issue(
+            comments=0,
+            created_at=recent,
+            body=(
+                "release/2.2 has its own copy, so it needs a port. "
+                "I have one ready and tested on a 2.2 node. "
+                "I'd open it as a draft until the upstream PR merges."
+            ),
+        )
+        self.assertEqual(
+            scout.strategic_claim_reason(containerd_14275, []),
+            "issue author already has an implementation/fix in progress",
+        )
+
+        client_golang_2129 = [
+            {
+                "body": (
+                    "I have analyzed this part of the codebase and would love to work on "
+                    "implementing this refactoring. I can start working on a Pull Request for it!"
+                ),
+                "created_at": recent,
+                "user": {"login": "AbdulKreemShah2408"},
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_claim_reason(issue(), client_golang_2129),
+            "active claim by @AbdulKreemShah2408",
         )
 
     def test_strategic_claim_recency_does_not_permanently_suppress(self) -> None:
