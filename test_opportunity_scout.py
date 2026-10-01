@@ -1470,10 +1470,17 @@ class DiscoveryTests(unittest.TestCase):
             title="Proxy regression",
             labels=[{"name": "help wanted"}, {"name": "bug"}],
         )
+        weak_low = issue(
+            html_url="https://github.com/g/g/issues/4",
+            title="Documentation cleanup",
+            body="",
+            labels=[],
+            updated_at=(datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),
+        )
         with (
             patch.object(scout, "target_repo_queries", return_value=["q"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
-            patch.object(bounty, "search_github", return_value={"items": [low]}),
+            patch.object(bounty, "search_github", return_value={"items": [low, weak_low]}),
             patch.object(bounty, "is_clean_candidate", return_value=True),
             patch.object(bounty, "fetch_repo_metadata", return_value=repo_meta()),
             patch.object(
@@ -1501,7 +1508,7 @@ class DiscoveryTests(unittest.TestCase):
         reason = "career score 40/100 below strategic threshold 55/100"
         self.assertEqual(len(audit), 1)
         self.assertIn(reason, audit[0]["reason"])
-        self.assertEqual(rejected[reason], 1)
+        self.assertEqual(rejected[reason], 2)
         self.assertEqual(examples[0]["reason"], reason)
 
     def test_discover_strategic_audits_early_misses_and_top_pool_overflow(self) -> None:
