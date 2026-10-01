@@ -564,6 +564,22 @@ def manual_tracking_issue_reason(
             return "umbrella tracking issue, not a single implementation task"
 
     body = str(item.get("body", ""))
+    normalized_body = normalized_claim_text(body).lower()
+    explicit_tracking_container = bool(
+        re.search(
+            r"\\b(?:use|using)\\s+(?:this|the)\\s+issue\\s+for\\s+tracking\\b",
+            normalized_body,
+        )
+    )
+    child_issue_delegation = bool(
+        re.search(
+            r"\\b(?:create|open|file)\\s+(?:sub[- ]?issues?|child issues?|separate issues?)\\b",
+            normalized_body,
+        )
+    )
+    if explicit_tracking_container and child_issue_delegation:
+        return "umbrella tracking issue, not a single implementation task"
+
     tracking_intent = bool(
         re.search(
             r"\b(?:track and resolve|track the following|tracking issue for)\b",
