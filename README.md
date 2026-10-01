@@ -35,7 +35,7 @@ Paid candidates reuse the existing BountyScout rules, including rejection of:
 - meta/bug-bounty monitoring alerts
 - issues without a real payment signal
 - issues with an open implementation PR
-- obvious active claim comments
+- obvious active claims, including recent issue-author implementation ownership
 
 Cash score considers payment confidence, stated reward, rough expected hourly value, competition, and repository legitimacy/activity.
 
