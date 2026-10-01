@@ -80,10 +80,7 @@ TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 def target_repo_queries() -> list[str]:
     """Give every curated repository its own result budget."""
-    return [
-        f"is:issue is:open no:assignee repo:{repo} sort:updated-desc"
-        for repo in TARGET_REPOS
-    ]
+    return [f"is:issue is:open no:assignee repo:{repo} sort:updated-desc" for repo in TARGET_REPOS]
 
 
 def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
@@ -1101,11 +1098,7 @@ def verify(
 
         lane = "paid"
     else:
-        comments = (
-            issue_comments(fresh, token)
-            if activity_comments is None
-            else activity_comments
-        )
+        comments = issue_comments(fresh, token) if activity_comments is None else activity_comments
         reason = strategic_rejection(fresh, token, comments)
         if reason:
             return None, reason
@@ -1211,9 +1204,7 @@ def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     """Flag strong raw results that deserve scrutiny when filters discard them."""
     _, _, labels, text = issue_text(item)
     updated = bounty.parse_github_datetime(item.get("updated_at"))
-    recent = bool(
-        updated and (datetime.now(timezone.utc) - updated).days <= 60
-    )
+    recent = bool(updated and (datetime.now(timezone.utc) - updated).days <= 60)
     contributor_signal = any(
         marker in labels
         for marker in (
@@ -1259,9 +1250,7 @@ def strategic_inspection_items(
     inspected: dict[str, list[dict[str, Any]]] = {}
     for repo, rows in by_repo.items():
         rows.sort(key=lambda row: row[:3], reverse=True)
-        inspected[repo] = [
-            row[3] for row in rows[:STRATEGIC_INSPECT_PER_REPO]
-        ]
+        inspected[repo] = [row[3] for row in rows[:STRATEGIC_INSPECT_PER_REPO]]
     return inspected
 
 
@@ -1284,9 +1273,9 @@ def discover_strategic(
     audit: list[dict[str, Any]] = []
 
     for query in target_repo_queries() + STRATEGIC_GLOBAL_QUERIES:
-        for item in bounty.search_github(
-            query, token, per_page=STRATEGIC_SEARCH_PER_PAGE
-        ).get("items", []):
+        for item in bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE).get(
+            "items", []
+        ):
             url = item.get("html_url")
             if not url or url in seen or url in paid_urls or url in touched:
                 continue
@@ -1328,9 +1317,7 @@ def discover_strategic(
     found: list[dict[str, Any]] = []
     inspected = strategic_inspection_items(provisional)
     for repo, items in inspected.items():
-        ranked: list[
-            tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]
-        ] = []
+        ranked: list[tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]] = []
         for item in items:
             comments = issue_comments(item, token)
             signal = bounty.payment_signal(item)
@@ -1374,9 +1361,7 @@ def discover_strategic(
             )
             if reason:
                 add_reject(rejected, examples, item, reason)
-                print(
-                    f"Skipping strategic candidate {item.get('html_url')}: {reason}"
-                )
+                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
                 continue
 
             assert candidate is not None
@@ -1392,9 +1377,7 @@ def discover_strategic(
                         item,
                         f"strong-looking near miss: {reason}",
                     )
-                print(
-                    f"Skipping strategic candidate {item.get('html_url')}: {reason}"
-                )
+                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
                 continue
 
             found.append(candidate)
@@ -1495,10 +1478,8 @@ def main() -> None:
     guide_cache: dict[str, str | None] = {}
 
     paid, paid_rejects, paid_examples = discover_paid(token, seen, repo_cache, guide_cache)
-    strategic, strategic_rejects, strategic_examples, strategic_audit = (
-        discover_strategic(
-            token, seen, {x["url"] for x in paid}, repo_cache, guide_cache
-        )
+    strategic, strategic_rejects, strategic_examples, strategic_audit = discover_strategic(
+        token, seen, {x["url"] for x in paid}, repo_cache, guide_cache
     )
 
     by_url: dict[str, dict[str, Any]] = {}
