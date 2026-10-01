@@ -14,6 +14,7 @@ from typing import Any, Mapping, cast
 import scout_bounties as bounty
 from strategic_claims import strategic_claim_text as strategic_claim_text
 from strategic_readiness import (
+    TRUSTED_ASSOCIATIONS as TRUSTED_ASSOCIATIONS,
     abandoned_lifecycle_reason as abandoned_lifecycle_reason,
     automated_tracking_issue_reason as automated_tracking_issue_reason,
     issue_label_set as issue_label_set,
