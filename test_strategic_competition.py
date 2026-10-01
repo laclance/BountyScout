@@ -239,6 +239,14 @@ class ClaimCompetitionTests(unittest.TestCase):
             )
         )
 
+    def test_claim_reason_handles_unidentifiable_issue_without_branch_matching(self) -> None:
+        self.assertIsNone(
+            competition.strategic_claim_reason(
+                {"html_url": "bad", "body": ""},
+                [{"body": "Thanks for the report.", "user": {"login": "observer"}}],
+            )
+        )
+
     def test_supplemental_claims_require_first_person_ownership_language(self) -> None:
         self.assertEqual(
             competition.supplemental_claim_reason(
