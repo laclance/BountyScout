@@ -10,6 +10,21 @@ import opportunity_scout as scout
 
 AMOUNT_RE = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
 
+CHAIN_LOVE_3969_BODY = """At current main, actionButtons is stored as a JSON array of Markdown links.
+Examples include references/offers/mcpservers.csv where Website and Docs can point to the
+same destination.
+
+Add a validator rule for actionButtons:
+1. Parse the JSON array.
+2. Parse each Markdown-link item into label + destination.
+3. Normalize trivial URL spelling differences for comparison.
+4. Reject duplicate normalized destination URLs inside the same cell.
+5. Error output should name the file, row/slug, repeated URL, and colliding labels.
+
+Existing rows can be corrected in bounded follow-up PRs after maintainers decide whether each
+repeated destination is redundant or whether a better official docs/product URL exists.
+"""
+
 
 def issue(**overrides: Any) -> dict[str, Any]:
     item: dict[str, Any] = {
@@ -171,6 +186,61 @@ class EffortCalibrationTests(unittest.TestCase):
         )
         self.assertEqual(scoring.estimate_effort(micro), "<1h")
         self.assertEqual(scoring.estimate_effort(broader), "1–3h")
+
+    def test_chain_love_3969_is_not_a_documentation_microfix(self) -> None:
+        item = issue(
+            title="[DBIP] Reject duplicate actionButtons destinations within the same cell",
+            body=CHAIN_LOVE_3969_BODY,
+        )
+        self.assertFalse(scoring.documentation_microfix(item))
+        estimate = scoring.estimate_effort_details(item)
+        self.assertEqual(estimate.bucket, "3–6h")
+        self.assertEqual(estimate.reasons, ("moderate implementation scope",))
+
+    def test_incidental_docs_path_does_not_make_implementation_a_microfix(self) -> None:
+        item = issue(
+            title="Reject duplicate action button destinations",
+            body=(
+                "Update the validator for actionButtons. One example is docs/generated/table.md, "
+                "but the task is to reject duplicate destinations at validation time."
+            ),
+        )
+        self.assertFalse(scoring.documentation_microfix(item))
+        self.assertNotEqual(scoring.estimate_effort(item), "<1h")
+
+    def test_spelling_differences_inside_implementation_prose_do_not_trigger_microfix(self) -> None:
+        item = issue(
+            title="Normalize action button destinations",
+            body=(
+                "Parse the JSON array and normalize URL spelling differences before comparing "
+                "destinations. Emit a structured validation error for duplicates."
+            ),
+        )
+        self.assertFalse(scoring.documentation_microfix(item))
+        self.assertNotEqual(scoring.estimate_effort(item), "<1h")
+
+    def test_legitimate_tiny_documentation_fixes_remain_microfixes(self) -> None:
+        cases = (
+            issue(title="Fix typo in README"),
+            issue(title="Correct spelling in docs"),
+            issue(title="Fix broken documentation link"),
+            issue(title="Repair broken image in documentation"),
+        )
+        for item in cases:
+            with self.subTest(title=item["title"]):
+                self.assertTrue(scoring.documentation_microfix(item))
+                self.assertEqual(scoring.estimate_effort(item), "<1h")
+
+    def test_docs_task_with_validator_or_parser_scope_is_not_a_microfix(self) -> None:
+        item = issue(
+            title="docs: fix spelling in actionButtons guide",
+            body=(
+                "Also add validator logic, parse the JSON payload, and emit structured validation "
+                "errors so the documented rule is enforced at runtime."
+            ),
+        )
+        self.assertFalse(scoring.documentation_microfix(item))
+        self.assertNotEqual(scoring.estimate_effort(item), "<1h")
 
     def test_generic_clipboard_api_does_not_count_as_infrastructure_domain_fit(self) -> None:
         ui = scoring.build_candidate(
