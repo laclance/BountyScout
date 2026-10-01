@@ -60,13 +60,24 @@ def strategic_claim_reason(
     if body and claim_source_is_recent(item, issue_body=True) and strategic_claim_text(body):
         return "issue author already has an implementation/fix in progress"
 
+    _, number = bounty.issue_repo_and_number(item)
     for comment in comments:
         if not claim_source_is_recent(comment):
             continue
         body = str(comment.get("body", ""))
+        author = str((comment.get("user") or {}).get("login", "someone"))
         if strategic_claim_text(body):
-            author = (comment.get("user") or {}).get("login", "someone")
             return f"active claim by @{author}"
+
+        if number:
+            branch = re.search(
+                rf"https://github\.com/([^/\s]+)/[^/\s]+/tree/"
+                rf"[^\s)]*(?:issue|fix)[-_/]?{number}\b",
+                body,
+                re.IGNORECASE,
+            )
+            if branch and branch.group(1).lower() == author.lower():
+                return f"active implementation branch linked by @{author}"
     return None
 
 
@@ -168,7 +179,7 @@ def search_open_implementation_pr_reason(
     )
     data = github.github_get(f"https://api.github.com/search/issues?{params}", token)
     if not isinstance(data, dict):
-        return None
+        return "could not verify open implementation PR search"
 
     repo_pattern = re.escape(repo)
     issue_ref = rf"(?:#{number}\b|https://github\.com/{repo_pattern}/issues/{number}\b)"
