@@ -168,20 +168,28 @@ def issue_repo_and_number(item: Mapping[str, Any]) -> tuple[str | None, int | No
 
 
 def has_existing_implementation_pr(repo: str, issue_number: int, token: str | None) -> str | None:
-    """Return a reason when an open PR appears to implement the issue."""
-    # Search the number broadly. Quoting a bare issue number can miss PR
-    # references such as "Fixes #123" in GitHub's search index.
-    query = f"repo:{repo} is:pr is:open {issue_number}"
-    results = search_github(query, token, per_page=50)
-
-    issue_ref = re.compile(
-        rf"(?:#\s*{issue_number}\b|/issues/{issue_number}\b|issue\s+#?\s*{issue_number}\b)",
-        re.IGNORECASE,
+    """Return a reason when the issue timeline references an open implementation PR."""
+    timeline = github_get(
+        f"https://api.github.com/repos/{repo}/issues/{issue_number}/timeline?per_page=100",
+        token,
     )
-    for pr in results.get("items", []):
-        pr_text = f"{pr.get('title', '')}\n{pr.get('body', '')}"
-        if issue_ref.search(pr_text):
-            return f"existing open implementation PR: {pr.get('html_url')}"
+    if not isinstance(timeline, list):
+        return None
+
+    for event in timeline:
+        if event.get("event") != "cross-referenced":
+            continue
+        source = event.get("source")
+        if not isinstance(source, dict):
+            continue
+        source_issue = source.get("issue")
+        if not isinstance(source_issue, dict):
+            continue
+        if "pull_request" not in source_issue or source_issue.get("state") != "open":
+            continue
+        url = source_issue.get("html_url")
+        if url:
+            return f"existing open implementation PR: {url}"
 
     return None
 

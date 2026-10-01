@@ -148,23 +148,58 @@ class PaymentTests(unittest.TestCase):
 
 class CompetitionTests(unittest.TestCase):
     def test_existing_pr_detected_and_absent(self) -> None:
-        prs = {
-            "items": [
-                {
-                    "title": "Fixes #42",
-                    "body": "",
-                    "html_url": "https://github.com/acme/widget/pull/9",
-                }
-            ]
-        }
-        with patch.object(scout, "search_github", return_value=prs):
+        timeline = [
+            {"event": "commented"},
+            {"event": "cross-referenced", "source": None},
+            {"event": "cross-referenced", "source": {"issue": None}},
+            {
+                "event": "cross-referenced",
+                "source": {"issue": {"state": "open"}},
+            },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "closed",
+                        "html_url": "https://github.com/acme/widget/pull/8",
+                    }
+                },
+            },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/acme/widget/pull/9",
+                    }
+                },
+            },
+        ]
+        with patch.object(scout, "github_get", return_value=timeline):
             reason = scout.has_existing_implementation_pr("acme/widget", 42, "t")
             self.assertIsNotNone(reason)
             assert reason is not None
             self.assertIn("pull/9", reason)
 
+        with patch.object(scout, "github_get", return_value=None):
+            self.assertIsNone(scout.has_existing_implementation_pr("acme/widget", 42, "t"))
+
         with patch.object(
-            scout, "search_github", return_value={"items": [{"title": "Other", "body": ""}]}
+            scout,
+            "github_get",
+            return_value=[
+                {
+                    "event": "cross-referenced",
+                    "source": {
+                        "issue": {
+                            "pull_request": {},
+                            "state": "open",
+                        }
+                    },
+                }
+            ],
         ):
             self.assertIsNone(scout.has_existing_implementation_pr("acme/widget", 42, "t"))
 
