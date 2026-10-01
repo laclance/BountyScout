@@ -94,10 +94,10 @@ PAID_DISCOVERY_QUERIES = [
     "is:issue is:open (opire.dev OR bountyhub.dev OR algora.io) in:comments sort:updated-desc",
 ]
 EXTENDED_AMOUNT_RE = (
-    r"(?:[$€£¥₹]\\s*\\d[\\d,]*(?:\\.\\d+)?|"
-    r"(?<![A-Za-z])R\\s*\\d[\\d,]*(?:\\.\\d+)?|"
-    r"(?<!ERC-)(?<!\\d)\\d+(?:\\.\\d+)?\\s*(?:usd|usdc|usdt|eur|gbp|cad|aud|nzd|jpy|chf|"
-    r"inr|zar|dai|xmr|sol|eth|btc)\\b)"
+    r"(?:[$€£¥₹]\s*\d[\d,]*(?:\.\d+)?|"
+    r"(?<![A-Za-z])R\s*\d[\d,]*(?:\.\d+)?|"
+    r"(?<!ERC-)(?<!\d)\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|cad|aud|nzd|jpy|chf|"
+    r"inr|zar|dai|xmr|sol|eth|btc)\b)"
 )
 
 PLATFORM_FETCH_LIMIT = 20
