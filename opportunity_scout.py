@@ -49,11 +49,11 @@ STRATEGIC_GLOBAL_QUERIES = [
     'is:issue is:open no:assignee label:"bug" kubernetes sort:updated-desc',
     'is:issue is:open no:assignee label:"bug" networking sort:updated-desc',
 ]
-TARGET_REPO_QUERY_CHUNK = 3
 STRATEGIC_SEARCH_PER_PAGE = 20
-STRATEGIC_VERIFY_LIMIT = 20
-STRATEGIC_VERIFY_PER_REPO = 3
+STRATEGIC_INSPECT_PER_REPO = 15
+STRATEGIC_KEEP_PER_REPO = 3
 STRATEGIC_MIN_CAREER_SCORE = 55
+STRATEGIC_AUDIT_LIMIT = 20
 REPORT_LIMIT = 8
 
 PAID_DISCOVERY_QUERIES = list(
@@ -79,13 +79,11 @@ TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
 def target_repo_queries() -> list[str]:
-    queries = []
-    for start in range(0, len(TARGET_REPOS), TARGET_REPO_QUERY_CHUNK):
-        repos = " ".join(
-            f"repo:{repo}" for repo in TARGET_REPOS[start : start + TARGET_REPO_QUERY_CHUNK]
-        )
-        queries.append(f"is:issue is:open no:assignee {repos} sort:updated-desc")
-    return queries
+    """Give every curated repository its own result budget."""
+    return [
+        f"is:issue is:open no:assignee repo:{repo} sort:updated-desc"
+        for repo in TARGET_REPOS
+    ]
 
 
 def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
@@ -369,7 +367,11 @@ def supplemental_claim_reason(
     return None
 
 
-def extended_competition_reason(item: Mapping[str, Any], token: str | None) -> str | None:
+def extended_competition_reason(
+    item: Mapping[str, Any],
+    token: str | None,
+    comments: list[dict[str, Any]] | None = None,
+) -> str | None:
     """Check search-index PRs, comment-linked PRs, and explicit work claims."""
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number:
@@ -379,7 +381,7 @@ def extended_competition_reason(item: Mapping[str, Any], token: str | None) -> s
     if reason:
         return reason
 
-    comments = issue_comments(item, token)
+    comments = issue_comments(item, token) if comments is None else comments
     reason = linked_open_pr_reason(item, token, comments)
     if reason:
         return reason
@@ -649,6 +651,7 @@ def build_candidate(
     signal: str | None,
     repo_meta: Mapping[str, Any],
     guide: str | None,
+    activity_comments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     repo, number = bounty.issue_repo_and_number(item)
     effort = estimate_effort(item)
@@ -843,15 +846,60 @@ def build_candidate(
         career -= 10
         career_reasons.append("large-scope penalty")
 
-    created = bounty.parse_github_datetime(item.get("created_at"))
-    if lane == "strategic" and created and not maintainer_ready:
-        age_days = max(0, (datetime.now(timezone.utc) - created).days)
-        if age_days > 730:
-            career -= 15
-            career_reasons.append("stale backlog age penalty")
-        elif age_days > 365:
-            career -= 8
-            career_reasons.append("older backlog age penalty")
+    if lane == "strategic":
+        now = datetime.now(timezone.utc)
+        created = bounty.parse_github_datetime(item.get("created_at"))
+        updated = bounty.parse_github_datetime(item.get("updated_at"))
+        created_days = max(0, (now - created).days) if created else None
+        updated_days = max(0, (now - updated).days) if updated else None
+
+        if updated_days is not None:
+            if updated_days <= 14:
+                career += 8
+                career_reasons.append("issue active in last 14d")
+            elif updated_days <= 60:
+                career += 5
+                career_reasons.append("issue active in last 60d")
+            elif updated_days <= 180:
+                career += 2
+                career_reasons.append("issue active in last 180d")
+
+        recent_comment_days: int | None = None
+        recent_maintainer_days: int | None = None
+        for comment in activity_comments or []:
+            stamp = bounty.parse_github_datetime(
+                comment.get("updated_at") or comment.get("created_at")
+            )
+            if not stamp:
+                continue
+            days = max(0, (now - stamp).days)
+            if recent_comment_days is None or days < recent_comment_days:
+                recent_comment_days = days
+            association = str(comment.get("author_association", "")).upper()
+            if association in TRUSTED_ASSOCIATIONS and (
+                recent_maintainer_days is None or days < recent_maintainer_days
+            ):
+                recent_maintainer_days = days
+
+        if recent_maintainer_days is not None and recent_maintainer_days <= 90:
+            career += 8
+            career_reasons.append("recent maintainer activity")
+        elif recent_comment_days is not None and recent_comment_days <= 30:
+            career += 4
+            career_reasons.append("recent active discussion")
+
+        recently_active = bool(
+            (updated_days is not None and updated_days <= 180)
+            or (recent_comment_days is not None and recent_comment_days <= 90)
+            or (recent_maintainer_days is not None and recent_maintainer_days <= 180)
+        )
+        if created_days is not None and not maintainer_ready and not recently_active:
+            if created_days > 730:
+                career -= 15
+                career_reasons.append("stale inactive backlog penalty")
+            elif created_days > 365:
+                career -= 8
+                career_reasons.append("older inactive backlog penalty")
 
     career = max(0, min(100, career))
 
@@ -954,7 +1002,11 @@ def non_actionable_diagnostic_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
-def strategic_rejection(item: Mapping[str, Any], token: str | None) -> str | None:
+def strategic_rejection(
+    item: Mapping[str, Any],
+    token: str | None,
+    comments: list[dict[str, Any]] | None = None,
+) -> str | None:
     if not bounty.is_clean_candidate(item):
         return "failed basic eligibility filter"
     _, _, labels, text = issue_text(item)
@@ -987,7 +1039,7 @@ def strategic_rejection(item: Mapping[str, Any], token: str | None) -> str | Non
     if diagnostic_reason:
         return diagnostic_reason
 
-    return extended_competition_reason(item, token)
+    return extended_competition_reason(item, token, comments)
 
 
 def verify(
@@ -997,6 +1049,7 @@ def verify(
     guide_cache: dict[str, str | None],
     require_paid: bool = False,
     payment_signal_override: str | None = None,
+    activity_comments: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     fresh, reason = refresh_issue(item, token)
     if reason:
@@ -1048,7 +1101,12 @@ def verify(
 
         lane = "paid"
     else:
-        reason = strategic_rejection(fresh, token)
+        comments = (
+            issue_comments(fresh, token)
+            if activity_comments is None
+            else activity_comments
+        )
+        reason = strategic_rejection(fresh, token, comments)
         if reason:
             return None, reason
         lane = "strategic"
@@ -1065,7 +1123,17 @@ def verify(
         return None, "repository is archived"
     if repo not in guide_cache:
         guide_cache[repo] = contribution_guide(repo, token)
-    return build_candidate(fresh, lane, signal, repo_meta, guide_cache[repo]), None
+    return (
+        build_candidate(
+            fresh,
+            lane,
+            signal,
+            repo_meta,
+            guide_cache[repo],
+            comments if lane == "strategic" else None,
+        ),
+        None,
+    )
 
 
 def add_reject(
@@ -1139,27 +1207,62 @@ def discover_paid(
     return found, rejected, examples
 
 
-def strategic_verification_items(
+def possible_miss_signal(item: Mapping[str, Any]) -> bool:
+    """Flag strong raw results that deserve scrutiny when filters discard them."""
+    _, _, labels, text = issue_text(item)
+    updated = bounty.parse_github_datetime(item.get("updated_at"))
+    recent = bool(
+        updated and (datetime.now(timezone.utc) - updated).days <= 60
+    )
+    contributor_signal = any(
+        marker in labels
+        for marker in (
+            "help wanted",
+            "help-wanted",
+            "good first issue",
+            "triage/accepted",
+            "refined",
+        )
+    )
+    bug_signal = "bug" in labels or bool(
+        re.search(r"\b(?:bug|regression|panic|deadlock|leak)\b", text)
+    )
+    return recent and (contributor_signal or bug_signal)
+
+
+def add_audit(
+    audit: list[dict[str, Any]],
+    item: Mapping[str, Any],
+    reason: str,
+) -> None:
+    if len(audit) >= STRATEGIC_AUDIT_LIMIT:
+        return
+    audit.append(
+        {
+            "url": item.get("html_url"),
+            "title": item.get("title"),
+            "reason": reason,
+        }
+    )
+
+
+def strategic_inspection_items(
     provisional: list[tuple[int, int, int, dict[str, Any]]],
-) -> list[dict[str, Any]]:
-    """Build a high-scoring but repo-diverse shortlist for expensive verification."""
-    ordered = sorted(provisional, key=lambda row: row[:3], reverse=True)
-    selected: list[dict[str, Any]] = []
-    per_repo: dict[str, int] = {}
+) -> dict[str, list[dict[str, Any]]]:
+    """Keep up to 15 plausible results per repo for activity inspection."""
+    by_repo: dict[str, list[tuple[int, int, int, dict[str, Any]]]] = {}
+    for row in provisional:
+        repo, _ = bounty.issue_repo_and_number(row[3])
+        if repo:
+            by_repo.setdefault(repo, []).append(row)
 
-    for _, _, _, item in ordered:
-        repo, _ = bounty.issue_repo_and_number(item)
-        if not repo:
-            continue
-        if per_repo.get(repo, 0) >= STRATEGIC_VERIFY_PER_REPO:
-            continue
-
-        selected.append(item)
-        per_repo[repo] = per_repo.get(repo, 0) + 1
-        if len(selected) >= STRATEGIC_VERIFY_LIMIT:
-            break
-
-    return selected
+    inspected: dict[str, list[dict[str, Any]]] = {}
+    for repo, rows in by_repo.items():
+        rows.sort(key=lambda row: row[:3], reverse=True)
+        inspected[repo] = [
+            row[3] for row in rows[:STRATEGIC_INSPECT_PER_REPO]
+        ]
+    return inspected
 
 
 def discover_strategic(
@@ -1168,20 +1271,33 @@ def discover_strategic(
     paid_urls: set[str],
     repo_cache: dict[str, dict[str, Any]],
     guide_cache: dict[str, str | None],
-) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, int],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     provisional: list[tuple[int, int, int, dict[str, Any]]] = []
     touched: set[str] = set()
     rejected: dict[str, int] = {}
     examples: list[dict[str, Any]] = []
+    audit: list[dict[str, Any]] = []
+
     for query in target_repo_queries() + STRATEGIC_GLOBAL_QUERIES:
-        for item in bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE).get(
-            "items", []
-        ):
+        for item in bounty.search_github(
+            query, token, per_page=STRATEGIC_SEARCH_PER_PAGE
+        ).get("items", []):
             url = item.get("html_url")
             if not url or url in seen or url in paid_urls or url in touched:
                 continue
             touched.add(url)
             if not bounty.is_clean_candidate(item):
+                if possible_miss_signal(item):
+                    add_audit(
+                        audit,
+                        item,
+                        "strong-looking result rejected by basic eligibility filter",
+                    )
                 continue
             repo, _ = bounty.issue_repo_and_number(item)
             if not repo:
@@ -1190,34 +1306,101 @@ def discover_strategic(
                 repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
             meta = repo_cache[repo]
             if not meta or meta.get("archived"):
+                if possible_miss_signal(item):
+                    add_audit(
+                        audit,
+                        item,
+                        "strong-looking result skipped because repository metadata is unavailable or archived",
+                    )
                 continue
             signal = bounty.payment_signal(item)
             lane = "paid" if signal else "strategic"
             preview = build_candidate(item, lane, signal, meta, None)
             provisional.append(
-                (preview["priority_score"], preview["career_score"], preview["cash_score"], item)
+                (
+                    preview["priority_score"],
+                    preview["career_score"],
+                    preview["cash_score"],
+                    item,
+                )
             )
 
     found: list[dict[str, Any]] = []
-    for item in strategic_verification_items(provisional):
-        candidate, reason = verify(item, token, repo_cache, guide_cache)
-        if reason:
-            add_reject(rejected, examples, item, reason)
-            print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
-            continue
-
-        assert candidate is not None
-        if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
-            reason = (
-                f"career score {candidate['career_score']}/100 below strategic threshold "
-                f"{STRATEGIC_MIN_CAREER_SCORE}/100"
+    inspected = strategic_inspection_items(provisional)
+    for repo, items in inspected.items():
+        ranked: list[
+            tuple[int, int, int, dict[str, Any], list[dict[str, Any]]]
+        ] = []
+        for item in items:
+            comments = issue_comments(item, token)
+            signal = bounty.payment_signal(item)
+            lane = "paid" if signal else "strategic"
+            preview = build_candidate(
+                item,
+                lane,
+                signal,
+                repo_cache[repo],
+                None,
+                comments,
             )
-            add_reject(rejected, examples, item, reason)
-            print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
-            continue
+            ranked.append(
+                (
+                    preview["priority_score"],
+                    preview["career_score"],
+                    preview["cash_score"],
+                    item,
+                    comments,
+                )
+            )
 
-        found.append(candidate)
-    return found, rejected, examples
+        ranked.sort(key=lambda row: row[:3], reverse=True)
+        kept = 0
+        for _, _, _, item, comments in ranked:
+            if kept >= STRATEGIC_KEEP_PER_REPO:
+                if possible_miss_signal(item):
+                    add_audit(
+                        audit,
+                        item,
+                        "not fully verified because three stronger candidates from this repo already survived",
+                    )
+                continue
+
+            candidate, reason = verify(
+                item,
+                token,
+                repo_cache,
+                guide_cache,
+                activity_comments=comments,
+            )
+            if reason:
+                add_reject(rejected, examples, item, reason)
+                print(
+                    f"Skipping strategic candidate {item.get('html_url')}: {reason}"
+                )
+                continue
+
+            assert candidate is not None
+            if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
+                reason = (
+                    f"career score {candidate['career_score']}/100 below strategic threshold "
+                    f"{STRATEGIC_MIN_CAREER_SCORE}/100"
+                )
+                add_reject(rejected, examples, item, reason)
+                if possible_miss_signal(item):
+                    add_audit(
+                        audit,
+                        item,
+                        f"strong-looking near miss: {reason}",
+                    )
+                print(
+                    f"Skipping strategic candidate {item.get('html_url')}: {reason}"
+                )
+                continue
+
+            found.append(candidate)
+            kept += 1
+
+    return found, rejected, examples, audit
 
 
 def github_report_ref(text: Any) -> str:
@@ -1312,8 +1495,10 @@ def main() -> None:
     guide_cache: dict[str, str | None] = {}
 
     paid, paid_rejects, paid_examples = discover_paid(token, seen, repo_cache, guide_cache)
-    strategic, strategic_rejects, strategic_examples = discover_strategic(
-        token, seen, {x["url"] for x in paid}, repo_cache, guide_cache
+    strategic, strategic_rejects, strategic_examples, strategic_audit = (
+        discover_strategic(
+            token, seen, {x["url"] for x in paid}, repo_cache, guide_cache
+        )
     )
 
     by_url: dict[str, dict[str, Any]] = {}
@@ -1326,6 +1511,11 @@ def main() -> None:
         key=lambda x: (x["priority_score"], x["career_score"], x["cash_score"], -x["comments"]),
         reverse=True,
     )[:REPORT_LIMIT]
+    if strategic_audit:
+        print("=== POTENTIAL SCANNER MISSES ===")
+        for item in strategic_audit:
+            print(f"- {item['url']}: {item['reason']}")
+
     if not queue:
         print("No new verified OSS opportunities found.")
         return
@@ -1369,6 +1559,13 @@ def main() -> None:
         if examples:
             body += "### Verification rejects\n\n"
             for item in examples:
+                source = github_report_ref(item["url"])
+                title = github_report_ref(item["title"] or source)
+                reason = github_report_ref(item["reason"])
+                body += f"- [{title}]({source}): {reason}\n"
+        if strategic_audit:
+            body += "\n### Potential scanner misses / tuning candidates\n\n"
+            for item in strategic_audit[:12]:
                 source = github_report_ref(item["url"])
                 title = github_report_ref(item["title"] or source)
                 reason = github_report_ref(item["reason"])
