@@ -100,11 +100,13 @@ These are direction markers, not a requirement to create empty abstractions earl
 
 ## Invariants
 
-- Paid candidates require explicit payment evidence.
+- Paid candidates require explicit payment evidence and must represent open work rather than payout-history/leaderboard summaries.
 - Strategic candidates must be refreshed and re-verified before they reach the final queue.
 - Assigned, actively claimed, superseded, discussion-only, or already-implemented work must not be presented as ready work.
 - Scanner misses are useful product feedback; audit paths should remain observable.
 - Repository/network failures should degrade coverage explicitly rather than silently turning into positive verification.
+- Strategic deep verification is rate-budgeted: inspect broadly, verify in rank order, and stop only when remaining candidates cannot displace the kept set under the known verification-score uplift bound.
+- Comment-fetch failure must remain distinguishable from a real empty discussion thread; incomplete verification runs warn prominently and do not advance seen-state.
 - Tests must cover scanner policy without live network access.
 - Ruff, strict mypy, and 100% statement + branch coverage are repository-wide quality gates.
 
