@@ -1640,6 +1640,178 @@ class VerificationTests(unittest.TestCase):
             "awaiting reproduction confirmation",
         )
 
+    def test_readiness_gate_targeted_live_refinements(self) -> None:
+        profile_request = [
+            {
+                "body": "Would it be possible to provide a profile from the affected binary?",
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(issue(title="Memory leak"), "t", profile_request),
+            "maintainer is waiting for requested diagnostic evidence",
+        )
+
+        redirect = [
+            {
+                "body": (
+                    "This requires a change in the specification defined in "
+                    "https://github.com/distribution/reference. "
+                    "Probably best to open a ticket there for discussion."
+                ),
+                "author_association": "COLLABORATOR",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(issue(title="IPv6 reference parsing"), "t", redirect),
+            "maintainer redirected implementation/discussion to another project",
+        )
+
+        duplicate = [
+            {
+                "body": (
+                    "Looks like a (possible) duplicate of #123. "
+                    "The discussion is being tracked there."
+                ),
+                "author_association": "OWNER",
+            }
+        ]
+        self.assertEqual(
+            scout.strategic_rejection(issue(title="Prune behavior"), "t", duplicate),
+            "maintainer indicates this is probably tracked by another canonical issue",
+        )
+
+        self.assertEqual(
+            scout.strategic_rejection(
+                issue(title="Gateway cert", labels=[{"name": "lifecycle/rotten"}]),
+                "t",
+                [],
+            ),
+            "issue is in an abandoned/rotten lifecycle state",
+        )
+
+        supplied = profile_request + [
+            {
+                "body": "I've attached the requested heap profile here: https://example.test/heap.",
+                "author_association": "NONE",
+            }
+        ]
+        approved = supplied + [
+            {
+                "body": "Thanks, this looks valid. A PR in this repository is welcome.",
+                "author_association": "MEMBER",
+            }
+        ]
+        redirect_then_ready = redirect + [
+            {
+                "body": "The spec concern is resolved. A PR in this repository is welcome.",
+                "author_association": "MEMBER",
+            }
+        ]
+        revival = [
+            {
+                "body": "We are reviving this issue; this issue is active again.",
+                "author_association": "MEMBER",
+            }
+        ]
+
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Memory leak"),
+                    "t",
+                    [
+                        {
+                            "body": "Could you provide a heap profile?",
+                            "author_association": "CONTRIBUTOR",
+                        }
+                    ],
+                )
+            )
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="API question"),
+                    "t",
+                    [
+                        {
+                            "body": "Could you clarify whether this also affects v2?",
+                            "author_association": "MEMBER",
+                        }
+                    ],
+                )
+            )
+            self.assertIsNone(scout.strategic_rejection(issue(title="Memory leak"), "t", supplied))
+            self.assertIsNone(scout.strategic_rejection(issue(title="Memory leak"), "t", approved))
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Parser bug"),
+                    "t",
+                    [
+                        {
+                            "body": "Related code is in distribution/reference for context.",
+                            "author_association": "MEMBER",
+                        }
+                    ],
+                )
+            )
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Parser bug"),
+                    "t",
+                    redirect_then_ready,
+                )
+            )
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Prune behavior"),
+                    "t",
+                    [
+                        {
+                            "body": "Related to #123, but this report has different symptoms.",
+                            "author_association": "MEMBER",
+                        }
+                    ],
+                )
+            )
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Prune behavior"),
+                    "t",
+                    [
+                        {
+                            "body": "Looks like a duplicate of #123.",
+                            "author_association": "NONE",
+                        }
+                    ],
+                )
+            )
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Prune behavior"),
+                    "t",
+                    [
+                        {
+                            "body": "This is not a duplicate of #123.",
+                            "author_association": "MEMBER",
+                        }
+                    ],
+                )
+            )
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Old issue", labels=[{"name": "stale"}]),
+                    "t",
+                    [],
+                )
+            )
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Gateway cert", labels=[{"name": "lifecycle/rotten"}]),
+                    "t",
+                    revival,
+                )
+            )
+
     def test_readiness_gate_allows_explicit_ready_override_and_normal_features(self) -> None:
         pending = issue(labels=[{"name": "status/needs-reproduction"}])
         ready_comments = [
