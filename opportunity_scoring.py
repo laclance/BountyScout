@@ -314,16 +314,22 @@ def repo_activity(repo_meta: Mapping[str, Any]) -> str:
     return f"{bucket} ({repo_meta.get('pushed_at')})"
 
 
-\ndef build_candidate(
+
+
+def build_candidate(
     item: Mapping[str, Any],
     lane: str,
     signal: str | None,
     repo_meta: Mapping[str, Any],
     guide: str | None,
     activity_comments: list[dict[str, Any]] | None = None,
+    *,
+    target_repos: Collection[str],
+    amount_pattern: str,
 ) -> dict[str, Any]:
     repo, number = bounty.issue_repo_and_number(item)
-    effort = estimate_effort(item)
+    effort_estimate = estimate_effort_details(item)
+    effort = effort_estimate.bucket
     comp = competition(item)
     stars = int(repo_meta.get("stargazers_count") or 0)
     pushed = bounty.parse_github_datetime(repo_meta.get("pushed_at"))
@@ -593,7 +599,8 @@ def repo_activity(repo_meta: Mapping[str, Any]) -> str:
         "cash_score": cash,
         "career_score": career,
         "priority_score": priority,
-        "effort": effort,\n        "effort_reasons": list(effort_estimate.reasons),
+        "effort": effort,
+        "effort_reasons": list(effort_estimate.reasons),
         "expected_hourly": hourly,
         "competition": comp,
         "stars": stars,
