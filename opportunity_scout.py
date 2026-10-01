@@ -26,6 +26,7 @@ from strategic_readiness import (
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
     proposal_stage_signal as proposal_stage_signal,
     reporter_resolution_reason as reporter_resolution_reason,
+    reward_history_reason as reward_history_reason,
     security_disclosure_reason as security_disclosure_reason,
     readiness_pending_label_reason as readiness_pending_label_reason,
     release_tracking_reason as release_tracking_reason,
@@ -627,6 +628,10 @@ def verify(
     if not clean:
         return None, "failed basic eligibility filter after source refresh"
 
+    reward_history = reward_history_reason(fresh)
+    if reward_history:
+        return None, reward_history
+
     issue_signal = bounty.payment_signal(fresh) or supplemental_payment_signal(fresh)
     comment_signal = None
     if not issue_signal and int(fresh.get("comments") or 0):
@@ -803,6 +808,7 @@ def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     """Flag strong raw results that deserve scrutiny when filters discard them."""
     if (
         security_disclosure_reason(item)
+        or reward_history_reason(item)
         or manual_tracking_issue_reason(item)
         or automated_tracking_issue_reason(item)
         or release_tracking_reason(item)
