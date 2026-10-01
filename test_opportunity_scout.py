@@ -3406,21 +3406,29 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(audit[0]["url"], "https://github.com/a/a/issues")
         self.assertIn("coverage incomplete", audit[0]["reason"])
 
-    def test_strategic_global_search_results_reserves_queries_in_order(self) -> None:
+    def test_prefetch_discovery_searches_paces_all_queries_in_order(self) -> None:
         with (
-            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", ["q1", "q2"]),
+            patch.object(scout, "PAID_DISCOVERY_QUERIES", ["p1", "p2"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", ["s1", "s2"]),
             patch.object(
                 bounty,
                 "search_github",
-                side_effect=[{"items": [{"id": 1}]}, {"items": [{"id": 2}]}],
+                side_effect=[
+                    {"items": [{"id": 1}]},
+                    {"items": [{"id": 2}]},
+                    {"items": [{"id": 3}]},
+                    {"items": [{"id": 4}]},
+                ],
             ) as search,
+            patch.object(scout, "sleep") as sleeper,
         ):
-            results = scout.strategic_global_search_results("t")
+            paid, strategic = scout.prefetch_discovery_searches("t")
 
-        self.assertEqual([query for query, _ in results], ["q1", "q2"])
-        self.assertEqual(search.call_count, 2)
-        self.assertEqual(search.call_args_list[0].args[:2], ("q1", "t"))
-        self.assertEqual(search.call_args_list[1].args[:2], ("q2", "t"))
+        self.assertEqual([query for query, _ in paid], ["p1", "p2"])
+        self.assertEqual([query for query, _ in strategic], ["s1", "s2"])
+        self.assertEqual([call.args[0] for call in search.call_args_list], ["p1", "p2", "s1", "s2"])
+        self.assertEqual(sleeper.call_count, 3)
+        sleeper.assert_called_with(scout.DISCOVERY_SEARCH_INTERVAL_SECONDS)
 
     def test_discover_strategic_audits_global_search_failure(self) -> None:
         with (
@@ -3439,6 +3447,18 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(audit[0]["url"], "https://github.com/issues")
         self.assertIn("global strategic discovery search failed", audit[0]["reason"])
         self.assertIn("coverage incomplete", audit[0]["reason"])
+
+    def test_discover_paid_prefetched_failure_skips_without_duplicate_search(self) -> None:
+        with (
+            patch.object(bounty, "search_github") as search,
+            patch.object(scout, "platform_paid_refs", return_value={}),
+        ):
+            found, rejected, examples = scout.discover_paid("t", set(), {}, {}, [("paid-q", {})])
+
+        search.assert_not_called()
+        self.assertEqual(found, [])
+        self.assertEqual(rejected, {})
+        self.assertEqual(examples, [])
 
     def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
@@ -3633,13 +3653,16 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertNotIn("reward:", "\n".join(strategic_lines))
         self.assertNotIn("cash:", "\n".join(strategic_lines))
 
-    def test_main_prefetches_strategic_search_before_paid_discovery(self) -> None:
+    def test_main_prefetches_all_discovery_searches_before_paid_work(self) -> None:
         order: list[str] = []
-        prefetched: list[tuple[str, dict[str, Any]]] = [("global-q", {"items": []})]
+        paid_prefetch: list[tuple[str, dict[str, Any]]] = [("paid-q", {"items": []})]
+        strategic_prefetch: list[tuple[str, dict[str, Any]]] = [("global-q", {"items": []})]
 
-        def prefetch(_token: str | None) -> list[tuple[str, dict[str, Any]]]:
-            order.append("strategic-search")
-            return prefetched
+        def prefetch(
+            _token: str | None,
+        ) -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[str, dict[str, Any]]]]:
+            order.append("searches")
+            return paid_prefetch, strategic_prefetch
 
         def paid(*args: Any) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
             order.append("paid")
@@ -3660,14 +3683,15 @@ class FormattingAndMainTests(unittest.TestCase):
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value=set()),
-            patch.object(scout, "strategic_global_search_results", side_effect=prefetch),
-            patch.object(scout, "discover_paid", side_effect=paid),
+            patch.object(scout, "prefetch_discovery_searches", side_effect=prefetch),
+            patch.object(scout, "discover_paid", side_effect=paid) as paid_discovery,
             patch.object(scout, "discover_strategic", side_effect=strategic_discovery) as strategic,
         ):
             scout.main()
 
-        self.assertEqual(order, ["strategic-search", "paid", "strategic"])
-        self.assertIs(strategic.call_args.args[5], prefetched)
+        self.assertEqual(order, ["searches", "paid", "strategic"])
+        self.assertIs(paid_discovery.call_args.args[4], paid_prefetch)
+        self.assertIs(strategic.call_args.args[5], strategic_prefetch)
 
     def test_main_no_queue(self) -> None:
         with (
@@ -3709,7 +3733,7 @@ class FormattingAndMainTests(unittest.TestCase):
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value={"old"}),
-            patch.object(scout, "strategic_global_search_results", return_value=[]),
+            patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([low, high], {"r1": 1}, [reject])),
             patch.object(
                 scout,
@@ -3770,7 +3794,7 @@ class FormattingAndMainTests(unittest.TestCase):
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value={"old"}),
-            patch.object(scout, "strategic_global_search_results", return_value=[]),
+            patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([], {}, [])),
             patch.object(
                 scout,
@@ -3794,9 +3818,40 @@ class FormattingAndMainTests(unittest.TestCase):
 
         gh.assert_called_once()
         self.assertIn("0 new verified candidates", gh.call_args.args[2])
-        self.assertIn("Strategic verification coverage is incomplete", gh.call_args.args[3])
+        self.assertIn(
+            "Opportunity discovery/verification coverage is incomplete", gh.call_args.args[3]
+        )
         save.assert_not_called()
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
+
+    def test_main_paid_search_failure_warns_and_preserves_seen_state(self) -> None:
+        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/BountyScout"}
+        strategic = candidate(paid=False)
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(
+                scout,
+                "prefetch_discovery_searches",
+                return_value=([("paid-q", {})], []),
+            ),
+            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(
+                scout,
+                "discover_strategic",
+                return_value=([strategic], {}, [], []),
+            ),
+            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(bounty, "save_seen_bounties") as save,
+        ):
+            scout.main()
+
+        gh.assert_called_once()
+        self.assertIn(
+            "Opportunity discovery/verification coverage is incomplete", gh.call_args.args[3]
+        )
+        self.assertIn("paid discovery search failed for query: paid-q", gh.call_args.args[3])
+        save.assert_not_called()
 
     def test_main_discovery_failure_warns_and_preserves_seen_state(self) -> None:
         env = {
@@ -3818,7 +3873,7 @@ class FormattingAndMainTests(unittest.TestCase):
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value={"old"}),
-            patch.object(scout, "strategic_global_search_results", return_value=[]),
+            patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([], {}, [])),
             patch.object(
                 scout,
@@ -3832,7 +3887,9 @@ class FormattingAndMainTests(unittest.TestCase):
             scout.main()
 
         gh.assert_called_once()
-        self.assertIn("Strategic verification coverage is incomplete", gh.call_args.args[3])
+        self.assertIn(
+            "Opportunity discovery/verification coverage is incomplete", gh.call_args.args[3]
+        )
         self.assertIn("1 discovery/source/comment/competition checks failed", gh.call_args.args[3])
         save.assert_not_called()
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
@@ -4097,7 +4154,7 @@ class CoverageGapTests(unittest.TestCase):
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(bounty, "load_seen_bounties", return_value=set()),
-            patch.object(scout, "strategic_global_search_results", return_value=[]),
+            patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([high, low], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
