@@ -7,7 +7,7 @@ from typing import Any
 import opportunity_scoring as scoring
 
 
-AMOUNT_RE = r"[$]s*d[d,]*(?:.d+)?"
+AMOUNT_RE = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
