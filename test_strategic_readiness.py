@@ -356,6 +356,20 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
             (False, "maintainer says issue still needs discussion"),
         )
 
+    def test_trusted_worth_discussion_and_community_feedback_are_holds(self) -> None:
+        for body in (
+            "Thanks for filing this. It is worth discussion.",
+            "Like to hear from the community before we choose an approach.",
+        ):
+            with self.subTest(body=body):
+                self.assertEqual(
+                    readiness.maintainer_readiness_comment_state(
+                        issue(),
+                        [{"body": body, "author_association": "COLLABORATOR"}],
+                    ),
+                    (False, "maintainer says issue still needs discussion"),
+                )
+
 
 class MaintainerIssueDecisionTests(unittest.TestCase):
     def test_trusted_issue_author_can_mark_semantics_as_still_undecided(self) -> None:
@@ -449,6 +463,35 @@ class RewardHistoryTests(unittest.TestCase):
         )
 
 
+class ReporterSupportTriageTests(unittest.TestCase):
+    def test_guidance_questionnaire_is_support_triage_not_implementation(self) -> None:
+        support = issue(
+            body=(
+                "We would like to determine whether this is expected behavior, an environment "
+                "interaction, a product bug, or configuration. We would particularly appreciate "
+                "guidance on:\n"
+                "1. Is this expected in this environment?\n"
+                "2. Are there known network idle-timeout issues?\n"
+                "3. Could the platform networking cause this?\n"
+                "4. Would switching transports be a recommended workaround?\n"
+            )
+        )
+        self.assertEqual(
+            readiness.reporter_support_triage_reason(support),
+            "support/triage issue rather than a contributor task",
+        )
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                issue(
+                    body=(
+                        "Implement retries for reusable request bodies. "
+                        "Should FormData stay non-replayable?"
+                    )
+                )
+            )
+        )
+
+
 class ManualTrackingIssueTests(unittest.TestCase):
     def test_multi_child_umbrella_tracker_is_not_single_implementation_task(self) -> None:
         tracker = issue(
@@ -481,6 +524,29 @@ class ManualTrackingIssueTests(unittest.TestCase):
         self.assertIsNone(
             readiness.manual_tracking_issue_reason(
                 issue(body=("Track the following follow-up work:\n- [ ] #10\n- [ ] #11\n"))
+            )
+        )
+        self.assertEqual(
+            readiness.manual_tracking_issue_reason(
+                issue(body="### Tasks\n- [x] Initial implementation\n- [ ] Further improvements"),
+                [
+                    {
+                        "body": "Let me know if I should add additional tasks to this umbrella issue.",
+                        "author_association": "MEMBER",
+                    }
+                ],
+            ),
+            "umbrella tracking issue, not a single implementation task",
+        )
+        self.assertIsNone(
+            readiness.manual_tracking_issue_reason(
+                issue(body="### Tasks\n- [ ] one change"),
+                [
+                    {
+                        "body": "I think this could be an umbrella issue.",
+                        "author_association": "NONE",
+                    }
+                ],
             )
         )
 

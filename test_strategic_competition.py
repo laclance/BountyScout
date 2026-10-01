@@ -178,6 +178,75 @@ class ClaimCompetitionTests(unittest.TestCase):
             "active claim by @david",
         )
 
+    def test_local_exploration_with_concrete_changes_is_active_implementation(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        self.assertEqual(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [
+                    {
+                        "body": (
+                            "I poked at this locally. No breaking change needed. "
+                            "I made the explicit selector win and moved the preference logic "
+                            "into sdk-metrics."
+                        ),
+                        "updated_at": recent,
+                        "user": {"login": "neoLsH"},
+                    }
+                ],
+            ),
+            "active claim by @neoLsH",
+        )
+        self.assertIsNone(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [
+                    {
+                        "body": "I poked at this locally but did not change anything.",
+                        "updated_at": recent,
+                        "user": {"login": "observer"},
+                    }
+                ],
+            )
+        )
+
+    def test_issue_numbered_branch_link_by_author_is_active_implementation(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        self.assertEqual(
+            competition.strategic_claim_reason(
+                issue(html_url="https://github.com/nodejs/undici/issues/5912", body=""),
+                [
+                    {
+                        "body": "https://github.com/KhafraDev/undici/tree/fetch/issue-5912",
+                        "updated_at": recent,
+                        "user": {"login": "KhafraDev"},
+                        "author_association": "MEMBER",
+                    }
+                ],
+            ),
+            "active implementation branch linked by @KhafraDev",
+        )
+        self.assertIsNone(
+            competition.strategic_claim_reason(
+                issue(html_url="https://github.com/nodejs/undici/issues/5912", body=""),
+                [
+                    {
+                        "body": "https://github.com/SomeoneElse/undici/tree/fetch/issue-5912",
+                        "updated_at": recent,
+                        "user": {"login": "observer"},
+                    }
+                ],
+            )
+        )
+
+    def test_claim_reason_handles_unidentifiable_issue_without_branch_matching(self) -> None:
+        self.assertIsNone(
+            competition.strategic_claim_reason(
+                {"html_url": "bad", "body": ""},
+                [{"body": "Thanks for the report.", "user": {"login": "observer"}}],
+            )
+        )
+
     def test_supplemental_claims_require_first_person_ownership_language(self) -> None:
         self.assertEqual(
             competition.supplemental_claim_reason(
@@ -352,9 +421,8 @@ class SearchPullRequestTests(unittest.TestCase):
             self.assertIn("is%3Apr", url)
             self.assertIn("is%3Aopen", url)
 
-    def test_search_ignores_non_pr_results_missing_urls_and_bad_responses(self) -> None:
+    def test_search_ignores_non_pr_results_and_missing_urls(self) -> None:
         cases: list[Any] = [
-            [],
             {"items": ["invalid"]},
             {
                 "items": [
@@ -396,6 +464,22 @@ class SearchPullRequestTests(unittest.TestCase):
                 [],
             )
         )
+
+    def test_search_failure_fails_closed_when_pr_check_is_needed(self) -> None:
+        responses: tuple[Any, ...] = (None, [])
+        for response in responses:
+            with (
+                self.subTest(response=response),
+                patch.object(github, "github_get", return_value=response),
+            ):
+                self.assertEqual(
+                    competition.search_open_implementation_pr_reason(
+                        issue(body="There may already be an implementation PR."),
+                        "t",
+                        [],
+                    ),
+                    "could not verify open implementation PR search",
+                )
 
 
 class TimelinePullRequestTests(unittest.TestCase):

@@ -629,12 +629,13 @@ class CalibrationTests(unittest.TestCase):
             getter.assert_not_called()
 
         with patch.object(github, "github_get", return_value=[]):
-            self.assertIsNone(
+            self.assertEqual(
                 scout.search_open_implementation_pr_reason(
                     issue(body="There may already be a PR for this.", comments=0),
                     "t",
                     [],
-                )
+                ),
+                "could not verify open implementation PR search",
             )
 
         edge_results = {
@@ -2112,6 +2113,112 @@ class VerificationTests(unittest.TestCase):
             "release planning/tracking issue, not implementation work",
         )
 
+    def test_fresh_1326_run_false_positive_regressions(self) -> None:
+        otel_js = issue(
+            html_url="https://github.com/open-telemetry/opentelemetry-js/issues/6957",
+            title="support ConsoleMetricExporter options from declarative config",
+            comments=2,
+        )
+        otel_comments = [
+            {
+                "body": (
+                    "I poked at this locally. No breaking change needed. "
+                    "I made the explicit selector win and moved the preference logic "
+                    "into sdk-metrics."
+                ),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "user": {"login": "neoLsH"},
+            }
+        ]
+
+        cloudflared = issue(
+            html_url="https://github.com/cloudflare/cloudflared/issues/1728",
+            title="QUIC connections intermittently terminate in Azure Container Apps",
+            body=(
+                "We would like to determine whether this is expected behavior, an Azure "
+                "networking interaction, a cloudflared issue, or configuration. "
+                "We would particularly appreciate guidance on:\n"
+                "1. Is this expected for established QUIC connections?\n"
+                "2. Are there known UDP idle-timeout issues?\n"
+                "3. Could Azure networking cause this?\n"
+                "4. Would switching to HTTP/2 be recommended?\n"
+            ),
+            comments=0,
+        )
+
+        aws_lbc = issue(
+            html_url=(
+                "https://github.com/kubernetes-sigs/aws-load-balancer-controller/issues/4870"
+            ),
+            title="manage controller CRD upgrades",
+            comments=1,
+        )
+        aws_comments = [
+            {
+                "body": (
+                    "Thanks for filing this. I agree the current CRD lifecycle experience "
+                    "isn't great. It is worth discussion. Like to hear from the community "
+                    "which approach is preferable."
+                ),
+                "author_association": "COLLABORATOR",
+            }
+        ]
+
+        controller_runtime = issue(
+            html_url="https://github.com/kubernetes-sigs/controller-runtime/issues/3220",
+            title="Feature: Warmup for controllers",
+            body=(
+                "### Tasks\n"
+                "- [x] Design\n"
+                "- [x] Initial implementation\n"
+                "- [ ] Further improvements\n"
+            ),
+            comments=1,
+        )
+        controller_comments = [
+            {
+                "body": "Let me know if I should add additional tasks to this umbrella issue.",
+                "author_association": "MEMBER",
+            }
+        ]
+
+        undici = issue(
+            html_url="https://github.com/nodejs/undici/issues/5912",
+            title="Should Fetch retry reusable request bodies after HTTP/2 GOAWAY?",
+            comments=1,
+        )
+        undici_comments = [
+            {
+                "body": "https://github.com/KhafraDev/undici/tree/fetch/issue-5912",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "user": {"login": "KhafraDev"},
+                "author_association": "MEMBER",
+            }
+        ]
+
+        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
+            self.assertEqual(
+                scout.strategic_rejection(otel_js, "t", otel_comments),
+                "active claim by @neoLsH",
+            )
+            self.assertEqual(
+                scout.strategic_rejection(undici, "t", undici_comments),
+                "active implementation branch linked by @KhafraDev",
+            )
+
+        self.assertEqual(
+            scout.strategic_rejection(cloudflared, "t", []),
+            "support/triage issue rather than a contributor task",
+        )
+        self.assertEqual(
+            scout.strategic_rejection(aws_lbc, "t", aws_comments),
+            "maintainer says issue still needs discussion",
+        )
+        self.assertEqual(
+            scout.strategic_rejection(controller_runtime, "t", controller_comments),
+            "umbrella tracking issue, not a single implementation task",
+        )
+
     def test_readiness_gate_targeted_live_refinements(self) -> None:
         profile_request = [
             {
@@ -3086,7 +3193,7 @@ class DiscoveryTests(unittest.TestCase):
                 scout,
                 "verify",
                 side_effect=[
-                    (None, "could not refresh issue comments"),
+                    (None, "could not verify open implementation PR search"),
                     (None, "could not refresh source issue"),
                 ],
             ) as verify_mock,
@@ -3096,7 +3203,7 @@ class DiscoveryTests(unittest.TestCase):
 
         self.assertEqual(found, [])
         self.assertEqual(verify_mock.call_count, 2)
-        self.assertEqual(rejected["could not refresh issue comments"], 1)
+        self.assertEqual(rejected["could not verify open implementation PR search"], 1)
         self.assertEqual(rejected["could not refresh source issue"], 1)
         self.assertEqual(len(examples), 2)
         self.assertTrue(
@@ -3458,8 +3565,9 @@ class FormattingAndMainTests(unittest.TestCase):
                 return_value=(
                     [],
                     {
-                        "could not refresh source issue": 3,
+                        "could not refresh source issue": 2,
                         "could not refresh issue comments": 2,
+                        "could not verify open implementation PR search": 1,
                     },
                     [],
                     [],

@@ -106,7 +106,7 @@ These are direction markers, not a requirement to create empty abstractions earl
 - Scanner misses are useful product feedback; audit paths should remain observable.
 - Repository/network failures should degrade coverage explicitly rather than silently turning into positive verification.
 - Strategic deep verification is rate-budgeted: inspect broadly, verify in rank order, and stop only when remaining candidates cannot displace the kept set under the known verification-score uplift bound.
-- Comment-fetch failure must remain distinguishable from a real empty discussion thread; incomplete verification runs warn prominently and do not advance seen-state.
+- Comment-fetch failure must remain distinguishable from a real empty discussion thread; failed implementation-PR searches are also verification failures rather than evidence of no competition. Incomplete verification runs warn prominently and do not advance seen-state.
 - Tests must cover scanner policy without live network access.
 - Ruff, strict mypy, and 100% statement + branch coverage are repository-wide quality gates.
 
