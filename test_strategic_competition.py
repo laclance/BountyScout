@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import patch
 
+import opportunity_scout as scout
 import scout_bounties as bounty
 import strategic_competition as competition
 
@@ -19,6 +20,15 @@ def issue(**overrides: Any) -> dict[str, Any]:
     }
     item.update(overrides)
     return item
+
+
+class CompatibilityWrapperTests(unittest.TestCase):
+    def test_opportunity_scout_preserves_claim_recency_export(self) -> None:
+        self.assertTrue(scout.claim_source_is_recent({}))
+        self.assertEqual(
+            scout.STRATEGIC_CLAIM_MAX_AGE_DAYS,
+            competition.STRATEGIC_CLAIM_MAX_AGE_DAYS,
+        )
 
 
 class ClaimCompetitionTests(unittest.TestCase):
