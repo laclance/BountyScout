@@ -3448,6 +3448,20 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIn("global strategic discovery search failed", audit[0]["reason"])
         self.assertIn("coverage incomplete", audit[0]["reason"])
 
+    def test_discover_paid_prefetched_failure_skips_without_duplicate_search(self) -> None:
+        with (
+            patch.object(bounty, "search_github") as search,
+            patch.object(scout, "platform_paid_refs", return_value={}),
+        ):
+            found, rejected, examples = scout.discover_paid(
+                "t", set(), {}, {}, [("paid-q", {})]
+            )
+
+        search.assert_not_called()
+        self.assertEqual(found, [])
+        self.assertEqual(rejected, {})
+        self.assertEqual(examples, [])
+
     def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
         duplicate = dict(a)
