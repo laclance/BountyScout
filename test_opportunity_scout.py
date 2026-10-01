@@ -996,6 +996,12 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "pr")
         with patch.object(scout, "extended_competition_reason", return_value="claim"):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "claim")
+        with patch.object(
+            scout,
+            "non_actionable_diagnostic_reason",
+            return_value="diagnostic",
+        ):
+            self.assertEqual(scout.strategic_rejection(issue(), "t"), "diagnostic")
 
         self.assertEqual(
             scout.strategic_rejection(issue(labels=["needs-triage"]), "t"),
