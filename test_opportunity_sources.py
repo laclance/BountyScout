@@ -172,7 +172,7 @@ class PlatformAdapterTests(unittest.TestCase):
     def test_opire_direct_and_detail_sources(self) -> None:
         pages = {
             "https://app.opire.dev/home": (
-                "https:\/\/github.com\/direct\/repo\/issues\/1 "
+                r"https:\/\/github.com\/direct\/repo\/issues\/1 "
                 '<a href="/issues/A">a</a><a href="/issues/B">b</a>'
             ),
             "https://app.opire.dev/issues/A": "",
@@ -286,6 +286,21 @@ class AdaptiveInspectionTests(unittest.TestCase):
         self.assertIn("https://github.com/b/b/issues/3", selected_urls)
         self.assertNotIn("https://github.com/a/a/issues/4", selected_urls)
         self.assertNotIn("https://github.com/b/b/issues/4", selected_urls)
+
+    def test_adaptive_overflow_skips_rows_without_expansion_signal(self) -> None:
+        selected = sources.strategic_inspection_items(
+            [
+                (100, 100, 0, issue(1)),
+                (90, 90, 0, issue(2)),
+            ],
+            base_per_repo=1,
+            adaptive_budget=1,
+            should_expand=lambda _: False,
+        )
+        self.assertEqual(
+            [item["html_url"] for item in selected["example/project"]],
+            [issue(1)["html_url"]],
+        )
 
     def test_invalid_issue_urls_are_not_selected(self) -> None:
         selected = sources.strategic_inspection_items(
