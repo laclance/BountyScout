@@ -1795,7 +1795,6 @@ class VerificationTests(unittest.TestCase):
             "awaiting reproduction confirmation",
         )
 
-
         undici = issue(
             title="HTTP/1.1 304 with Content-Length closes the connection",
             labels=[{"name": "bug"}],
