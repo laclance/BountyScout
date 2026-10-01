@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-import json
 import os
 import re
-import urllib.parse
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from threading import Lock
 from time import monotonic
-from typing import Any, Mapping, cast
+from typing import Any, Mapping
 
 import scout_bounties as bounty
 import opportunity_scoring as scoring
+import opportunity_sources as sources
 import strategic_competition as competition_policy
 from strategic_claims import strategic_claim_text as strategic_claim_text
 from strategic_readiness import (
@@ -62,6 +60,7 @@ STRATEGIC_SEARCH_PER_PAGE = 20
 TARGET_REPO_FETCH_PER_PAGE = 50
 TARGET_REPO_FETCH_PAGES = 3
 STRATEGIC_INSPECT_PER_REPO = 15
+STRATEGIC_ADAPTIVE_INSPECT_BUDGET = 24
 STRATEGIC_KEEP_PER_REPO = 3
 STRATEGIC_MIN_CAREER_SCORE = 55
 STRATEGIC_AUDIT_LIMIT = 20
@@ -93,39 +92,18 @@ PLATFORM_FETCH_LIMIT = 20
 ISSUEHUNT_PAGES = 2
 
 
-def target_repo_issue_pool(repo: str, token: str | None) -> tuple[list[dict[str, Any]], str | None]:
-    """Fetch enough real issues even though GitHub mixes PRs into /issues."""
-    issues: list[dict[str, Any]] = []
-
-    for page in range(1, TARGET_REPO_FETCH_PAGES + 1):
-        params = urllib.parse.urlencode(
-            {
-                "state": "open",
-                "sort": "updated",
-                "direction": "desc",
-                "per_page": TARGET_REPO_FETCH_PER_PAGE,
-                "page": page,
-            }
-        )
-        data = bounty.github_get(
-            f"https://api.github.com/repos/{repo}/issues?{params}",
-            token,
-        )
-        if not isinstance(data, list):
-            error = f"target repo discovery failed for {repo}; scan coverage incomplete"
-            return issues[:STRATEGIC_SEARCH_PER_PAGE], error
-
-        for item in data:
-            if not isinstance(item, dict) or "pull_request" in item:
-                continue
-            issues.append(item)
-            if len(issues) >= STRATEGIC_SEARCH_PER_PAGE:
-                return issues[:STRATEGIC_SEARCH_PER_PAGE], None
-
-        if len(data) < TARGET_REPO_FETCH_PER_PAGE:
-            break
-
-    return issues[:STRATEGIC_SEARCH_PER_PAGE], None
+def target_repo_issue_pool(
+    repo: str,
+    token: str | None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Fetch the configured bounded source pool for a curated repository."""
+    return sources.target_repo_issue_pool(
+        repo,
+        token,
+        fetch_per_page=TARGET_REPO_FETCH_PER_PAGE,
+        fetch_pages=TARGET_REPO_FETCH_PAGES,
+        result_limit=STRATEGIC_SEARCH_PER_PAGE,
+    )
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
@@ -196,43 +174,18 @@ def repo_activity(repo_meta: Mapping[str, Any]) -> str:
 
 
 def github_get_optional(url: str, token: str | None) -> Any:
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "OSSOpportunityScout",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    try:
-        request = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(request, timeout=10) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except Exception:
-        return None
+    """Compatibility wrapper for optional GitHub JSON fetching."""
+    return sources.github_get_optional(url, token)
 
 
 def fetch_text(url: str, timeout: int = 12) -> str:
-    """Fetch public HTML for official bounty-platform discovery pages."""
-    headers = {"User-Agent": "OSSOpportunityScout"}
-    try:
-        request = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return cast(bytes, response.read()).decode("utf-8", errors="replace")
-    except Exception as exc:
-        print(f"Platform fetch failed for {url}: {exc}")
-        return ""
+    """Compatibility wrapper for public platform HTML fetching."""
+    return sources.fetch_text(url, timeout)
 
 
 def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str, Any]]:
-    """Fetch issue comments for activity, payment, and competition checks."""
-    repo, number = bounty.issue_repo_and_number(item)
-    if not repo or not number or not int(item.get("comments") or 0):
-        return []
-    comments = bounty.github_get(
-        f"https://api.github.com/repos/{repo}/issues/{number}/comments?per_page=100",
-        token,
-    )
-    return comments if isinstance(comments, list) else []
+    """Compatibility wrapper for issue-comment source fetching."""
+    return sources.issue_comments(item, token)
 
 
 TRIAGE_PENDING_LABELS = {"needs-triage"}
@@ -421,175 +374,49 @@ def comment_payment_signal(item: Mapping[str, Any], token: str | None) -> str | 
 
 
 def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
-    """Fetch a GitHub source issue from a platform-discovered URL."""
-    match = re.match(
-        r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)",
-        str(url),
-    )
-    if not match:
-        return None
-    repo, number = match.group(1), int(match.group(2))
-    item = bounty.github_get(
-        f"https://api.github.com/repos/{repo}/issues/{number}",
-        token,
-    )
-    return item if isinstance(item, dict) else None
+    """Compatibility wrapper for platform-discovered GitHub issue fetching."""
+    return sources.issue_from_github_url(url, token)
 
 
 def issuehunt_platform_refs() -> dict[str, str]:
-    """Read the official IssueHunt funded-issues pages."""
-    refs: dict[str, str] = {}
-    for page in range(1, ISSUEHUNT_PAGES + 1):
-        url = "https://oss.issuehunt.io/issues"
-        if page > 1:
-            url += f"?page={page}"
-        page_html = fetch_text(url)
-        if not page_html:
-            continue
-
-        pattern = re.compile(
-            r'href=["\'](/r/([^/"\']+)/([^/"\']+)/issues/(\d+))["\']',
-            re.IGNORECASE,
-        )
-        for match in pattern.finditer(page_html):
-            owner, repo, number = match.group(2), match.group(3), match.group(4)
-            source_url = f"https://github.com/{owner}/{repo}/issues/{number}"
-            nearby = page_html[match.end() : match.end() + 1200]
-            amount = re.search(r"\$\s*\d[\d,]*(?:\.\d+)?", nearby)
-            signal = "confirmed bounty platform feed (IssueHunt)"
-            if amount:
-                signal += f": {amount.group(0).strip()}"
-            refs[source_url] = signal
-    return refs
+    """Compatibility wrapper for IssueHunt discovery."""
+    return sources.issuehunt_platform_refs(fetch_text, pages=ISSUEHUNT_PAGES)
 
 
 def opire_platform_refs() -> dict[str, str]:
-    """Read visible Opire bounty cards and map them back to GitHub issues."""
-    refs: dict[str, str] = {}
-    home = fetch_text("https://app.opire.dev/home")
-    if not home:
-        return refs
-
-    normalized = home.replace("\\/", "/")
-    direct = re.findall(
-        r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
-        normalized,
+    """Compatibility wrapper for Opire discovery."""
+    return sources.opire_platform_refs(
+        fetch_text,
+        fetch_limit=PLATFORM_FETCH_LIMIT,
+        network_workers=NETWORK_WORKERS,
     )
-    for source_url in direct[:PLATFORM_FETCH_LIMIT]:
-        refs[source_url] = "confirmed bounty platform feed (Opire)"
-
-    detail_paths = list(
-        dict.fromkeys(
-            re.findall(
-                r'href=["\'](/issues/[A-Za-z0-9_-]+)["\']',
-                normalized,
-            )
-        )
-    )[:PLATFORM_FETCH_LIMIT]
-
-    with ThreadPoolExecutor(
-        max_workers=min(NETWORK_WORKERS, max(1, len(detail_paths)))
-    ) as executor:
-        details = executor.map(
-            lambda path: fetch_text("https://app.opire.dev" + path),
-            detail_paths,
-        )
-        for detail in details:
-            if not detail:
-                continue
-            detail = detail.replace("\\/", "/")
-            source = re.search(
-                r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
-                detail,
-            )
-            if not source:
-                continue
-            amount = re.search(
-                r"\$\s*\d[\d,]*(?:\.\d+)?\s+bounty\b",
-                detail,
-                re.IGNORECASE,
-            )
-            signal = "confirmed bounty platform feed (Opire)"
-            if amount:
-                signal += f": {amount.group(0).split()[0]}"
-            refs[source.group(0)] = signal
-
-    return refs
 
 
 def bountyhub_platform_refs() -> dict[str, str]:
-    """Read public BountyHub listings when the site exposes them in HTML."""
-    refs: dict[str, str] = {}
-    listing = fetch_text("https://www.bountyhub.dev/en/bounties")
-    if not listing:
-        return refs
-
-    normalized = listing.replace("\\/", "/")
-    direct = re.findall(
-        r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
-        normalized,
+    """Compatibility wrapper for BountyHub discovery."""
+    return sources.bountyhub_platform_refs(
+        EXTENDED_AMOUNT_RE,
+        fetch_text,
+        fetch_limit=PLATFORM_FETCH_LIMIT,
+        network_workers=NETWORK_WORKERS,
     )
-    for source_url in direct[:PLATFORM_FETCH_LIMIT]:
-        refs[source_url] = "confirmed bounty platform feed (BountyHub)"
-
-    detail_paths = list(
-        dict.fromkeys(
-            re.findall(
-                r'href=["\'](/en/bounty/view/[A-Za-z0-9_-]+)["\']',
-                normalized,
-            )
-        )
-    )[:PLATFORM_FETCH_LIMIT]
-
-    with ThreadPoolExecutor(
-        max_workers=min(NETWORK_WORKERS, max(1, len(detail_paths)))
-    ) as executor:
-        details = executor.map(
-            lambda path: fetch_text("https://www.bountyhub.dev" + path),
-            detail_paths,
-        )
-        for detail in details:
-            if not detail:
-                continue
-            detail = detail.replace("\\/", "/")
-            source = re.search(
-                r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
-                detail,
-            )
-            if not source:
-                continue
-            amount = re.search(EXTENDED_AMOUNT_RE, detail, re.IGNORECASE)
-            signal = "confirmed bounty platform feed (BountyHub)"
-            if amount:
-                signal += f": {amount.group(0).strip()}"
-            refs[source.group(0)] = signal
-
-    return refs
 
 
 def platform_paid_refs() -> dict[str, str]:
-    """Collect official-platform discoveries, deduped by source GitHub issue URL."""
-    refs: dict[str, str] = {}
-    sources = (
-        issuehunt_platform_refs,
-        opire_platform_refs,
-        bountyhub_platform_refs,
+    """Merge official bounty-platform source discoveries."""
+    return sources.platform_paid_refs(
+        (
+            issuehunt_platform_refs,
+            opire_platform_refs,
+            bountyhub_platform_refs,
+        ),
+        network_workers=NETWORK_WORKERS,
     )
-    with ThreadPoolExecutor(max_workers=len(sources)) as executor:
-        for source in executor.map(lambda loader: loader(), sources):
-            refs.update(source)
-    return refs
 
 
 def contribution_guide(repo: str, token: str | None) -> str | None:
-    for path in ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"):
-        data = github_get_optional(
-            f"https://api.github.com/repos/{repo}/contents/{urllib.parse.quote(path)}",
-            token,
-        )
-        if isinstance(data, dict) and data.get("html_url"):
-            return str(data["html_url"])
-    return None
+    """Compatibility wrapper for contribution-guide discovery."""
+    return sources.contribution_guide(repo, token, github_get_optional)
 
 
 def build_candidate(
@@ -945,6 +772,8 @@ def possible_miss_signal(item: Mapping[str, Any]) -> bool:
             "good first issue",
             "triage/accepted",
             "refined",
+            "contributor/wanted",
+            "contributor wanted",
         )
     )
     bug_signal = "bug" in labels or bool(
@@ -1012,18 +841,13 @@ def add_audit(
 def strategic_inspection_items(
     provisional: list[tuple[int, int, int, dict[str, Any]]],
 ) -> dict[str, list[dict[str, Any]]]:
-    """Keep the best configured result pool per repo for activity inspection."""
-    by_repo: dict[str, list[tuple[int, int, int, dict[str, Any]]]] = {}
-    for row in provisional:
-        repo, _ = bounty.issue_repo_and_number(row[3])
-        if repo:
-            by_repo.setdefault(repo, []).append(row)
-
-    inspected: dict[str, list[dict[str, Any]]] = {}
-    for repo, rows in by_repo.items():
-        rows.sort(key=lambda row: row[:3], reverse=True)
-        inspected[repo] = [row[3] for row in rows[:STRATEGIC_INSPECT_PER_REPO]]
-    return inspected
+    """Select base per-repo candidates plus a globally bounded strong overflow."""
+    return sources.strategic_inspection_items(
+        provisional,
+        base_per_repo=STRATEGIC_INSPECT_PER_REPO,
+        adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
+        should_expand=possible_miss_signal,
+    )
 
 
 def discover_strategic(
@@ -1125,7 +949,7 @@ def discover_strategic(
             add_audit(
                 audit,
                 item,
-                "strong-looking result fell outside the repo top-15 inspection pool",
+                "strong-looking result fell outside the adaptive repo inspection pool",
             )
 
     inspection_rows = [(repo, item) for repo, items in inspected.items() for item in items]

@@ -14,6 +14,7 @@ The paid scanner remains intentionally close to upstream, while fork-specific st
 - `scout_bounties.py` — upstream-compatible paid bounty discovery and strict payment/competition filters.
 - `opportunity_scout.py` — application orchestration and strategic scanner composition.
 - `opportunity_scoring.py` — effort estimation and cash/career ranking over verified evidence.
+- `opportunity_sources.py` — GitHub/platform source adapters and bounded adaptive inspection selection.
 - `strategic_claims.py` — pure contributor ownership/implementation claim detection.
 - `strategic_competition.py` — active-claim and implementation-PR competition checks.
 - `strategic_readiness.py` — pure maintainer-readiness and lifecycle policy.
@@ -40,7 +41,7 @@ Cash score considers payment confidence, stated reward, rough expected hourly va
 
 Strategic discovery starts with a curated target list covering AWS/Kubernetes, container runtimes, networking, RPC/storage, observability, Go tooling, Terraform, GitOps, and selected JS/TS infrastructure projects, plus narrow global searches for contributor-ready bugs. Curated repositories are read through GitHub's core Issues API rather than the Search API, so every target gets its own result budget without exhausting search-rate limits.
 
-For each curated repository, the scout activity-inspects up to 15 plausible issues, re-ranks them using issue/comment freshness, and then fully verifies candidates in order until up to three valid opportunities survive. Search depth is intentionally broader than the final queue. Verification refreshes the source issue and checks:
+For each curated repository, the scout activity-inspects the top 15 plausible issues, then spends a small global overflow budget on strong recent bug or contributor-ready candidates that narrowly miss that cutoff. It re-ranks inspected issues using issue/comment freshness and then fully verifies candidates in order until up to three valid opportunities survive. Search depth is intentionally broader than the final queue. Verification refreshes the source issue and checks:
 
 - issue is still open and unassigned
 - no obvious active claim
