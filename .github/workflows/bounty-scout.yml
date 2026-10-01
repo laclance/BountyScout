@@ -1,6 +1,9 @@
 name: OSS Opportunity Scout Hourly
 
 on:
+  push:
+    branches:
+      - verify/merged-scout-run
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
