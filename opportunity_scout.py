@@ -949,11 +949,8 @@ def prefetch_discovery_searches(
     list[tuple[str, dict[str, Any]]],
 ]:
     """Pace paid and strategic Search calls to avoid burst/secondary rate limits."""
-    requests = [
-        ("paid", query, 15) for query in PAID_DISCOVERY_QUERIES
-    ] + [
-        ("strategic", query, STRATEGIC_SEARCH_PER_PAGE)
-        for query in STRATEGIC_GLOBAL_QUERIES
+    requests = [("paid", query, 15) for query in PAID_DISCOVERY_QUERIES] + [
+        ("strategic", query, STRATEGIC_SEARCH_PER_PAGE) for query in STRATEGIC_GLOBAL_QUERIES
     ]
     paid_results: list[tuple[str, dict[str, Any]]] = []
     strategic_results: list[tuple[str, dict[str, Any]]] = []

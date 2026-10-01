@@ -3806,7 +3806,9 @@ class FormattingAndMainTests(unittest.TestCase):
 
         gh.assert_called_once()
         self.assertIn("0 new verified candidates", gh.call_args.args[2])
-        self.assertIn("Opportunity discovery/verification coverage is incomplete", gh.call_args.args[3])
+        self.assertIn(
+            "Opportunity discovery/verification coverage is incomplete", gh.call_args.args[3]
+        )
         save.assert_not_called()
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
 
@@ -3833,7 +3835,9 @@ class FormattingAndMainTests(unittest.TestCase):
             scout.main()
 
         gh.assert_called_once()
-        self.assertIn("Opportunity discovery/verification coverage is incomplete", gh.call_args.args[3])
+        self.assertIn(
+            "Opportunity discovery/verification coverage is incomplete", gh.call_args.args[3]
+        )
         self.assertIn("paid discovery search failed for query: paid-q", gh.call_args.args[3])
         save.assert_not_called()
 
@@ -3871,7 +3875,9 @@ class FormattingAndMainTests(unittest.TestCase):
             scout.main()
 
         gh.assert_called_once()
-        self.assertIn("Opportunity discovery/verification coverage is incomplete", gh.call_args.args[3])
+        self.assertIn(
+            "Opportunity discovery/verification coverage is incomplete", gh.call_args.args[3]
+        )
         self.assertIn("1 discovery/source/comment/competition checks failed", gh.call_args.args[3])
         save.assert_not_called()
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
