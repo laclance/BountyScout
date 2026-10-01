@@ -13,6 +13,7 @@ The paid scanner remains intentionally close to upstream, while fork-specific st
 
 - `scout_bounties.py` — upstream-compatible paid bounty discovery and strict payment/competition filters.
 - `opportunity_scout.py` — application orchestration and strategic scanner composition.
+- `opportunity_scoring.py` — effort estimation and cash/career ranking over verified evidence.
 - `strategic_claims.py` — pure contributor ownership/implementation claim detection.
 - `strategic_competition.py` — active-claim and implementation-PR competition checks.
 - `strategic_readiness.py` — pure maintainer-readiness and lifecycle policy.
@@ -60,7 +61,7 @@ Each reported candidate includes:
 - payment confidence
 - cash score /100
 - career score /100
-- effort: `<1h`, `1–3h`, `3–6h`, or `1d+`
+- effort: `<1h`, `1–3h`, `3–6h`, `6–12h`, or `1d+`, with a short effort basis
 - competition: `none`, `low`, `medium`, or `high`
 - stars, recent activity, language, and labels
 - scoring reasons
