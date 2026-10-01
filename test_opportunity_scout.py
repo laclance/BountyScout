@@ -3083,12 +3083,73 @@ class DiscoveryTests(unittest.TestCase):
             )
         )
 
+        detection_tracker = issue(
+            html_url="https://github.com/kubestellar/docs/issues/7162",
+            title="[aw] Detection Runs",
+            user={"login": "github-actions[bot]"},
+            labels=[{"name": "help wanted"}, {"name": "agentic-workflows"}],
+            updated_at=now.isoformat(),
+            body=(
+                "This issue tracks all runs where threat detection flagged problems in "
+                "agentic workflows in this repository. Each workflow run that completes "
+                "with a detection warning or failure posts a comment here.\n\n"
+                "This issue helps monitor the health of the threat detection system.\n\n"
+                "This issue is automatically managed by GitHub Agentic Workflows. "
+                "Do not close this issue manually.\n\n"
+                "No action to take - Do not assign to an agent."
+            ),
+        )
+        self.assertFalse(scout.possible_miss_signal(detection_tracker))
+
         audit: list[dict[str, Any]] = []
         with patch.object(scout, "STRATEGIC_AUDIT_LIMIT", 2):
             scout.add_audit(audit, strong, "one")
             scout.add_audit(audit, strong, "two")
             scout.add_audit(audit, strong, "three")
         self.assertEqual(len(audit), 2)
+
+    def test_detection_tracker_rejection_does_not_reach_near_miss_audit(self) -> None:
+        tracker = issue(
+            html_url="https://github.com/kubestellar/docs/issues/7162",
+            title="[aw] Detection Runs",
+            user={"login": "github-actions[bot]"},
+            labels=[{"name": "help wanted"}, {"name": "agentic-workflows"}],
+            updated_at=datetime.now(timezone.utc).isoformat(),
+            body=(
+                "This issue tracks all runs where threat detection flagged problems in "
+                "agentic workflows in this repository. Each workflow run with a detection "
+                "warning or failure posts a comment here.\n\n"
+                "This issue helps monitor the health of the threat detection system.\n\n"
+                "This issue is automatically managed by GitHub Agentic Workflows. "
+                "Do not close this issue manually.\n\n"
+                "No action to take - Do not assign to an agent."
+            ),
+        )
+        reason = "automated monitoring tracker, not an implementation task"
+        preview = candidate(
+            url=tracker["html_url"],
+            paid=False,
+            career_score=51,
+            priority_score=51,
+        )
+        with (
+            patch.object(scout, "TARGET_REPOS", ["kubestellar/docs"]),
+            patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
+            patch.object(
+                scout,
+                "target_repo_issue_pool",
+                return_value=([tracker], None),
+            ),
+            patch.object(scout, "fetch_repo_metadata", return_value=repo_meta()),
+            patch.object(scout, "build_candidate", return_value=preview),
+            patch.object(scout, "verify", return_value=(None, reason)),
+        ):
+            found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
+
+        self.assertEqual(found, [])
+        self.assertEqual(rejected[reason], 1)
+        self.assertEqual(examples[0]["url"], tracker["html_url"])
+        self.assertEqual(audit, [])
 
     def test_discover_strategic_keeps_crowded_issue_for_real_competition_checks(self) -> None:
         crowded = issue(

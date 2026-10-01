@@ -661,6 +661,59 @@ class LifecycleClassificationTests(unittest.TestCase):
             "automated CI/release incident, not an implementation task",
         )
 
+    def test_bot_managed_non_actionable_monitoring_tracker_is_rejected(self) -> None:
+        tracker = issue(
+            title="[aw] Detection Runs",
+            user={"login": "github-actions[bot]"},
+            body=(
+                "This issue tracks all runs where threat detection flagged problems in "
+                "agentic workflows. It helps monitor the health of the threat detection system.\n\n"
+                "This issue is automatically managed by GitHub Agentic Workflows. "
+                "Do not close this issue manually.\n\n"
+                "No action to take - Do not assign to an agent."
+            ),
+        )
+        self.assertEqual(
+            readiness.automated_tracking_issue_reason(tracker),
+            "automated monitoring tracker, not an implementation task",
+        )
+
+        do_not_assign = issue(
+            title="Detection run tracker",
+            user={"login": "github-actions[bot]"},
+            body=(
+                "This issue tracks detection runs and is automatically managed. "
+                "Do not assign to an agent."
+            ),
+        )
+        self.assertEqual(
+            readiness.automated_tracking_issue_reason(do_not_assign),
+            "automated monitoring tracker, not an implementation task",
+        )
+
+    def test_automated_tracker_rule_keeps_actionable_and_human_issues(self) -> None:
+        self.assertIsNone(
+            readiness.automated_tracking_issue_reason(
+                issue(
+                    title="Tracking request regression",
+                    user={"login": "human"},
+                    body="Tracking requests can leak workers. Please fix the cleanup path.",
+                )
+            )
+        )
+        self.assertIsNone(
+            readiness.automated_tracking_issue_reason(
+                issue(
+                    title="CI found reproducible parser failure",
+                    user={"login": "github-actions[bot]"},
+                    body=(
+                        "Automation reproduced this parser crash on main. "
+                        "Please investigate and add a regression fix."
+                    ),
+                )
+            )
+        )
+
     def test_release_tracking_and_release_only_work_are_distinct(self) -> None:
         self.assertEqual(
             readiness.release_tracking_reason(issue(title="Release 2.0 tracking checklist")),
