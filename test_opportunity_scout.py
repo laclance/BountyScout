@@ -3192,7 +3192,7 @@ class DiscoveryTests(unittest.TestCase):
                 scout,
                 "verify",
                 side_effect=[
-                    (None, "could not refresh issue comments"),
+                    (None, "could not verify open implementation PR search"),
                     (None, "could not refresh source issue"),
                 ],
             ) as verify_mock,
@@ -3202,7 +3202,7 @@ class DiscoveryTests(unittest.TestCase):
 
         self.assertEqual(found, [])
         self.assertEqual(verify_mock.call_count, 2)
-        self.assertEqual(rejected["could not refresh issue comments"], 1)
+        self.assertEqual(rejected["could not verify open implementation PR search"], 1)
         self.assertEqual(rejected["could not refresh source issue"], 1)
         self.assertEqual(len(examples), 2)
         self.assertTrue(
