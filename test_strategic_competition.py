@@ -158,6 +158,41 @@ class ClaimCompetitionTests(unittest.TestCase):
             )
         )
 
+    def test_chain_love_3969_direct_claim_is_active_ownership(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        comments = [
+            {
+                "body": (
+                    "Claiming this DBIP. Plan: validator rule in json-tools parsing each "
+                    "actionButtons cell (JSON array of Markdown links), normalizing destinations "
+                    "(trailing slash + scheme/host casing), rejecting duplicate destinations per "
+                    "cell with the suggested file/slug/URL/labels error; plus the bounded data fix "
+                    "removing redundant duplicate buttons (keep first occurrence, no URL guessing) "
+                    "so the rule lands green. Paired data/tools PRs incoming."
+                ),
+                "updated_at": recent,
+                "user": {"login": "elevasyncsolutions-jpg"},
+            }
+        ]
+
+        self.assertEqual(
+            competition.strategic_claim_reason(
+                issue(html_url="https://github.com/Chain-Love/chain-love/issues/3969", body=""),
+                comments,
+            ),
+            "active claim by @elevasyncsolutions-jpg",
+        )
+        self.assertEqual(
+            competition.strategic_competition_reason(
+                issue(html_url="https://github.com/Chain-Love/chain-love/issues/3969", body=""),
+                "t",
+                comments,
+                linked_pr_checker=lambda *_: self.fail("linked PR check should not be reached"),
+                timeline_pr_checker=lambda *_: self.fail("timeline PR check should not be reached"),
+            ),
+            "active claim by @elevasyncsolutions-jpg",
+        )
+
     def test_taking_this_one_is_active_ownership(self) -> None:
         recent = datetime.now(timezone.utc).isoformat()
         self.assertEqual(
