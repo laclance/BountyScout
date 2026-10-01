@@ -3453,9 +3453,7 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(bounty, "search_github") as search,
             patch.object(scout, "platform_paid_refs", return_value={}),
         ):
-            found, rejected, examples = scout.discover_paid(
-                "t", set(), {}, {}, [("paid-q", {})]
-            )
+            found, rejected, examples = scout.discover_paid("t", set(), {}, {}, [("paid-q", {})])
 
         search.assert_not_called()
         self.assertEqual(found, [])
