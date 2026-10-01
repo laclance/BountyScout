@@ -1540,7 +1540,9 @@ class DiscoveryTests(unittest.TestCase):
         ):
             found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
         self.assertEqual([x["url"] for x in found], [good["html_url"]])
-        self.assertEqual(audit, [])
+        self.assertEqual(len(audit), 1)
+        self.assertEqual(audit[0]["url"], archived["html_url"])
+        self.assertIn("repository metadata", audit[0]["reason"])
         self.assertEqual(rejected["reject"], 1)
         self.assertEqual(examples[0]["url"], paid["html_url"])
 
@@ -1934,7 +1936,9 @@ class CoverageGapTests(unittest.TestCase):
                 "t", {seen_item["html_url"]}, set(), cache, {}
             )
         self.assertEqual([x["url"] for x in found], [cached["html_url"]])
-        self.assertEqual(audit, [])
+        self.assertEqual(len(audit), 1)
+        self.assertEqual(audit[0]["url"], dirty["html_url"])
+        self.assertIn("basic eligibility filter", audit[0]["reason"])
         fetch_meta.assert_not_called()
         self.assertEqual(rejected, {})
         self.assertEqual(examples, [])
