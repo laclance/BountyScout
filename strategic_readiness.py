@@ -374,6 +374,23 @@ def abandoned_lifecycle_reason(
     return None
 
 
+def maintainer_issue_decision_reason(item: Mapping[str, Any]) -> str | None:
+    """Reject trusted maintainer-authored issues that explicitly remain in decision stage."""
+    association = str(item.get("author_association", "")).upper()
+    if association not in TRUSTED_ASSOCIATIONS:
+        return None
+
+    body = str(item.get("body", "")).lower()
+    if re.search(
+        r"\b(?:this|the) issue is to decide\b|"
+        r"\bwe (?:still )?need to decide\b|"
+        r"\bdecision (?:is|remains) (?:open|pending)\b",
+        body,
+    ):
+        return "maintainer-authored issue is still deciding implementation semantics"
+    return None
+
+
 def automated_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
     """Reject bot-maintained dashboards/trackers that are not contributor tasks."""
     title = str(item.get("title", ""))
@@ -400,6 +417,21 @@ def automated_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
     )
     if dependency_tracking or renovate_dashboard:
         return "automated dependency dashboard, not an implementation task"
+
+    body_text = body.lower()
+    ci_incident = (
+        "nightly-failure" in labels
+        or "this issue closes itself on the next successful" in body_text
+        or bool(
+            re.search(
+                r"\bnext successful\s+(?:build|publish|publication|run)"
+                r"\s+will\s+(?:update|close)\s+this\s+(?:issue|incident)\b",
+                body_text,
+            )
+        )
+    )
+    if ci_incident:
+        return "automated CI/release incident, not an implementation task"
     return None
 
 
