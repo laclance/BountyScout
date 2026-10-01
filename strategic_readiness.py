@@ -88,6 +88,7 @@ def maintainer_comment_authority(comment: Mapping[str, Any]) -> bool:
             "i am closing this",
             "we're closing this",
             "we are closing this",
+            "prevailing wisdom on the maintainer team",
         )
     )
 
