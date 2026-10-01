@@ -167,6 +167,179 @@ class EffortCalibrationTests(unittest.TestCase):
         self.assertEqual(scoring.estimate_effort(item), "1–3h")
         self.assertEqual(scoring.competition(item), "high")
 
+    def test_stale_closed_pr_history_does_not_inflate_effort(self) -> None:
+        item = issue(
+            title="Reduce response buffering",
+            body="Parse the response more directly to reduce memory use.",
+        )
+        comments = [
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "The previous PR was closed because the contributor went inactive. "
+                    "The implementation itself is straightforward."
+                ),
+            }
+        ]
+        estimate = scoring.estimate_effort_details(item, comments)
+        self.assertEqual(estimate.bucket, "3–6h")
+
+    def test_prior_implementation_correctness_evidence_can_raise_effort(self) -> None:
+        item = issue(
+            title="Reduce response buffering",
+            body="Parse the response more directly to reduce memory use.",
+        )
+        comments = [
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "The previous implementation still mishandles cancellation and leaves a "
+                    "goroutine running. Add a regression test and an API-level benchmark."
+                ),
+            }
+        ]
+        estimate = scoring.estimate_effort_details(item, comments)
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertEqual(
+            estimate.reasons,
+            ("maintainer-confirmed implementation-history complexity",),
+        )
+
+    def test_untrusted_complexity_history_does_not_inflate_effort(self) -> None:
+        item = issue(
+            title="Reduce response buffering",
+            body="Parse the response more directly to reduce memory use.",
+        )
+        comments = [
+            {
+                "author_association": "NONE",
+                "body": (
+                    "The previous implementation breaks cancellation and needs a regression "
+                    "test plus an API-level benchmark."
+                ),
+            }
+        ]
+        self.assertEqual(scoring.estimate_effort_details(item, comments).bucket, "3–6h")
+
+    def test_technical_concerns_without_history_context_do_not_inflate_effort(self) -> None:
+        item = issue(
+            title="Reduce response buffering",
+            body="Parse the response more directly to reduce memory use.",
+        )
+        comments = [
+            {
+                "author_association": "MEMBER",
+                "body": "Cancellation needs a regression test and a benchmark.",
+            }
+        ]
+        self.assertEqual(scoring.estimate_effort_details(item, comments).bucket, "3–6h")
+
+    def test_existing_large_scope_stays_large_with_history_comments(self) -> None:
+        item = issue(
+            title="Architecture rewrite",
+            body="Redesign the parser and transport architecture.",
+        )
+        comments = [
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "The previous implementation also had cancellation and benchmark concerns."
+                ),
+            }
+        ]
+        self.assertEqual(scoring.estimate_effort_details(item, comments).bucket, "1d+")
+
+    def test_prometheus_977_uses_verified_maintainer_history(self) -> None:
+        item = issue(
+            html_url="https://github.com/prometheus/client_golang/issues/977",
+            title="Client API: don't read entire response into a buffer before parsing it",
+            body=(
+                "The API client reads the entire HTTP response into a []byte before decoding "
+                "JSON. For larger responses the buffer gets expensive. Parse JSON from the "
+                "response body as it comes in. Handling timeouts may be more complicated."
+            ),
+            labels=[
+                {"name": "help wanted"},
+                {"name": "low hanging fruit"},
+                {"name": "keep-open"},
+            ],
+            comments=11,
+        )
+        comments = [
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "Right now I don't expect to start on this. It's quite a big job. "
+                    "Code-generating the API may help with such structural changes."
+                ),
+            },
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "We could introduce a new method, deprecate the older methods, and remove "
+                    "them with v2 to preserve compatibility for external consumers."
+                ),
+            },
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "The first two JSON parser passes could be merged without major change, "
+                    "but nested calls need the code rewritten in streaming style."
+                ),
+            },
+            {
+                "author_association": "NONE",
+                "body": (
+                    "I would keep httpClient.Do untouched and merge the two JSON unmarshal "
+                    "passes into a single decode."
+                ),
+            },
+        ]
+
+        self.assertEqual(scoring.estimate_effort_details(item).bucket, "3–6h")
+        estimate = scoring.estimate_effort_details(item, comments)
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertEqual(
+            estimate.reasons,
+            ("maintainer-confirmed implementation-history complexity",),
+        )
+
+    def test_strategic_candidate_uses_verified_comments_for_effort(self) -> None:
+        item = issue(
+            title="Reduce response buffering",
+            body="Parse the response more directly to reduce memory use.",
+        )
+        comments = [
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "The previous implementation mishandles cancellation and needs a "
+                    "regression test plus an API-level benchmark."
+                ),
+            }
+        ]
+        preview = scoring.build_candidate(
+            item,
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        verified = scoring.build_candidate(
+            item,
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            comments,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertEqual(preview["effort"], "3–6h")
+        self.assertEqual(verified["effort"], "6–12h")
+
     def test_concurrency_bug_has_debugging_floor(self) -> None:
         estimate = scoring.estimate_effort_details(
             issue(
