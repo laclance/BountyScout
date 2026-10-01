@@ -185,7 +185,7 @@ def has_existing_implementation_pr(repo: str, issue_number: int, token: str | No
         source_issue = source.get("issue")
         if not isinstance(source_issue, dict):
             continue
-        if not source_issue.get("pull_request") or source_issue.get("state") != "open":
+        if "pull_request" not in source_issue or source_issue.get("state") != "open":
             continue
         url = source_issue.get("html_url")
         if url:
