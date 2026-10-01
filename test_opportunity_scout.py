@@ -2542,6 +2542,27 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.verify(fresh, "t", {}, {}, True), ({"ok": True}, None))
 
+    def test_verify_rejects_hall_of_fame_before_paid_scoring(self) -> None:
+        fresh = issue(
+            title="🏆 Hall of Fame — October 2026",
+            body=(
+                "## 🥇 Top Contributors\n"
+                "## 📊 Monthly Stats\n"
+                "Total Bounty Distributed | **$4770**"
+            ),
+            labels=[{"name": "hall-of-fame"}],
+            comments=0,
+        )
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(bounty, "candidate_rejection_reason") as upstream,
+        ):
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {}, require_paid=True)[1],
+                "bounty history/leaderboard, not an open paid task",
+            )
+        upstream.assert_not_called()
+
     def test_verify_paid_rejects_recent_issue_author_prepared_patch(self) -> None:
         fresh = issue(
             body=(
@@ -2594,6 +2615,25 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(
                 scout.verify(fresh, "t", {}, {}, True)[1], "no explicit payment signal"
             )
+
+    def test_verify_strategic_fails_closed_when_comments_cannot_refresh(self) -> None:
+        fresh = issue(body="", title="Feature", comments=2)
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([], "could not refresh issue comments"),
+            ),
+            patch.object(scout, "strategic_rejection") as rejection,
+        ):
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {})[1],
+                "could not refresh issue comments",
+            )
+        rejection.assert_not_called()
 
     def test_verify_non_payment_rejection_and_strategic_success(self) -> None:
         paid = issue(body="bounty $100", comments=0)
