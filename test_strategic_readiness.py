@@ -64,9 +64,7 @@ class ReadinessLabelTests(unittest.TestCase):
 
     def test_proposal_stage_recognizes_title_and_label_dialects(self) -> None:
         self.assertTrue(readiness.proposal_stage_signal(issue(title="RFC: retry policy")))
-        self.assertTrue(
-            readiness.proposal_stage_signal(issue(labels=[{"name": "kind/proposal"}]))
-        )
+        self.assertTrue(readiness.proposal_stage_signal(issue(labels=[{"name": "kind/proposal"}])))
         self.assertTrue(readiness.proposal_stage_signal(issue(labels=["needs/discussion"])))
         self.assertFalse(readiness.proposal_stage_signal(issue(labels=["enhancement"])))
 
@@ -265,9 +263,7 @@ class LifecycleClassificationTests(unittest.TestCase):
         self.assertIsNone(
             readiness.release_tracking_reason(issue(body="Please publish a new release."))
         )
-        self.assertIsNone(
-            readiness.release_tracking_reason(issue(title="Bug in release parser"))
-        )
+        self.assertIsNone(readiness.release_tracking_reason(issue(title="Bug in release parser")))
 
 
 if __name__ == "__main__":
