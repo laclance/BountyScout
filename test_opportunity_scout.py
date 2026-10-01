@@ -1541,7 +1541,7 @@ class DiscoveryTests(unittest.TestCase):
         unknown = scout.basic_rejection_audit_reason(issue())
         self.assertEqual(
             unknown,
-            "strong-looking result rejected by an unrecognized basic eligibility rule",
+            "strong-looking result rejected by an unrecognized basic eligibility filter rule",
         )
 
     def test_possible_miss_signal_and_audit_cap(self) -> None:
