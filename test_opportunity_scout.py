@@ -3286,6 +3286,7 @@ class DiscoveryTests(unittest.TestCase):
                 career_score=score,
             )
 
+        buf = io.StringIO()
         with (
             patch.object(scout, "TARGET_REPOS", ["g/g"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
@@ -3310,7 +3311,6 @@ class DiscoveryTests(unittest.TestCase):
                     None,
                 ),
             ) as verify_mock,
-            io.StringIO() as buf,
             redirect_stdout(buf),
         ):
             found, rejected, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
@@ -3318,7 +3318,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual([item["url"] for item in found], [winner["html_url"]])
         self.assertEqual(verify_mock.call_count, 1)
         self.assertEqual(rejected["issue is marked claimed by the project"], 1)
-        bound_reason = "pre-verification career upper bound 51/100 below strategic threshold 55/100"
+        bound_reason = "career score 40/100 below strategic threshold 55/100"
         self.assertEqual(rejected[bound_reason], 1)
         self.assertTrue(any(bound_reason in item["reason"] for item in audit))
         self.assertIn("Strategic deep verification: 1/3", buf.getvalue())

@@ -1212,8 +1212,8 @@ def discover_strategic(
             elif career_upper_bound < STRATEGIC_MIN_CAREER_SCORE:
                 candidate = None
                 reason = (
-                    f"pre-verification career upper bound {career_upper_bound}/100 below "
-                    f"strategic threshold {STRATEGIC_MIN_CAREER_SCORE}/100"
+                    f"career score {row[1]}/100 below strategic threshold "
+                    f"{STRATEGIC_MIN_CAREER_SCORE}/100"
                 )
                 network_checked = False
             else:
@@ -1267,9 +1267,7 @@ def discover_strategic(
             item = row[3]
             if reason:
                 add_reject(rejected, examples, item, reason)
-                if reason.startswith(
-                    "pre-verification career upper bound"
-                ) and possible_miss_signal(item):
+                if reason.startswith("career score ") and possible_miss_signal(item):
                     add_audit(audit, item, f"strong-looking near miss: {reason}")
                 print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
                 continue
