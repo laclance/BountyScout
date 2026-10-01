@@ -2766,6 +2766,15 @@ class DiscoveryTests(unittest.TestCase):
         )
         self.assertTrue(scout.possible_miss_signal(strong))
         self.assertFalse(scout.possible_miss_signal(stale))
+        self.assertFalse(
+            scout.possible_miss_signal(
+                issue(
+                    title="🏆 Hall of Fame — October 2026",
+                    labels=[{"name": "hall-of-fame"}],
+                    body="Top Contributors\nMonthly Stats\nTotal Bounty Distributed: $4770",
+                )
+            )
+        )
 
         audit: list[dict[str, Any]] = []
         with patch.object(scout, "STRATEGIC_AUDIT_LIMIT", 2):
@@ -3373,6 +3382,41 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertIn("old", saved)
         self.assertIn(high["url"], saved)
         self.assertIn(strategic["url"], saved)
+
+    def test_main_incomplete_coverage_reports_and_preserves_seen_state(self) -> None:
+        env = {
+            "GITHUB_TOKEN": "tok",
+            "GITHUB_REPOSITORY": "me/BountyScout",
+        }
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(
+                scout,
+                "discover_strategic",
+                return_value=(
+                    [],
+                    {
+                        "could not refresh source issue": 3,
+                        "could not refresh issue comments": 2,
+                    },
+                    [],
+                    [],
+                ),
+            ),
+            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(bounty, "save_seen_bounties") as save,
+            io.StringIO() as buf,
+            redirect_stdout(buf),
+        ):
+            scout.main()
+
+        gh.assert_called_once()
+        self.assertIn("0 new verified candidates", gh.call_args.args[2])
+        self.assertIn("Strategic verification coverage is incomplete", gh.call_args.args[3])
+        save.assert_not_called()
+        self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
 
     def test_main_no_delivery_does_not_save(self) -> None:
         paid = candidate()
