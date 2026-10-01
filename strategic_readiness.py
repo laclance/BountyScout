@@ -632,6 +632,28 @@ def automated_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
         return "automated dependency dashboard, not an implementation task"
 
     body_text = body.lower()
+    automated_management = bool(
+        re.search(
+            r"\b(?:automatically managed|managed automatically|auto-managed)\b",
+            body_text,
+        )
+    )
+    tracking_or_monitoring = bool(
+        re.search(
+            r"\b(?:tracks?|tracking|monitors?|monitoring)\b",
+            body_text,
+        )
+    )
+    explicitly_non_actionable = bool(
+        re.search(
+            r"\b(?:no action (?:to take|is )?required|no action to take|"
+            r"do not assign|don't assign)\b",
+            body_text,
+        )
+    )
+    if automated_management and tracking_or_monitoring and explicitly_non_actionable:
+        return "automated monitoring tracker, not an implementation task"
+
     ci_incident = (
         "nightly-failure" in labels
         or "this issue closes itself on the next successful" in body_text
