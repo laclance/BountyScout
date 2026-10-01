@@ -543,6 +543,8 @@ def strategic_rejection(
         return "support/triage issue rather than a contributor task"
 
     label_set = issue_label_set(item)
+    if "claimed" in label_set:
+        return "issue is marked claimed by the project"
     labels_text = " ".join(label_set)
     comment_ready, comment_hold_reason = maintainer_readiness_comment_state(item, comments)
 
