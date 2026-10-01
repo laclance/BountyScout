@@ -78,6 +78,7 @@ STRATEGIC_AUDIT_LIMIT = 20
 PAID_MIN_CASH_SCORE = 55
 REPORT_LIMIT = 8
 NETWORK_WORKERS = 6
+STRATEGIC_VERIFY_WORKERS = 8
 DISCOVERY_SEARCH_INTERVAL_SECONDS = 2.1
 CACHE_LOCKS = github.KeyedLockPool()
 
@@ -515,6 +516,61 @@ def non_actionable_diagnostic_reason(item: Mapping[str, Any]) -> str | None:
     )
     if system_failure and hardware_specific and diagnostic_only:
         return "hardware/kernel diagnostic report without actionable contributor scope"
+    return None
+
+
+def strategic_preflight_rejection(item: Mapping[str, Any]) -> str | None:
+    """Reject source-visible states that cannot be rescued by comment/timeline checks."""
+    if not strategic_basic_candidate(item):
+        return "failed basic eligibility filter"
+    _, _, labels, text = issue_text(item)
+    if "oss opportunity queue" in text:
+        return "generated opportunity-scout report"
+    if any(
+        label in labels
+        for label in (
+            "question",
+            "support",
+            "needs info",
+            "needs-info",
+            "needs-information",
+            "waiting for info",
+            "waiting-for-info",
+            "invalid",
+        )
+    ):
+        return "support/triage issue rather than a contributor task"
+
+    label_set = issue_label_set(item)
+    if "claimed" in label_set:
+        return "issue is marked claimed by the project"
+
+    if not int(item.get("comments") or 0):
+        labels_text = " ".join(label_set)
+        accepted = bool(TRIAGE_ACCEPTED_LABELS & label_set) or maintainer_ready_signal(labels_text)
+        abandoned_reason = abandoned_lifecycle_reason(item, False)
+        if abandoned_reason:
+            return abandoned_reason
+        readiness_reason = readiness_pending_label_reason(item, accepted)
+        if readiness_reason:
+            return readiness_reason
+        pending = bool(TRIAGE_PENDING_LABELS & label_set) or triage_pending_signal(labels_text)
+        if pending and not accepted:
+            return "awaiting maintainer triage"
+
+    for reason in (
+        security_disclosure_reason(item),
+        reporter_support_triage_reason(item),
+        manual_tracking_issue_reason(item, []),
+        automated_tracking_issue_reason(item),
+        release_tracking_reason(item, []),
+        maintainer_issue_decision_reason(item),
+        maintainer_submission_hold_reason(item),
+        non_actionable_diagnostic_reason(item),
+        strategic_claim_reason(item, []),
+    ):
+        if reason:
+            return reason
     return None
 
 
@@ -1122,6 +1178,7 @@ def discover_strategic(
                 sources.IssueRow,
                 dict[str, Any] | None,
                 str | None,
+                bool,
             ]
         ],
         bool,
@@ -1132,6 +1189,7 @@ def discover_strategic(
                 sources.IssueRow,
                 dict[str, Any] | None,
                 str | None,
+                bool,
             ]
         ] = []
         accepted: list[dict[str, Any]] = []
@@ -1139,13 +1197,31 @@ def discover_strategic(
 
         for index, row in enumerate(ranked):
             item = row[3]
-            candidate, reason = verify(
-                item,
-                token,
-                repo_cache,
-                guide_cache,
-            )
-            outcomes.append((row, candidate, reason))
+            preflight_reason = strategic_preflight_rejection(item)
+            career_upper_bound = sources.strategic_verification_upper_bound(
+                row,
+                score_uplift_bound=STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND,
+            )[1]
+            if preflight_reason:
+                candidate = None
+                reason = preflight_reason
+                network_checked = False
+            elif career_upper_bound < STRATEGIC_MIN_CAREER_SCORE:
+                candidate = None
+                reason = (
+                    f"pre-verification career upper bound {career_upper_bound}/100 below "
+                    f"strategic threshold {STRATEGIC_MIN_CAREER_SCORE}/100"
+                )
+                network_checked = False
+            else:
+                candidate, reason = verify(
+                    item,
+                    token,
+                    repo_cache,
+                    guide_cache,
+                )
+                network_checked = True
+            outcomes.append((row, candidate, reason, network_checked))
 
             if reason in source_failure_reasons:
                 consecutive_source_failures += 1
@@ -1175,7 +1251,7 @@ def discover_strategic(
 
     verification_inputs = list(ranked_by_repo.items())
     with ThreadPoolExecutor(
-        max_workers=min(NETWORK_WORKERS, max(1, len(verification_inputs)))
+        max_workers=min(STRATEGIC_VERIFY_WORKERS, max(1, len(verification_inputs)))
     ) as executor:
         repo_verification_results = list(executor.map(verify_repo, verification_inputs))
 
@@ -1183,11 +1259,13 @@ def discover_strategic(
     verified_rows = 0
     selected_rows = sum(len(rows) for rows in ranked_by_repo.values())
     for repo, outcomes, coverage_incomplete in repo_verification_results:
-        verified_rows += len(outcomes)
-        for row, candidate, reason in outcomes:
+        verified_rows += sum(1 for _, _, _, network_checked in outcomes if network_checked)
+        for row, candidate, reason, _ in outcomes:
             item = row[3]
             if reason:
                 add_reject(rejected, examples, item, reason)
+                if reason.startswith("pre-verification career upper bound") and possible_miss_signal(item):
+                    add_audit(audit, item, f"strong-looking near miss: {reason}")
                 print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
                 continue
 
