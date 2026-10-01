@@ -218,6 +218,22 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
     if any(
         marker in body
         for marker in (
+            "would be the wrong solution",
+            "is the wrong solution",
+            "would be the wrong approach",
+            "is the wrong approach",
+            "not the right solution",
+            "not the right approach",
+            "should not be implemented",
+            "shouldn't be implemented",
+            "we do not want to support",
+            "we don't want to support",
+        )
+    ):
+        return "maintainer indicates the proposed implementation approach is not wanted", False
+    if any(
+        marker in body
+        for marker in (
             "needs discussion",
             "need more discussion",
             "need to discuss this first",
@@ -413,6 +429,8 @@ def release_tracking_reason(
             r"\balready\s+(?:merged|fixed|implemented|resolved)\b",
             r"\b(?:seems|appears)\s+to\s+be\s+resolved\s+by\b",
             r"\b(?:is|was)\s+resolved\s+by\b",
+            r"\b(?:fixed|implemented|resolved)\s+(?:on|in)\s+(?:the\s+)?(?:main|master)\b",
+            r"\b(?:fix|implementation)\s+(?:is|has\s+been)\s+(?:already\s+)?(?:on|in)\s+(?:main|master)\b",
         )
     )
     release_only = any(
@@ -423,6 +441,10 @@ def release_tracking_reason(
             r"\bplease\s+(?:tag|cut|publish)\s+(?:a\s+)?(?:new\s+)?release\b",
             r"\bwaiting\s+for\s+(?:a\s+)?(?:release|tag)\b",
             r"\bonly\s+(?:release|tagging)\s+remains\b",
+            r"\b(?:not|isn't|is\s+not|hasn't\s+been|has\s+not\s+been)\s+released\s+yet\b",
+            r"\b(?:awaiting|waiting\s+for)\s+(?:the\s+)?next\s+release\b",
+            r"\b(?:will|should)\s+be\s+(?:good\s+)?(?:in|with)\s+(?:the\s+)?next\s+release\b",
+            r"\b(?:will|should)\s+be\s+included\s+in\s+(?:the\s+)?next\s+release\b",
         )
     )
     if implementation_done and release_only:
