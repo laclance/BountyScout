@@ -1133,9 +1133,9 @@ def discover_strategic(
     rejected: dict[str, int] = {}
     examples: list[dict[str, Any]] = []
     for query in target_repo_queries() + STRATEGIC_GLOBAL_QUERIES:
-        for item in bounty.search_github(
-            query, token, per_page=STRATEGIC_SEARCH_PER_PAGE
-        ).get("items", []):
+        for item in bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE).get(
+            "items", []
+        ):
             url = item.get("html_url")
             if not url or url in seen or url in paid_urls or url in touched:
                 continue
