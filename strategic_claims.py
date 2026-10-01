@@ -20,7 +20,6 @@ def explicit_ownership_claim(text: str) -> bool:
         r"\bi(?:'d| would) like to (?:work on|take|handle|implement|fix|resolve|pick (?:this|it) up)\b",
         r"\bi(?:'d| would) love to (?:work on|take on|handle|implement|fix|resolve)\b",
         r"\bi(?:'m| am) interested in working on\b",
-        r"\bi(?:'d| would) like to pick (?:this|it) up\b",
         r"\bi(?:'m| am) (?:taking|working on) (?:this|it|an independent pass)\b",
         r"\bi can (?:take|work on|handle|implement|fix|resolve)\b",
         r"\bi(?:'ll| will) (?:take|work on|handle|implement|fix|resolve)\b",
