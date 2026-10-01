@@ -1761,6 +1761,36 @@ class DiscoveryTests(unittest.TestCase):
         selfEqual(rejected, {})
         selfEqual(examples, [])
 
+    def test_discover_paid_rejects_low_value_direct_and_platform_candidates(self) -> None:
+        direct = issue(html_url="https://github.com/a/a/issues/1")
+        platform = issue(html_url="https://github.com/p/p/issues/2")
+        low_direct = candidate(url=direct["html_url"], cash_score=41, priority_score=41)
+        low_platform = candidate(url=platform["html_url"], cash_score=42, priority_score=42)
+
+        with (
+            patch.object(bounty, "search_github", return_value={"items": [direct]}),
+            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(
+                scout,
+                "verify",
+                side_effect=[(low_direct, None), (low_platform, None)],
+            ),
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value={platform["html_url"]: "confirmed bounty platform feed (IssueHunt): $2"},
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=platform),
+        ):
+            found, rejected, examples = scout.discover_paid("t", set(), {}, {})
+
+        self.assertEqual(found, [])
+        direct_reason = "cash score 41/100 below paid threshold 55/100"
+        platform_reason = "cash score 42/100 below paid threshold 55/100"
+        self.assertEqual(rejected[direct_reason], 1)
+        self.assertEqual(rejected[platform_reason], 1)
+        self.assertEqual({item["reason"] for item in examples}, {direct_reason, platform_reason})
+
     def test_discover_paid_records_rejections_and_seen(self) -> None:
         seen = issue(html_url="https://github.com/a/a/issues/1")
         bad = issue(html_url="https://github.com/a/a/issues/2")
