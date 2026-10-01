@@ -69,6 +69,9 @@ TARGET_REPO_FETCH_PAGES = 3
 STRATEGIC_INSPECT_PER_REPO = 15
 STRATEGIC_ADAPTIVE_INSPECT_BUDGET = 24
 STRATEGIC_KEEP_PER_REPO = 3
+STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND = 11
+STRATEGIC_REFRESH_FAILURE_LIMIT = 2
+STRATEGIC_COVERAGE_WARNING_THRESHOLD = 5
 STRATEGIC_MIN_CAREER_SCORE = 55
 STRATEGIC_AUDIT_LIMIT = 20
 PAID_MIN_CASH_SCORE = 55
@@ -666,7 +669,12 @@ def verify(
 
         lane = "paid"
     else:
-        comments = issue_comments(fresh, token) if activity_comments is None else activity_comments
+        if activity_comments is None:
+            comments, comments_reason = github.issue_comments_checked(fresh, token)
+            if comments_reason:
+                return None, comments_reason
+        else:
+            comments = activity_comments
         reason = strategic_rejection(fresh, token, comments)
         if reason:
             return None, reason
