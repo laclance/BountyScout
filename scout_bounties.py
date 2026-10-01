@@ -24,7 +24,8 @@ SEARCH_QUERIES = [
 # deliberately not enough because those words appear in unrelated issues.
 PAYMENT_TERM_RE = r"(?:bounty|reward|payout|compensation|pay(?:ment|s|ing|s)?|paid)"
 AMOUNT_RE = (
-    r"(?:[$€£]\s*\d[\d,]*(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|xmr|sol|eth|btc)\b)"
+    r"(?:[$€£]\s*\d[\d,]*(?:\.\d+)?|"
+    r"(?<!ERC-)(?<!\d)\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|xmr|sol|eth|btc)\b)"
 )
 
 CLAIM_PATTERNS = [

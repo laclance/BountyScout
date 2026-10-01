@@ -96,9 +96,10 @@ PAID_DISCOVERY_QUERIES = [
 EXTENDED_AMOUNT_RE = (
     r"(?:[$€£¥₹]\s*\d[\d,]*(?:\.\d+)?|"
     r"(?<![A-Za-z])R\s*\d[\d,]*(?:\.\d+)?|"
-    r"\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|cad|aud|nzd|jpy|chf|"
+    r"(?<!ERC-)(?<!\d)\d+(?:\.\d+)?\s*(?:usd|usdc|usdt|eur|gbp|cad|aud|nzd|jpy|chf|"
     r"inr|zar|dai|xmr|sol|eth|btc)\b)"
 )
+
 PLATFORM_FETCH_LIMIT = 20
 ISSUEHUNT_PAGES = 2
 
