@@ -34,17 +34,17 @@
 - **function** `issue_text()` — line 32
 - **function** `code_reference_count()` — line 48
 - **function** `documentation_microfix()` — line 52
-- **class** `EffortEstimate` — line 163
+- **class** `EffortEstimate()` — line 163
 - **function** `estimate_effort_details()` — line 170
-- **function** `estimate_effort()` — line 313
-- **function** `effort_hours()` — line 318
-- **function** `comment_contributes_to_competition()` — line 337
-- **function** `competition()` — line 372
-- **function** `payment_confidence()` — line 390
-- **function** `reward_text()` — line 408
-- **function** `repo_activity()` — line 415
-- **function** `strategic_priority_score()` — line 431
-- **function** `build_candidate()` — line 476
+- **function** `estimate_effort()` — line 334
+- **function** `effort_hours()` — line 339
+- **function** `comment_contributes_to_competition()` — line 358
+- **function** `competition()` — line 393
+- **function** `payment_confidence()` — line 411
+- **function** `reward_text()` — line 429
+- **function** `repo_activity()` — line 436
+- **function** `strategic_priority_score()` — line 452
+- **function** `build_candidate()` — line 497
 
 ## `opportunity_scout.py`
 
