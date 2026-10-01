@@ -60,11 +60,11 @@ TARGET_REPOS = [
     "nodejs/undici",
 ]
 STRATEGIC_GLOBAL_QUERIES = [
-    'is:issue is:open no:assignee label:"help wanted" label:"bug" sort:updated-desc',
+    'is:issue is:open no:assignee label:"help wanted" (label:"bug" OR regression) sort:updated-desc',
     'is:issue is:open no:assignee label:"good first issue" label:"bug" sort:updated-desc',
-    'is:issue is:open no:assignee label:"help wanted" regression sort:updated-desc',
 ]
 STRATEGIC_SEARCH_PER_PAGE = 20
+STRATEGIC_GLOBAL_SEARCH_PER_PAGE = 30
 TARGET_REPO_FETCH_PER_PAGE = 50
 TARGET_REPO_FETCH_PAGES = 3
 STRATEGIC_INSPECT_PER_REPO = 15
@@ -936,7 +936,7 @@ def strategic_global_search_results(
     return [
         (
             query,
-            bounty.search_github(query, token, per_page=STRATEGIC_SEARCH_PER_PAGE),
+            bounty.search_github(query, token, per_page=STRATEGIC_GLOBAL_SEARCH_PER_PAGE),
         )
         for query in STRATEGIC_GLOBAL_QUERIES
     ]
