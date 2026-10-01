@@ -4,10 +4,10 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from threading import Lock
 from time import monotonic
 from typing import Any, Mapping
 
+import github_access as github
 import scout_bounties as bounty
 import opportunity_reporting as reporting
 import opportunity_scoring as scoring
@@ -68,14 +68,12 @@ STRATEGIC_AUDIT_LIMIT = 20
 PAID_MIN_CASH_SCORE = 55
 REPORT_LIMIT = 8
 NETWORK_WORKERS = 6
-CACHE_LOCK = Lock()
-CACHE_KEY_LOCKS: dict[str, Any] = {}
+CACHE_LOCKS = github.KeyedLockPool()
 
 
 def cache_lock_for(key: str) -> Any:
-    """Serialize cache fills per repository without blocking unrelated repositories."""
-    with CACHE_LOCK:
-        return CACHE_KEY_LOCKS.setdefault(key, Lock())
+    """Compatibility wrapper for shared keyed cache-fill locking."""
+    return CACHE_LOCKS.lock_for(key)
 
 
 PAID_DISCOVERY_QUERIES = [
@@ -176,7 +174,7 @@ def repo_activity(repo_meta: Mapping[str, Any]) -> str:
 
 def github_get_optional(url: str, token: str | None) -> Any:
     """Compatibility wrapper for optional GitHub JSON fetching."""
-    return sources.github_get_optional(url, token)
+    return github.github_get(url, token, timeout=10, log_errors=False)
 
 
 def fetch_text(url: str, timeout: int = 12) -> str:
@@ -185,8 +183,8 @@ def fetch_text(url: str, timeout: int = 12) -> str:
 
 
 def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str, Any]]:
-    """Compatibility wrapper for issue-comment source fetching."""
-    return sources.issue_comments(item, token)
+    """Compatibility wrapper for issue-comment GitHub fetching."""
+    return github.issue_comments(item, token)
 
 
 TRIAGE_PENDING_LABELS = {"needs-triage"}
@@ -376,7 +374,7 @@ def comment_payment_signal(item: Mapping[str, Any], token: str | None) -> str | 
 
 def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
     """Compatibility wrapper for platform-discovered GitHub issue fetching."""
-    return sources.issue_from_github_url(url, token)
+    return github.issue_from_github_url(url, token)
 
 
 def issuehunt_platform_refs() -> dict[str, str]:
@@ -416,8 +414,13 @@ def platform_paid_refs() -> dict[str, str]:
 
 
 def contribution_guide(repo: str, token: str | None) -> str | None:
-    """Compatibility wrapper for contribution-guide discovery."""
-    return sources.contribution_guide(repo, token, github_get_optional)
+    """Compatibility wrapper for contribution-guide GitHub fetching."""
+    return github.contribution_guide(repo, token, github_get_optional)
+
+
+def fetch_repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
+    """Compatibility wrapper for repository metadata GitHub fetching."""
+    return github.repo_metadata(repo, token)
 
 
 def build_candidate(
@@ -447,7 +450,7 @@ def refresh_issue(
     repo, number = bounty.issue_repo_and_number(item)
     if not repo or not number:
         return None, "could not identify repository/issue number"
-    fresh = bounty.github_get(f"https://api.github.com/repos/{repo}/issues/{number}", token)
+    fresh = github.github_get(f"https://api.github.com/repos/{repo}/issues/{number}", token)
     if not isinstance(fresh, dict):
         return None, "could not refresh source issue"
     if fresh.get("state") != "open":
@@ -638,24 +641,31 @@ def verify(
     repo, _ = bounty.issue_repo_and_number(fresh)
     if repo is None:
         return None, "could not identify repository/issue number"
-    with cache_lock_for(f"repo:{repo}"):
-        if repo not in repo_cache:
-            repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
-    repo_meta = repo_cache[repo]
+    repo_meta = github.cached_value(
+        repo_cache,
+        repo,
+        lambda: fetch_repo_metadata(repo, token),
+        CACHE_LOCKS,
+        namespace="repo",
+    )
     if not repo_meta:
         return None, "repository metadata unavailable"
     if repo_meta.get("archived"):
         return None, "repository is archived"
-    with cache_lock_for(f"guide:{repo}"):
-        if repo not in guide_cache:
-            guide_cache[repo] = contribution_guide(repo, token)
+    guide = github.cached_value(
+        guide_cache,
+        repo,
+        lambda: contribution_guide(repo, token),
+        CACHE_LOCKS,
+        namespace="guide",
+    )
     return (
         build_candidate(
             fresh,
             lane,
             signal,
             repo_meta,
-            guide_cache[repo],
+            guide,
             comments if lane == "strategic" else None,
         ),
         None,
@@ -913,10 +923,14 @@ def discover_strategic(
             repo, _ = bounty.issue_repo_and_number(item)
             if not repo:
                 continue
-            with cache_lock_for(f"repo:{repo}"):
-                if repo not in repo_cache:
-                    repo_cache[repo] = bounty.fetch_repo_metadata(repo, token)
-            meta = repo_cache[repo]
+            repo_key = repo
+            meta = github.cached_value(
+                repo_cache,
+                repo_key,
+                lambda: fetch_repo_metadata(repo_key, token),
+                CACHE_LOCKS,
+                namespace="repo",
+            )
             if not meta or meta.get("archived"):
                 if possible_miss_signal(item):
                     add_audit(

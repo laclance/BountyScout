@@ -6,7 +6,7 @@ from typing import Any, Literal
 from unittest.mock import patch
 
 import opportunity_sources as sources
-import scout_bounties as bounty
+import github_access as github
 
 
 class FakeResponse:
@@ -43,7 +43,7 @@ class TargetRepoSourceTests(unittest.TestCase):
         }
         i1, i2, i3 = issue(1), issue(2), issue(3)
         with patch.object(
-            bounty,
+            github,
             "github_get",
             side_effect=[
                 [i1, pr, "bad", pr],
@@ -67,7 +67,7 @@ class TargetRepoSourceTests(unittest.TestCase):
 
     def test_target_repo_pool_returns_partial_results_and_explicit_failure(self) -> None:
         i1 = issue(1)
-        with patch.object(bounty, "github_get", side_effect=[[i1, i1], None]):
+        with patch.object(github, "github_get", side_effect=[[i1, i1], None]):
             items, error = sources.target_repo_issue_pool(
                 "example/project",
                 "t",
@@ -80,7 +80,7 @@ class TargetRepoSourceTests(unittest.TestCase):
 
     def test_target_repo_pool_exhausts_pages_when_results_are_only_prs(self) -> None:
         pr = {"pull_request": {"url": "x"}}
-        with patch.object(bounty, "github_get", side_effect=[[pr, pr], [pr, pr]]) as getter:
+        with patch.object(github, "github_get", side_effect=[[pr, pr], [pr, pr]]) as getter:
             items, error = sources.target_repo_issue_pool(
                 "example/project",
                 "t",
@@ -118,18 +118,18 @@ class GenericSourceTests(unittest.TestCase):
     def test_issue_comments_short_circuit_and_response_shape(self) -> None:
         self.assertEqual(sources.issue_comments({"html_url": "bad", "comments": 2}, "t"), [])
         self.assertEqual(sources.issue_comments(issue(1, comments=0), "t"), [])
-        with patch.object(bounty, "github_get", return_value={"bad": "shape"}):
+        with patch.object(github, "github_get", return_value={"bad": "shape"}):
             self.assertEqual(sources.issue_comments(issue(1), "t"), [])
-        with patch.object(bounty, "github_get", return_value=[{"body": "x"}]):
+        with patch.object(github, "github_get", return_value=[{"body": "x"}]):
             self.assertEqual(sources.issue_comments(issue(1), "t"), [{"body": "x"}])
 
     def test_issue_from_github_url_validates_and_fetches(self) -> None:
         self.assertIsNone(sources.issue_from_github_url("bad", "t"))
-        with patch.object(bounty, "github_get", return_value=[]):
+        with patch.object(github, "github_get", return_value=[]):
             self.assertIsNone(
                 sources.issue_from_github_url("https://github.com/a/b/issues/12", "t")
             )
-        with patch.object(bounty, "github_get", return_value={"state": "open"}) as getter:
+        with patch.object(github, "github_get", return_value={"state": "open"}) as getter:
             self.assertEqual(
                 sources.issue_from_github_url("https://github.com/a/b/issues/12", "t"),
                 {"state": "open"},

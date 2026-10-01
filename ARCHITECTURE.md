@@ -44,6 +44,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | --- | --- | --- |
 | `scout_bounties.py` | Upstream-compatible paid discovery, payment signals, basic competition checks, notifications | Keep changes conservative to reduce upstream merge conflicts |
 | `opportunity_scout.py` | Application orchestration plus strategic discovery, verification, delivery, and transitional legacy logic | Shrink over time by extracting cohesive strategic domains |
+| `github_access.py` | Fork-owned GitHub JSON transport plus keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
 | `opportunity_reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
 | `opportunity_scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration |
 | `opportunity_sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
@@ -58,6 +59,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 
 ```text
 opportunity_scout.py
+    |-- github_access.py
     |-- scout_bounties.py
     |-- opportunity_reporting.py
     |-- opportunity_scoring.py
@@ -66,12 +68,16 @@ opportunity_scout.py
     |-- strategic_competition.py
     |-- strategic_readiness.py
 
+github_access.py --> scout_bounties.py
+github_access.py  -X-> opportunity_scout.py
 opportunity_reporting.py  -X-> opportunity_scout.py
+opportunity_sources.py --> github_access.py
 opportunity_sources.py --> scout_bounties.py
 opportunity_sources.py  -X-> opportunity_scout.py
 opportunity_scoring.py --> scout_bounties.py
 opportunity_scoring.py --> strategic_readiness.py
 opportunity_scoring.py  -X-> opportunity_scout.py
+strategic_competition.py --> github_access.py
 strategic_competition.py --> scout_bounties.py
 strategic_competition.py --> strategic_claims.py
 strategic_competition.py  -X-> opportunity_scout.py
@@ -89,7 +95,6 @@ Do not perform a big-bang package rewrite. Extract one stable responsibility at 
 
 Likely future boundaries, when the code pressure justifies them:
 
-- GitHub HTTP access and cache behavior
 
 These are direction markers, not a requirement to create empty abstractions early.
 

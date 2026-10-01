@@ -12,6 +12,7 @@ import urllib.parse
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
+import github_access as github
 import scout_bounties as bounty
 from strategic_claims import strategic_claim_text
 
@@ -110,7 +111,7 @@ def linked_open_pr_reason(
         )
 
     for pr_number in dict.fromkeys(candidates):
-        pr = bounty.github_get(
+        pr = github.github_get(
             f"https://api.github.com/repos/{repo}/pulls/{pr_number}",
             token,
         )
@@ -148,7 +149,7 @@ def search_open_implementation_pr_reason(
             "per_page": 10,
         }
     )
-    data = bounty.github_get(f"https://api.github.com/search/issues?{params}", token)
+    data = github.github_get(f"https://api.github.com/search/issues?{params}", token)
     if not isinstance(data, dict):
         return None
 
@@ -178,7 +179,7 @@ def timeline_open_pr_reason(item: Mapping[str, Any], token: str | None) -> str |
     if not repo or not number:
         return None
 
-    timeline = bounty.github_get(
+    timeline = github.github_get(
         f"https://api.github.com/repos/{repo}/issues/{number}/timeline?per_page=100",
         token,
     )
