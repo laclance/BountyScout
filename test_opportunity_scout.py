@@ -401,10 +401,7 @@ class HttpAndPlatformTests(unittest.TestCase):
         self.assertIsNone(
             scout.supplemental_payment_signal(
                 issue(
-                    body=(
-                        "See https://bountyhub.dev/x — Ethereum-mainnet "
-                        "ERC-20 USDC/USDT address"
-                    )
+                    body=("See https://bountyhub.dev/x — Ethereum-mainnet ERC-20 USDC/USDT address")
                 )
             )
         )
