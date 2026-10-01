@@ -6,13 +6,13 @@ It does not rank final candidates or decide implementation readiness.
 
 from __future__ import annotations
 
-import json
 import re
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Mapping, Sequence, cast
 
+import github_access as github
 import scout_bounties as bounty
 
 IssueRow = tuple[int, int, int, dict[str, Any]]
@@ -41,7 +41,7 @@ def target_repo_issue_pool(
                 "page": page,
             }
         )
-        data = bounty.github_get(
+        data = github.github_get(
             f"https://api.github.com/repos/{repo}/issues?{params}",
             token,
         )
@@ -64,19 +64,7 @@ def target_repo_issue_pool(
 
 def github_get_optional(url: str, token: str | None) -> Any:
     """Fetch optional GitHub JSON without turning source absence into a hard failure."""
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "OSSOpportunityScout",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    try:
-        request = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(request, timeout=10) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except Exception:
-        return None
+    return github.github_get(url, token, timeout=10, log_errors=False)
 
 
 def fetch_text(url: str, timeout: int = 12) -> str:
@@ -93,30 +81,12 @@ def fetch_text(url: str, timeout: int = 12) -> str:
 
 def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str, Any]]:
     """Fetch issue comments used by activity, payment, and competition checks."""
-    repo, number = bounty.issue_repo_and_number(item)
-    if not repo or not number or not int(item.get("comments") or 0):
-        return []
-    comments = bounty.github_get(
-        f"https://api.github.com/repos/{repo}/issues/{number}/comments?per_page=100",
-        token,
-    )
-    return comments if isinstance(comments, list) else []
+    return github.issue_comments(item, token)
 
 
 def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
     """Fetch a GitHub source issue from a platform-discovered URL."""
-    match = re.match(
-        r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)",
-        str(url),
-    )
-    if not match:
-        return None
-    repo, number = match.group(1), int(match.group(2))
-    item = bounty.github_get(
-        f"https://api.github.com/repos/{repo}/issues/{number}",
-        token,
-    )
-    return item if isinstance(item, dict) else None
+    return github.issue_from_github_url(url, token)
 
 
 def issuehunt_platform_refs(
