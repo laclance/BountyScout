@@ -44,6 +44,8 @@ CLAIM_PATTERNS = [
 
 UNFUNDED_PROPOSAL_PATTERNS = [
     r"\[bounty proposal\]",
+    r"(?m)^\s*(?:\*\*)?bounty proposal(?:\*\*)?\s*$",
+    r"\bwould you approve\s+(?:\*\*)?(?:us\$|\$)\s*\d[\d,]*(?:\.\d+)?(?:\*\*)?\s+cash\b",
     r"\bproposed amount, not an existing award\b",
     r"\$\s*\d[\d,]*(?:\.\d+)?\s+proposed\b",
     r"\bwould (?:a |an )?(?:us\$|\$)?\s*\d[\d,]*(?:\.\d+)? bounty be appropriate\b",
