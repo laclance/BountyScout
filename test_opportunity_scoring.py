@@ -996,5 +996,217 @@ class ScoringRegressionTests(unittest.TestCase):
         self.assertEqual(missing, "unknown")
 
 
+    def test_owner_module_covers_effort_payment_and_activity_buckets(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Android split tunnel bug",
+                body="### Steps to reproduce\n\n_No response_",
+                labels=["OS-android"],
+                comments=8,
+            )
+        )
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertIn("platform-specific reproduction is missing", estimate.reasons)
+
+        cases = [
+            (None, 0),
+            ("confirmed bounty platform feed (Opire)", 100),
+            ("explicit bounty command: $1", 100),
+            ("explicit /reward comment: $1", 98),
+            ("explicit /bounty comment: $1", 98),
+            ("bounty labels: $1", 95),
+            ("named bounty platform + funding language", 90),
+            ("payment term + amount: $1", 85),
+        ]
+        for signal, expected in cases:
+            with self.subTest(signal=signal):
+                self.assertEqual(scoring.payment_confidence(signal), expected)
+
+        now = datetime.now(timezone.utc)
+        self.assertEqual(scoring.repo_activity({}), "unknown")
+        for days, prefix in (
+            (2, "active in last 7d"),
+            (20, "active in last 30d"),
+            (60, "active in last 90d"),
+            (120, "last push"),
+        ):
+            with self.subTest(days=days):
+                activity = scoring.repo_activity(
+                    {"pushed_at": (now - timedelta(days=days)).isoformat()}
+                )
+                self.assertTrue(activity.startswith(prefix))
+
+    def test_owner_module_covers_cash_star_language_and_scope_branches(self) -> None:
+        now = datetime.now(timezone.utc)
+        inactive = (now - timedelta(days=120)).isoformat()
+
+        non_usd = scoring.build_candidate(
+            issue(title="Feature", body="", comments=4),
+            "paid",
+            "confirmed bounty platform feed (X): €25",
+            repo_meta(stargazers_count=500, pushed_at=inactive, language="Rust"),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertIsNone(non_usd["expected_hourly"])
+        self.assertIn("reward not USD-comparable", non_usd["cash_reasons"])
+
+        low_star = scoring.build_candidate(
+            issue(title="Feature", body="plain", comments=4),
+            "strategic",
+            None,
+            repo_meta(stargazers_count=50, pushed_at=inactive, language="Rust"),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertEqual(low_star["stars"], 50)
+
+        active_go = scoring.build_candidate(
+            issue(title="Feature", body="network api regression", comments=0),
+            "paid",
+            "payment term + amount: $25",
+            repo_meta(stargazers_count=1500, language="Go"),
+            None,
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertIn("established repo", active_go["cash_reasons"])
+        self.assertIn("Go codebase", active_go["career_reasons"])
+        self.assertIn("target repo bonus", active_go["career_reasons"])
+
+        broad = scoring.build_candidate(
+            issue(title="Architecture redesign", body="plain", comments=0),
+            "strategic",
+            None,
+            repo_meta(stargazers_count=50, pushed_at=inactive, language="HCL"),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertIn("large-scope penalty", broad["career_reasons"])
+
+    def test_owner_module_covers_clarity_and_documentation_cap_branches(self) -> None:
+        detailed = scoring.build_candidate(
+            issue(
+                title="Network regression",
+                body=(
+                    "Root cause is in pkg/a.go. Steps to reproduce: run it. "
+                    "Suggested fix: update pkg/b.go."
+                ),
+                comments=0,
+            ),
+            "strategic",
+            None,
+            repo_meta(language="TypeScript"),
+            "guide",
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertIn("clear implementation/reproduction detail", detailed["career_reasons"])
+
+        partial = scoring.build_candidate(
+            issue(title="Bug", body="Code path: pkg/a.go", comments=0),
+            "strategic",
+            None,
+            repo_meta(language="Ruby"),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertIn("implementation detail available", partial["career_reasons"])
+
+        docs = scoring.build_candidate(
+            issue(
+                title="README typo",
+                body="Fix spelling in docs/guide.md.",
+                comments=0,
+            ),
+            "strategic",
+            None,
+            repo_meta(language="Rust"),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertIn("documentation-only micro-fix cap", docs["career_reasons"])
+        self.assertLessEqual(docs["career_score"], 45)
+
+    def test_owner_module_covers_strategic_freshness_activity_branches(self) -> None:
+        now = datetime.now(timezone.utc)
+
+        def build(updated_days: int, comments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+            return scoring.build_candidate(
+                issue(
+                    title="Network bug",
+                    body="network regression",
+                    comments=len(comments or []),
+                    created_at=(now - timedelta(days=500)).isoformat(),
+                    updated_at=(now - timedelta(days=updated_days)).isoformat(),
+                ),
+                "strategic",
+                None,
+                repo_meta(),
+                None,
+                comments,
+                target_repos={"example/project"},
+                amount_pattern=AMOUNT_RE,
+            )
+
+        fresh = build(3)
+        middle = build(20)
+        older = build(120)
+        discussion = build(
+            120,
+            [
+                {
+                    "body": "Reproduced.",
+                    "created_at": (now - timedelta(days=5)).isoformat(),
+                    "author_association": "NONE",
+                    "user": {"login": "dev"},
+                }
+            ],
+        )
+        maintained = build(
+            120,
+            [
+                {
+                    "created_at": (now - timedelta(days=20)).isoformat(),
+                    "author_association": "MEMBER",
+                    "user": {"login": "maintainer"},
+                },
+                {
+                    "created_at": (now - timedelta(days=5)).isoformat(),
+                    "author_association": "MEMBER",
+                    "user": {"login": "maintainer"},
+                },
+            ],
+        )
+
+        self.assertIn("issue active in last 14d", fresh["career_reasons"])
+        self.assertIn("issue active in last 60d", middle["career_reasons"])
+        self.assertIn("issue active in last 180d", older["career_reasons"])
+        self.assertIn("recent active discussion", discussion["career_reasons"])
+        self.assertIn("recent maintainer activity", maintained["career_reasons"])
+
+        inactive = scoring.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=0,
+                created_at=(now - timedelta(days=500)).isoformat(),
+                updated_at=(now - timedelta(days=300)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertIn("older inactive backlog penalty", inactive["career_reasons"])
+
+
 if __name__ == "__main__":
     unittest.main()
