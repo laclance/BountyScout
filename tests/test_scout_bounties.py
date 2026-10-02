@@ -512,6 +512,120 @@ class MainTests(unittest.TestCase):
         save.assert_not_called()
 
 
+    def test_main_quiet_successful_scan_performs_canonical_maintenance(self) -> None:
+        old_url = "https://github.com/acme/widget/issues/99"
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([old_url]),
+            ),
+            patch.object(scout, "search_github", return_value={"items": []}),
+            patch.object(
+                scout.shared_github,
+                "issue_lifecycle",
+                return_value=scout.shared_github.IssueLifecycleResult("open"),
+            ) as lifecycle,
+            patch.object(state, "save_seen_state") as save,
+        ):
+            scout.main()
+
+        lifecycle.assert_called_once_with(old_url, None)
+        save.assert_called_once()
+        saved = save.call_args.args[0]
+        record = saved.record(old_url)
+        self.assertIsNotNone(record)
+        assert record is not None
+        self.assertIsNotNone(record.last_checked_at)
+
+    def test_main_quiet_maintenance_save_failure_is_reported(self) -> None:
+        old_url = "https://github.com/acme/widget/issues/99"
+        buf = io.StringIO()
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([old_url]),
+            ),
+            patch.object(scout, "search_github", return_value={"items": []}),
+            patch.object(
+                scout.shared_github,
+                "issue_lifecycle",
+                return_value=scout.shared_github.IssueLifecycleResult("failed"),
+            ),
+            patch.object(
+                state,
+                "save_seen_state",
+                side_effect=state.SeenStateSaveError("maintenance save failed"),
+            ),
+            redirect_stdout(buf),
+        ):
+            scout.main()
+
+        self.assertIn("Error saving state file: maintenance save failed", buf.getvalue())
+
+    def test_main_successful_delivery_compacts_and_marks_new_state_atomically(self) -> None:
+        old_url = "https://github.com/acme/widget/issues/99"
+        item = issue(html_url="https://github.com/acme/widget/issues/100")
+        env = {"DISCORD_WEBHOOK_URL": "https://hook"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([old_url]),
+            ),
+            patch.object(scout, "search_github", return_value={"items": [item]}),
+            patch.object(
+                scout,
+                "candidate_rejection_reason",
+                return_value=(None, "payment term + amount: $100"),
+            ),
+            patch.object(scout, "fetch_repo_metadata", return_value={}),
+            patch.object(scout, "send_discord_notification", return_value=True),
+            patch.object(
+                scout.shared_github,
+                "issue_lifecycle",
+                return_value=scout.shared_github.IssueLifecycleResult("closed"),
+            ),
+            patch.object(state, "save_seen_state") as save,
+        ):
+            scout.main()
+
+        saved = save.call_args.args[0]
+        self.assertFalse(saved.contains(old_url))
+        self.assertTrue(saved.contains(item["html_url"]))
+
+    def test_main_failed_delivery_does_not_run_maintenance(self) -> None:
+        old_url = "https://github.com/acme/widget/issues/99"
+        item = issue(html_url="https://github.com/acme/widget/issues/100")
+        env = {"DISCORD_WEBHOOK_URL": "https://hook"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([old_url]),
+            ),
+            patch.object(scout, "search_github", return_value={"items": [item]}),
+            patch.object(
+                scout,
+                "candidate_rejection_reason",
+                return_value=(None, "payment term + amount: $100"),
+            ),
+            patch.object(scout, "fetch_repo_metadata", return_value={}),
+            patch.object(scout, "send_discord_notification", return_value=False),
+            patch.object(scout.shared_github, "issue_lifecycle") as lifecycle,
+            patch.object(state, "save_seen_state") as save,
+        ):
+            scout.main()
+
+        lifecycle.assert_not_called()
+        save.assert_not_called()
+
+
 class CoverageGapTests(unittest.TestCase):
     def test_score_zero_reward_old_issue_and_no_star_branches(self) -> None:
         now = datetime.now(timezone.utc)
