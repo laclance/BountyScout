@@ -188,8 +188,7 @@ class StrategicVerificationTests(unittest.TestCase):
             updated_at=now,
         )
         accepted = [
-            issue(html_url=f"https://github.com/g/g/issues/{index}")
-            for index in range(2, 6)
+            issue(html_url=f"https://github.com/g/g/issues/{index}") for index in range(2, 6)
         ]
         returned: dict[str, Candidate] = {
             str(weak["html_url"]): verified_candidate(weak, score=40),
