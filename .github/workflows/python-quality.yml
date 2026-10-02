@@ -13,6 +13,8 @@ on:
       - ".github/workflows/python-quality.yml"
       - ".github/workflows/bounty-scout.yml"
   push:
+    branches:
+      - main
     paths:
       - "**/*.py"
       - ".coveragerc"
@@ -25,7 +27,11 @@ on:
       - ".github/workflows/bounty-scout.yml"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: python-quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
@@ -34,8 +40,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'push' && github.ref_name || github.ref }}
-          persist-credentials: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -45,25 +50,7 @@ jobs:
       - name: Install validation dependencies
         run: python -m pip install -r requirements-dev.txt
 
-      - name: Format with Ruff
-        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
-        run: ruff format .
-
-      - name: Commit formatting changes
-        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
-        run: |
-          if git diff --quiet; then
-            echo "Ruff formatting already clean."
-          else
-            git config --local user.email "github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
-            git add -- '*.py'
-            git commit -m "style: auto-format with Ruff [skip ci]"
-            git push
-          fi
-
       - name: Check Ruff formatting
-        if: github.event_name != 'push' || github.ref == 'refs/heads/main'
         run: ruff format --check .
 
       - name: Lint with Ruff
