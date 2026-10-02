@@ -724,19 +724,20 @@ def add_reject(
 def discover_paid(
     token: str | None,
     seen: set[str],
-    repo_cache: dict[str, dict[str, Any]],
+    repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
-    search_results: list[tuple[str, dict[str, Any]]] | None = None,
+    search_results: list[SearchBatch] | None = None,
 ) -> tuple[list[Candidate], dict[str, int], list[RejectionRecord]]:
     found: list[Candidate] = []
     touched: set[str] = set()
     rejected: dict[str, int] = {}
     examples: list[RejectionRecord] = []
-    pending: list[tuple[dict[str, Any], str | None, bool]] = []
+    pending: list[tuple[GitHubIssue, str | None, bool]] = []
 
     if search_results is None:
         search_results = [
-            (query, bounty.search_github(query, token)) for query in PAID_DISCOVERY_QUERIES
+            (query, cast(GitHubSearchResult, bounty.search_github(query, token)))
+            for query in PAID_DISCOVERY_QUERIES
         ]
 
     for _, result in search_results:
@@ -776,9 +777,9 @@ def discover_paid(
             pending.append((item, platform_signal, True))
 
     def verify_paid(
-        row: tuple[dict[str, Any], str | None, bool],
+        row: tuple[GitHubIssue, str | None, bool],
     ) -> tuple[
-        tuple[dict[str, Any], str | None, bool],
+        tuple[GitHubIssue, str | None, bool],
         tuple[Candidate | None, str | None],
     ]:
         item, platform_signal, _ = row
@@ -820,9 +821,9 @@ def discover_paid(
     return found, rejected, examples
 
 
-def possible_miss_signal(item: Mapping[str, Any]) -> bool:
+def possible_miss_signal(item: GitHubIssue) -> bool:
     """Flag strong raw results that deserve scrutiny when filters discard them."""
-    typed_item = _github_issue(item)
+    typed_item = item
     if (
         security_disclosure_reason(typed_item)
         or reward_history_reason(typed_item)
@@ -853,7 +854,7 @@ def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     return recent and (contributor_signal or bug_signal)
 
 
-def basic_rejection_audit_reason(item: Mapping[str, Any]) -> str | None:
+def basic_rejection_audit_reason(item: GitHubIssue) -> str | None:
     """Return only tunable/unknown basic-filter reasons worth auditing."""
     if "pull_request" in item:
         return None
@@ -895,7 +896,7 @@ def basic_rejection_audit_reason(item: Mapping[str, Any]) -> str | None:
 
 def add_audit(
     audit: list[RejectionRecord],
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     reason: str,
 ) -> None:
     if len(audit) >= STRATEGIC_AUDIT_LIMIT:
@@ -910,26 +911,28 @@ def add_audit(
 
 
 def strategic_inspection_items(
-    provisional: Sequence[tuple[int, int, int, Mapping[str, Any]]],
-) -> dict[str, list[dict[str, Any]]]:
+    provisional: list[sources.IssueRow],
+) -> dict[str, list[GitHubIssue]]:
     """Select base per-repo candidates plus a globally bounded strong overflow."""
-    selected = sources.strategic_inspection_items(
-        cast(list[sources.IssueRow], list(provisional)),
+    return sources.strategic_inspection_items(
+        provisional,
         base_per_repo=STRATEGIC_INSPECT_PER_REPO,
         adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
-        should_expand=cast(sources.IssuePredicate, possible_miss_signal),
+        should_expand=possible_miss_signal,
     )
-    return cast(dict[str, list[dict[str, Any]]], selected)
 
 
 def strategic_global_search_results(
     token: str | None,
-) -> list[tuple[str, dict[str, Any]]]:
+) -> list[SearchBatch]:
     """Reserve the strategic global Search calls before heavier API work begins."""
     return [
         (
             query,
-            bounty.search_github(query, token, per_page=STRATEGIC_GLOBAL_SEARCH_PER_PAGE),
+            cast(
+                GitHubSearchResult,
+                bounty.search_github(query, token, per_page=STRATEGIC_GLOBAL_SEARCH_PER_PAGE),
+            ),
         )
         for query in STRATEGIC_GLOBAL_QUERIES
     ]
@@ -937,18 +940,18 @@ def strategic_global_search_results(
 
 def prefetch_discovery_searches(
     token: str | None,
-) -> tuple[
-    list[tuple[str, dict[str, Any]]],
-    list[tuple[str, dict[str, Any]]],
-]:
+) -> tuple[list[SearchBatch], list[SearchBatch]]:
     """Pace paid and strategic Search calls to avoid burst/secondary rate limits."""
     requests = [("paid", query, 15) for query in PAID_DISCOVERY_QUERIES] + [
         ("strategic", query, STRATEGIC_GLOBAL_SEARCH_PER_PAGE) for query in STRATEGIC_GLOBAL_QUERIES
     ]
-    paid_results: list[tuple[str, dict[str, Any]]] = []
-    strategic_results: list[tuple[str, dict[str, Any]]] = []
+    paid_results: list[SearchBatch] = []
+    strategic_results: list[SearchBatch] = []
     for index, (lane, query, per_page) in enumerate(requests):
-        result = bounty.search_github(query, token, per_page=per_page)
+        result = cast(
+            GitHubSearchResult,
+            bounty.search_github(query, token, per_page=per_page),
+        )
         target = paid_results if lane == "paid" else strategic_results
         target.append((query, result))
         if index + 1 < len(requests):
@@ -960,9 +963,9 @@ def discover_strategic(
     token: str | None,
     seen: set[str],
     paid_urls: set[str],
-    repo_cache: dict[str, dict[str, Any]],
+    repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
-    global_search_results: list[tuple[str, dict[str, Any]]] | None = None,
+    global_search_results: list[SearchBatch] | None = None,
 ) -> tuple[
     list[Candidate],
     dict[str, int],
@@ -975,7 +978,7 @@ def discover_strategic(
     examples: list[RejectionRecord] = []
     audit: list[RejectionRecord] = []
 
-    source_batches: list[list[dict[str, Any]]] = []
+    source_batches: list[list[GitHubIssue]] = []
     with ThreadPoolExecutor(
         max_workers=min(NETWORK_WORKERS, max(1, len(TARGET_REPOS)))
     ) as executor:
@@ -990,10 +993,10 @@ def discover_strategic(
             if source_error:
                 add_audit(
                     audit,
-                    {
-                        "html_url": f"https://github.com/{target_repo}/issues",
-                        "title": target_repo,
-                    },
+                    GitHubIssue(
+                        html_url=f"https://github.com/{target_repo}/issues",
+                        title=target_repo,
+                    ),
                     source_error,
                 )
             source_batches.append(items)
@@ -1006,10 +1009,10 @@ def discover_strategic(
         if not isinstance(global_items, list):
             add_audit(
                 audit,
-                {
-                    "html_url": "https://github.com/issues",
-                    "title": f"Global GitHub Search: {query}",
-                },
+                GitHubIssue(
+                    html_url="https://github.com/issues",
+                    title=f"Global GitHub Search: {query}",
+                ),
                 f"global strategic discovery search failed for query: {query}; "
                 "scan coverage incomplete",
             )
@@ -1056,7 +1059,7 @@ def discover_strategic(
                     preview["priority_score"],
                     preview["career_score"],
                     preview["cash_score"],
-                    _github_issue(item),
+                    item,
                 )
             )
 
@@ -1094,7 +1097,7 @@ def discover_strategic(
                     preview["priority_score"],
                     preview["career_score"],
                     preview["cash_score"],
-                    _github_issue(item),
+                    item,
                 )
             )
         ranked.sort(key=lambda row: row[:3], reverse=True)
@@ -1270,12 +1273,12 @@ def main() -> None:
     token = os.environ.get("GITHUB_TOKEN")
     repo_fullname = os.environ.get("GITHUB_REPOSITORY")
     seen = bounty.load_seen_bounties()
-    repo_cache: dict[str, dict[str, Any]] = {}
+    repo_cache: dict[str, RepositoryMetadata] = {}
     guide_cache: dict[str, str | None] = {}
 
     started = monotonic()
-    prefetched_paid_searches: list[tuple[str, dict[str, Any]]] | None = None
-    prefetched_global_searches: list[tuple[str, dict[str, Any]]] | None = None
+    prefetched_paid_searches: list[SearchBatch] | None = None
+    prefetched_global_searches: list[SearchBatch] | None = None
     if token and repo_fullname:
         prefetched_paid_searches, prefetched_global_searches = prefetch_discovery_searches(token)
     paid_started = monotonic()
