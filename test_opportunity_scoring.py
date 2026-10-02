@@ -1208,7 +1208,6 @@ class ScoringRegressionTests(unittest.TestCase):
         )
         self.assertIn("older inactive backlog penalty", inactive["career_reasons"])
 
-
     def test_owner_module_covers_remaining_branch_edges(self) -> None:
         now = datetime.now(timezone.utc)
         inactive = (now - timedelta(days=120)).isoformat()
