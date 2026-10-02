@@ -13,6 +13,7 @@ from typing import Literal, NotRequired, TypeAlias, TypedDict
 EffortBucket: TypeAlias = Literal["<1h", "1–3h", "3–6h", "6–12h", "1d+"]
 CompetitionLevel: TypeAlias = Literal["none", "low", "medium", "high"]
 CandidateLane: TypeAlias = Literal["paid", "strategic"]
+IssueLifecycleStatus: TypeAlias = Literal["open", "closed", "not_found", "failed"]
 
 
 class GitHubLabel(TypedDict, total=False):
