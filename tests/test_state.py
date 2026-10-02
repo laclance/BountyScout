@@ -189,9 +189,7 @@ class SeenStateLogicTests(unittest.TestCase):
         seen.mark_reported_many([URL_B, URL_A], reported_at=FIXED_REPORTED_AT)
 
         self.assertEqual(seen.urls(), {URL_A, URL_B})
-        self.assertEqual(
-            seen.record(URL_B), state_module.SeenEntry(reported_at=FIXED_REPORTED_AT)
-        )
+        self.assertEqual(seen.record(URL_B), state_module.SeenEntry(reported_at=FIXED_REPORTED_AT))
         self.assertIsNone(seen.record("https://github.com/example/project/issues/999"))
 
     def test_saving_migrated_legacy_state_emits_only_versioned_schema(self) -> None:
