@@ -1,15 +1,9 @@
 [run]
 branch = True
 source =
+    bountyscout
     scout_bounties
     opportunity_scout
-    github_access
-    opportunity_reporting
-    opportunity_scoring
-    opportunity_sources
-    strategic_claims
-    strategic_competition
-    strategic_readiness
 
 [report]
 show_missing = True

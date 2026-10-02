@@ -43,14 +43,15 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | Module | Responsibility | Boundary |
 | --- | --- | --- |
 | `scout_bounties.py` | Upstream-compatible paid discovery, payment signals, basic competition checks, notifications | Keep changes conservative to reduce upstream merge conflicts |
-| `opportunity_scout.py` | Application orchestration plus strategic discovery, verification, delivery, and transitional legacy logic | Shrink over time by extracting cohesive strategic domains |
-| `github_access.py` | Fork-owned GitHub JSON transport plus keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
-| `opportunity_reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
-| `opportunity_scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration, including trusted maintainer-history signals |
-| `opportunity_sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
-| `strategic_claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
-| `strategic_competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses local evidence before timeline I/O; never imports `opportunity_scout.py` |
-| `strategic_readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
+| `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
+| `bountyscout/app.py` | Combined application orchestration plus strategic discovery, verification, and delivery | Canonical fork-owned application implementation |
+| `bountyscout/github.py` | Fork-owned GitHub JSON transport plus keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
+| `bountyscout/reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
+| `bountyscout/scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration, including trusted maintainer-history signals |
+| `bountyscout/sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
+| `bountyscout/strategic/claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
+| `bountyscout/strategic/competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses local evidence before timeline I/O; never imports `opportunity_scout.py` |
+| `bountyscout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` | Notification state | Only mark items seen after a notification path succeeds |
 | `.github/workflows/bounty-scout.yml` | Scheduled scanner execution | Runtime workflow, not the quality gate |
 | `.github/workflows/python-quality.yml` | Formatting, lint, map, typing, tests, coverage | Must stay fast enough for normal PR iteration |
@@ -58,32 +59,30 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 ## Dependency direction
 
 ```text
-opportunity_scout.py
-    |-- github_access.py
-    |-- scout_bounties.py
-    |-- opportunity_reporting.py
-    |-- opportunity_scoring.py
-    |-- opportunity_sources.py
-    |-- strategic_claims.py
-    |-- strategic_competition.py
-    |-- strategic_readiness.py
+opportunity_scout.py --> bountyscout.app
 
-github_access.py --> scout_bounties.py
-github_access.py  -X-> opportunity_scout.py
-opportunity_reporting.py  -X-> opportunity_scout.py
-opportunity_sources.py --> github_access.py
-opportunity_sources.py --> scout_bounties.py
-opportunity_sources.py  -X-> opportunity_scout.py
-opportunity_scoring.py --> scout_bounties.py
-opportunity_scoring.py --> strategic_readiness.py
-opportunity_scoring.py  -X-> opportunity_scout.py
-strategic_competition.py --> github_access.py
-strategic_competition.py --> scout_bounties.py
-strategic_competition.py --> strategic_claims.py
-strategic_competition.py  -X-> opportunity_scout.py
-strategic_readiness.py --> strategic_claims.py
-strategic_readiness.py  -X-> opportunity_scout.py
-strategic_claims.py     -X-> opportunity_scout.py
+bountyscout.app
+    |-- bountyscout.github
+    |-- scout_bounties.py
+    |-- bountyscout.reporting
+    |-- bountyscout.scoring
+    |-- bountyscout.sources
+    |-- bountyscout.strategic.claims
+    |-- bountyscout.strategic.competition
+    |-- bountyscout.strategic.readiness
+
+bountyscout.github --> scout_bounties.py
+bountyscout.sources --> bountyscout.github
+bountyscout.sources --> scout_bounties.py
+bountyscout.scoring --> scout_bounties.py
+bountyscout.scoring --> bountyscout.strategic.readiness
+bountyscout.strategic.competition --> bountyscout.github
+bountyscout.strategic.competition --> scout_bounties.py
+bountyscout.strategic.competition --> bountyscout.strategic.claims
+bountyscout.strategic.readiness --> bountyscout.strategic.claims
+
+package/domain modules -X-> opportunity_scout.py
+package/domain modules -X-> bountyscout.app
 scout_bounties.py       -X-> opportunity_scout.py
 ```
 
@@ -91,7 +90,7 @@ New leaf modules should follow the same rule. The orchestration layer may compos
 
 ## Refactoring direction
 
-Do not perform a big-bang package rewrite. Extract one stable responsibility at a time, keep behavior green, then update this document and the generated map.
+Phase 3A establishes `bountyscout/` as the canonical fork-owned implementation package and `tests/` as the test hierarchy. `scout_bounties.py` remains intentionally separate for upstream compatibility. Generic helper dependencies that still point from the package into `scout_bounties.py` are intentionally deferred to Phase 3B; do not mix that dependency-direction cleanup into structure-only changes.
 
 ## Invariants
 
