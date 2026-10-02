@@ -57,14 +57,14 @@
 - **function** `cached_value()` — line 49
 - **function** `github_get()` — line 78
 - **function** `search_github()` — line 96
-- **function** `issue_repo_and_number()` — line 119
-- **function** `parse_github_datetime()` — line 126
-- **function** `issue_lifecycle()` — line 136
-- **function** `repo_metadata()` — line 168
-- **function** `issue_comments_checked()` — line 174
-- **function** `issue_comments()` — line 194
-- **function** `contribution_guide()` — line 203
-- **function** `issue_from_github_url()` — line 220
+- **function** `issue_repo_and_number()` — line 118
+- **function** `parse_github_datetime()` — line 125
+- **function** `issue_lifecycle()` — line 135
+- **function** `repo_metadata()` — line 167
+- **function** `issue_comments_checked()` — line 173
+- **function** `issue_comments()` — line 193
+- **function** `contribution_guide()` — line 202
+- **function** `issue_from_github_url()` — line 219
 
 ## `bountyscout/paid.py`
 
