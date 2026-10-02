@@ -2,15 +2,24 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Final, Iterable, Literal, Mapping, TypedDict
+
+from bountyscout.types import IssueLifecycleStatus
 
 StateVersion = Literal[2]
 STATE_VERSION: Final[StateVersion] = 2
 DEFAULT_STATE_FILE: Final = Path("seen_bounties.json")
+SEEN_STATE_REVALIDATION_LIMIT: Final = 20
+SEEN_STATE_RECHECK_INTERVAL: Final = timedelta(days=30)
+_GITHUB_ISSUE_URL_RE: Final = re.compile(
+    r"^https://github\.com/[^/]+/[^/]+/issues/\d+$"
+)
 
 
 class SeenEntryDocument(TypedDict):
@@ -27,6 +36,13 @@ class SeenStateDocument(TypedDict):
 class SeenEntry:
     reported_at: str | None = None
     last_checked_at: str | None = None
+
+
+@dataclass(frozen=True)
+class SeenStateMaintenanceResult:
+    state: SeenState
+    checked_urls: tuple[str, ...]
+    pruned_urls: tuple[str, ...]
 
 
 class SeenStateLoadError(Exception):
@@ -61,6 +77,22 @@ class SeenState:
     def record(self, url: str) -> SeenEntry | None:
         return self._entries.get(url)
 
+    def copy(self) -> SeenState:
+        return SeenState(self._entries)
+
+    def remove(self, url: str) -> bool:
+        return self._entries.pop(url, None) is not None
+
+    def mark_checked(self, url: str, *, checked_at: str) -> bool:
+        entry = self._entries.get(url)
+        if entry is None:
+            return False
+        self._entries[url] = SeenEntry(
+            reported_at=entry.reported_at,
+            last_checked_at=checked_at,
+        )
+        return True
+
     def mark_reported(self, url: str, *, reported_at: str | None = None) -> None:
         if url in self._entries:
             return
@@ -84,6 +116,100 @@ class SeenState:
                 "last_checked_at": entry.last_checked_at,
             }
         return {"version": STATE_VERSION, "seen": seen}
+
+
+def _timestamp_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _state_timestamp(value: datetime) -> str:
+    utc_value = value.astimezone(timezone.utc)
+    return utc_value.isoformat().replace("+00:00", "Z")
+
+
+def _github_issue_url(url: str) -> bool:
+    return _GITHUB_ISSUE_URL_RE.fullmatch(url) is not None
+
+
+def eligible_for_revalidation(
+    entry: SeenEntry,
+    now: datetime,
+    interval: timedelta = SEEN_STATE_RECHECK_INTERVAL,
+) -> bool:
+    """Return whether a seen entry is old or unknown enough for lifecycle maintenance."""
+    if entry.last_checked_at is None:
+        return True
+    return now - _timestamp_datetime(entry.last_checked_at) >= interval
+
+
+def select_revalidation_batch(
+    state: SeenState,
+    now: datetime,
+    limit: int = SEEN_STATE_REVALIDATION_LIMIT,
+    interval: timedelta = SEEN_STATE_RECHECK_INTERVAL,
+) -> list[str]:
+    """Select a deterministic bounded batch of stale canonical GitHub issue URLs."""
+    if limit <= 0:
+        return []
+
+    eligible = [
+        (url, entry)
+        for url, entry in state._entries.items()
+        if _github_issue_url(url) and eligible_for_revalidation(entry, now, interval)
+    ]
+
+    def sort_key(item: tuple[str, SeenEntry]) -> tuple[int, datetime, str]:
+        url, entry = item
+        if entry.last_checked_at is None:
+            return (0, datetime.min.replace(tzinfo=timezone.utc), url)
+        return (1, _timestamp_datetime(entry.last_checked_at).astimezone(timezone.utc), url)
+
+    eligible.sort(key=sort_key)
+    return [url for url, _ in eligible[:limit]]
+
+
+def apply_revalidation_result(
+    state: SeenState,
+    url: str,
+    status: IssueLifecycleStatus,
+    checked_at: datetime,
+) -> None:
+    """Apply one lifecycle outcome, pruning only confirmed closed GitHub issues."""
+    if status == "closed":
+        state.remove(url)
+        return
+    state.mark_checked(url, checked_at=_state_timestamp(checked_at))
+
+
+def maintain_seen_state(
+    state: SeenState,
+    now: datetime,
+    checker: Callable[[str], IssueLifecycleStatus],
+    *,
+    limit: int = SEEN_STATE_REVALIDATION_LIMIT,
+    interval: timedelta = SEEN_STATE_RECHECK_INTERVAL,
+) -> SeenStateMaintenanceResult:
+    """Return a maintained copy after a bounded lifecycle pass.
+
+    A checker exception is treated as a failed lifecycle attempt: the URL stays seen
+    and its check timestamp advances so one failure cannot monopolize later batches.
+    """
+    maintained = state.copy()
+    batch = select_revalidation_batch(state, now, limit, interval)
+    pruned: list[str] = []
+    for url in batch:
+        try:
+            status = checker(url)
+        except Exception:
+            status = "failed"
+        if status == "closed":
+            pruned.append(url)
+        apply_revalidation_result(maintained, url, status, now)
+    return SeenStateMaintenanceResult(
+        state=maintained,
+        checked_urls=tuple(batch),
+        pruned_urls=tuple(pruned),
+    )
 
 
 def _validated_url(value: object) -> str:
