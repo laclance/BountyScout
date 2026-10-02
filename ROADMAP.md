@@ -132,6 +132,14 @@ not make the paid-only entry point depend on combined application orchestration.
 - root `search_github()` remains a compatibility wrapper over the package helper
 - queries, ordering, pacing, request budgets, and standalone paid behavior are unchanged
 
+### Phase 4E.4 — package-owned paid rejection/competition verification — complete
+
+- paid rejection precedence and root-compatible competition checks moved to `bountyscout.paid_verification`
+- root symbols remain compatibility aliases/wrappers
+- strategic competition no longer imports root
+- combined verification consumes package behavior directly
+- network/request behavior remains unchanged
+
 Broader Phase 4E remains open.
 
 ## Deferred result-object work

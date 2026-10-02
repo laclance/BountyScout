@@ -13,6 +13,7 @@ from unittest.mock import patch
 import bountyscout.app as scout
 from bountyscout import github
 from bountyscout import paid as paid_policy
+from bountyscout import paid_verification
 from bountyscout import state
 import scout_bounties as bounty
 from bountyscout.strategic import competition as competition_policy
@@ -549,7 +550,7 @@ class CalibrationTests(unittest.TestCase):
         )
 
         with patch.object(
-            bounty,
+            paid_verification,
             "has_existing_implementation_pr",
             return_value="search pr",
         ):
@@ -560,7 +561,7 @@ class CalibrationTests(unittest.TestCase):
 
         with (
             patch.object(
-                bounty,
+                paid_verification,
                 "has_existing_implementation_pr",
                 return_value=None,
             ),
@@ -588,7 +589,7 @@ class CalibrationTests(unittest.TestCase):
         ]
         with (
             patch.object(
-                bounty,
+                paid_verification,
                 "has_existing_implementation_pr",
                 return_value=None,
             ),
@@ -610,7 +611,7 @@ class CalibrationTests(unittest.TestCase):
 
         with (
             patch.object(
-                bounty,
+                paid_verification,
                 "has_existing_implementation_pr",
                 return_value=None,
             ),
@@ -632,7 +633,7 @@ class CalibrationTests(unittest.TestCase):
 
         with (
             patch.object(
-                bounty,
+                paid_verification,
                 "has_existing_implementation_pr",
                 return_value=None,
             ),
@@ -673,7 +674,7 @@ class CalibrationTests(unittest.TestCase):
                 ],
             ),
             patch.object(
-                bounty,
+                paid_verification,
                 "has_existing_implementation_pr",
                 return_value=None,
             ),
@@ -724,7 +725,7 @@ class CalibrationTests(unittest.TestCase):
                 return_value="confirmed bounty platform comment (Algora): $50",
             ),
             patch.object(
-                bounty,
+                paid_verification,
                 "candidate_rejection_reason",
                 return_value=("no explicit payment signal", None),
             ),
@@ -969,7 +970,7 @@ class VerificationTests(unittest.TestCase):
             comments=0,
         )
         with (
-            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
+            patch.object(paid_verification, "has_existing_implementation_pr", return_value=None),
             patch.object(
                 github,
                 "github_get",
@@ -1037,7 +1038,7 @@ class VerificationTests(unittest.TestCase):
                 "user": {"login": "fzlzjerry"},
             }
         ]
-        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
+        with patch.object(paid_verification, "has_existing_implementation_pr", return_value=None):
             self.assertEqual(
                 scout.strategic_rejection(client_golang, "t", client_golang_comments),
                 "active claim by @fzlzjerry",
@@ -1056,7 +1057,7 @@ class VerificationTests(unittest.TestCase):
             created_at=datetime.now(timezone.utc).isoformat(),
             comments=0,
         )
-        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
+        with patch.object(paid_verification, "has_existing_implementation_pr", return_value=None):
             self.assertEqual(
                 scout.strategic_rejection(aws_lbc, "t", []),
                 "issue author already has an implementation/fix in progress",
@@ -1108,7 +1109,7 @@ class VerificationTests(unittest.TestCase):
                 "user": {"login": "davidscottpope-gif"},
             }
         ]
-        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
+        with patch.object(paid_verification, "has_existing_implementation_pr", return_value=None):
             self.assertEqual(
                 scout.strategic_rejection(cloudflared, "t", cloudflared_comments),
                 "active claim by @davidscottpope-gif",
@@ -1280,7 +1281,7 @@ class VerificationTests(unittest.TestCase):
             }
         ]
 
-        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
+        with patch.object(paid_verification, "has_existing_implementation_pr", return_value=None):
             self.assertEqual(
                 scout.strategic_rejection(otel_js, "t", otel_comments),
                 "active claim by @neoLsH",
@@ -1734,7 +1735,7 @@ class VerificationTests(unittest.TestCase):
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(
-                bounty,
+                paid_verification,
                 "candidate_rejection_reason",
                 return_value=(None, "payment term + amount: $100"),
             ),
@@ -1747,7 +1748,7 @@ class VerificationTests(unittest.TestCase):
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(
-                bounty,
+                paid_verification,
                 "candidate_rejection_reason",
                 return_value=(None, "payment term + amount: $100"),
             ),
@@ -1758,7 +1759,7 @@ class VerificationTests(unittest.TestCase):
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(
-                bounty,
+                paid_verification,
                 "candidate_rejection_reason",
                 return_value=(None, "payment term + amount: $100"),
             ),
@@ -1779,7 +1780,7 @@ class VerificationTests(unittest.TestCase):
         )
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
-            patch.object(bounty, "candidate_rejection_reason") as upstream,
+            patch.object(paid_verification, "candidate_rejection_reason") as upstream,
         ):
             self.assertEqual(
                 scout.verify(fresh, "t", {}, {}, require_paid=True)[1],
@@ -1810,7 +1811,7 @@ class VerificationTests(unittest.TestCase):
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
-                bounty,
+                paid_verification,
                 "candidate_rejection_reason",
                 return_value=("no explicit payment signal", None),
             ),
@@ -1948,7 +1949,7 @@ class VerificationTests(unittest.TestCase):
             ) as comments_fetch,
             patch.object(scout, "issue_comments") as unchecked_fetch,
             patch.object(
-                bounty,
+                paid_verification,
                 "candidate_rejection_reason",
                 return_value=("no explicit payment signal", None),
             ),
@@ -1982,7 +1983,9 @@ class VerificationTests(unittest.TestCase):
         paid = issue(body="bounty $100", comments=0)
         with (
             patch.object(scout, "refresh_issue", return_value=(paid, None)),
-            patch.object(bounty, "candidate_rejection_reason", return_value=("unfunded", "x")),
+            patch.object(
+                paid_verification, "candidate_rejection_reason", return_value=("unfunded", "x")
+            ),
         ):
             self.assertEqual(scout.verify(paid, "t", {}, {}, True)[1], "unfunded")
 
@@ -3142,12 +3145,12 @@ class CoverageGapTests(unittest.TestCase):
                 scout, "comment_payment_signal", return_value="explicit /reward comment: $50"
             ),
             patch.object(
-                bounty,
+                paid_verification,
                 "candidate_rejection_reason",
                 return_value=("no explicit payment signal", None),
             ),
-            patch.object(bounty, "has_existing_implementation_pr", return_value=None),
-            patch.object(bounty, "active_claim_reason", return_value=None),
+            patch.object(paid_verification, "has_existing_implementation_pr", return_value=None),
+            patch.object(paid_verification, "active_claim_reason", return_value=None),
             patch.object(scout, "fetch_repo_metadata") as fetch_meta,
             patch.object(scout, "contribution_guide") as guide,
             patch.object(scout, "build_candidate", return_value={"ok": True}),

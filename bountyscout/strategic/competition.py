@@ -1,8 +1,8 @@
 """Strategic competition and implementation-PR detection.
 
 This module interprets claim and pull-request evidence for OSS opportunities. It
-uses fork-owned GitHub utilities plus deliberately shared paid-scanner policy, never
-the application orchestrator, and is directly testable with mocked GitHub responses.
+uses package-owned GitHub utilities and paid-verification policy, never the root scanner
+or application orchestrator, and is directly testable with mocked GitHub responses.
 """
 
 from __future__ import annotations
@@ -11,8 +11,7 @@ import re
 from datetime import datetime, timezone
 from typing import Callable
 
-from bountyscout import github
-import scout_bounties as bounty
+from bountyscout import github, paid_verification
 from bountyscout.strategic.claims import strategic_claim_text
 from bountyscout.types import GitHubComment, GitHubIssue
 
@@ -35,6 +34,7 @@ LinkedPrChecker = Callable[[GitHubIssue, str | None, list[GitHubComment]], str |
 ClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
 SupplementalClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
 TimelinePrChecker = Callable[[GitHubIssue, str | None], str | None]
+ExistingPrChecker = Callable[[str, int, str | None], str | None]
 
 
 def claim_source_is_recent(
@@ -203,6 +203,7 @@ def extended_competition_reason(
     token: str | None,
     comments: list[GitHubComment],
     *,
+    existing_pr_checker: ExistingPrChecker | None = None,
     linked_pr_checker: LinkedPrChecker = linked_open_pr_reason,
     supplemental_claim_checker: SupplementalClaimChecker = supplemental_claim_reason,
 ) -> str | None:
@@ -211,7 +212,8 @@ def extended_competition_reason(
     if not repo or not number:
         return "could not identify repository/issue number"
 
-    reason = bounty.has_existing_implementation_pr(repo, number, token)
+    checker = existing_pr_checker or paid_verification.has_existing_implementation_pr
+    reason = checker(repo, number, token)
     if reason:
         return reason
 
@@ -221,7 +223,7 @@ def extended_competition_reason(
 
     for comment in comments:
         body = str(comment.get("body", ""))
-        for pattern in bounty.CLAIM_PATTERNS:
+        for pattern in paid_verification.CLAIM_PATTERNS:
             if re.search(pattern, body, re.IGNORECASE):
                 author = (comment.get("user") or {}).get("login", "someone")
                 return f"active claim by @{author}"
