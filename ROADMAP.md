@@ -51,9 +51,11 @@ Broad result-object conversion is intentionally deferred.
 - complete quiet runs can compact state, while failed delivery or incomplete combined coverage persists no maintenance changes
 - confirmed-closed entries may surface again if the issue is later reopened
 
-### Phase 4B.3 — legacy generated-report cleanup
+### Phase 4B.3 — legacy generated-report cleanup — complete
 
-- clean up legacy generated scan reports from before the current auto-close lifecycle
+- one-time cleanup requires explicit repository, open-state, non-PR, label, title/body, and automation-author identity signals
+- the 28 historical pre-auto-close combined queue reports were closed as `not_planned`; paid-only alert artifacts were intentionally left untouched
+- current generated reports remain owned by the normal auto-close delivery lifecycle; no recurring cleanup service exists
 
 ## Phase 4C — app decomposition
 
