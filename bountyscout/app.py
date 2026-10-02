@@ -377,35 +377,35 @@ def contribution_guide(repo: str, token: str | None) -> str | None:
     return github.contribution_guide(repo, token, github_get_optional)
 
 
-def fetch_repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
+def fetch_repo_metadata(repo: str, token: str | None) -> RepositoryMetadata:
     """Compatibility wrapper for repository metadata GitHub fetching."""
-    return cast(dict[str, Any], github.repo_metadata(repo, token))
+    return github.repo_metadata(repo, token)
 
 
 def build_candidate(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     lane: CandidateLane,
     signal: str | None,
-    repo_meta: Mapping[str, Any],
+    repo_meta: RepositoryMetadata,
     guide: str | None,
-    activity_comments: list[dict[str, Any]] | None = None,
+    activity_comments: list[GitHubComment] | None = None,
 ) -> Candidate:
     """Build ranked candidate output through the extracted scoring module."""
     return scoring.build_candidate(
-        _github_issue(item),
+        item,
         lane,
         signal,
-        cast(RepositoryMetadata, repo_meta),
+        repo_meta,
         guide,
-        _optional_github_comments(activity_comments),
+        activity_comments,
         target_repos=TARGET_REPOS,
         amount_pattern=EXTENDED_AMOUNT_RE,
     )
 
 
 def refresh_issue(
-    item: Mapping[str, Any], token: str | None
-) -> tuple[dict[str, Any] | None, str | None]:
+    item: GitHubIssue, token: str | None
+) -> tuple[GitHubIssue | None, str | None]:
     repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return None, "could not identify repository/issue number"
@@ -416,10 +416,10 @@ def refresh_issue(
         return None, "issue is no longer open"
     if "pull_request" in fresh:
         return None, "source is a pull request, not an issue"
-    return fresh, None
+    return cast(GitHubIssue, fresh), None
 
 
-def upstream_wrapper_issue_url(item: Mapping[str, Any]) -> str | None:
+def upstream_wrapper_issue_url(item: GitHubIssue) -> str | None:
     """Return the real GitHub source issue for explicit aggregator/handoff wrappers."""
     title = str(item.get("title", ""))
     body = str(item.get("body", ""))
@@ -437,7 +437,7 @@ def upstream_wrapper_issue_url(item: Mapping[str, Any]) -> str | None:
     return match.group(1) if match else None
 
 
-def non_actionable_diagnostic_reason(item: Mapping[str, Any]) -> str | None:
+def non_actionable_diagnostic_reason(item: GitHubIssue) -> str | None:
     """Reject machine/OS crash diagnostics that lack an actionable contributor path."""
     _, body, labels, text = issue_text(item)
     maintainer_ready = maintainer_ready_signal(labels)
@@ -466,7 +466,7 @@ def non_actionable_diagnostic_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _strategic_common_source_rejection(item: Mapping[str, Any]) -> str | None:
+def _strategic_common_source_rejection(item: GitHubIssue) -> str | None:
     """Return source-only strategic rejections shared by preflight and full verification."""
     if not strategic_basic_candidate(item):
         return "failed basic eligibility filter"
@@ -489,47 +489,44 @@ def _strategic_common_source_rejection(item: Mapping[str, Any]) -> str | None:
     ):
         return "support/triage issue rather than a contributor task"
 
-    if "claimed" in issue_label_set(_github_issue(item)):
+    if "claimed" in issue_label_set(item):
         return "issue is marked claimed by the project"
     return None
 
 
 def _strategic_classification_rejection(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]],
+    item: GitHubIssue,
+    comments: list[GitHubComment],
 ) -> str | None:
     """Return ordered policy rejections that are pure over supplied issue evidence."""
-    typed_item = _github_issue(item)
-    typed_comments = _github_comments(comments)
     for reason in (
-        security_disclosure_reason(typed_item),
-        reporter_support_triage_reason(typed_item),
-        manual_tracking_issue_reason(typed_item, typed_comments),
-        automated_tracking_issue_reason(typed_item),
-        release_tracking_reason(typed_item, typed_comments),
-        maintainer_issue_decision_reason(typed_item),
-        maintainer_submission_hold_reason(typed_item),
+        security_disclosure_reason(item),
+        reporter_support_triage_reason(item),
+        manual_tracking_issue_reason(item, comments),
+        automated_tracking_issue_reason(item),
+        release_tracking_reason(item, comments),
+        maintainer_issue_decision_reason(item),
+        maintainer_submission_hold_reason(item),
     ):
         if reason:
             return reason
     return None
 
 
-def strategic_preflight_rejection(item: Mapping[str, Any]) -> str | None:
+def strategic_preflight_rejection(item: GitHubIssue) -> str | None:
     """Reject source-visible states that cannot be rescued by comment/timeline checks."""
     common_reason = _strategic_common_source_rejection(item)
     if common_reason:
         return common_reason
 
-    typed_item = _github_issue(item)
-    label_set = issue_label_set(typed_item)
+    label_set = issue_label_set(item)
     if not int(item.get("comments") or 0):
         labels_text = " ".join(label_set)
         accepted = bool(TRIAGE_ACCEPTED_LABELS & label_set) or maintainer_ready_signal(labels_text)
-        abandoned_reason = abandoned_lifecycle_reason(typed_item, False)
+        abandoned_reason = abandoned_lifecycle_reason(item, False)
         if abandoned_reason:
             return abandoned_reason
-        readiness_reason = readiness_pending_label_reason(typed_item, accepted)
+        readiness_reason = readiness_pending_label_reason(item, accepted)
         if readiness_reason:
             return readiness_reason
         pending = bool(TRIAGE_PENDING_LABELS & label_set) or triage_pending_signal(labels_text)
@@ -548,24 +545,19 @@ def strategic_preflight_rejection(item: Mapping[str, Any]) -> str | None:
 
 
 def strategic_rejection(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     common_reason = _strategic_common_source_rejection(item)
     if common_reason:
         return common_reason
 
-    typed_item = _github_issue(item)
-    label_set = issue_label_set(typed_item)
+    label_set = issue_label_set(item)
     labels_text = " ".join(label_set)
-    typed_comments = _optional_github_comments(comments)
-    comment_ready, comment_hold_reason = maintainer_readiness_comment_state(
-        typed_item,
-        typed_comments,
-    )
+    comment_ready, comment_hold_reason = maintainer_readiness_comment_state(item, comments)
 
-    abandoned_reason = abandoned_lifecycle_reason(typed_item, comment_ready is True)
+    abandoned_reason = abandoned_lifecycle_reason(item, comment_ready is True)
     if abandoned_reason:
         return abandoned_reason
 
@@ -575,7 +567,7 @@ def strategic_rejection(
         or comment_ready is True
     )
 
-    readiness_reason = readiness_pending_label_reason(typed_item, accepted)
+    readiness_reason = readiness_pending_label_reason(item, accepted)
     if readiness_reason:
         return readiness_reason
 
@@ -587,7 +579,7 @@ def strategic_rejection(
     if classification_reason:
         return classification_reason
 
-    reporter_reason = reporter_resolution_reason(typed_item, typed_comments)
+    reporter_reason = reporter_resolution_reason(item, comments)
     if reporter_reason:
         return reporter_reason
 
@@ -602,13 +594,13 @@ def strategic_rejection(
 
 
 def verify(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    repo_cache: dict[str, dict[str, Any]],
+    repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
     require_paid: bool = False,
     payment_signal_override: str | None = None,
-    activity_comments: list[dict[str, Any]] | None = None,
+    activity_comments: list[GitHubComment] | None = None,
 ) -> tuple[Candidate | None, str | None]:
     fresh, reason = refresh_issue(item, token)
     if reason:
@@ -631,7 +623,7 @@ def verify(
     if not clean:
         return None, "failed basic eligibility filter after source refresh"
 
-    reward_history = reward_history_reason(_github_issue(fresh))
+    reward_history = reward_history_reason(fresh)
     if reward_history:
         return None, reward_history
 
@@ -643,10 +635,9 @@ def verify(
             comment_signal = comment_payment_signal(fresh, token)
         else:
             if comments is None:
-                loaded_comments, comments_reason = github.issue_comments_checked(fresh, token)
+                comments, comments_reason = github.issue_comments_checked(fresh, token)
                 if comments_reason:
                     return None, comments_reason
-                comments = cast(list[dict[str, Any]], loaded_comments)
             comment_signal = comment_payment_signal(fresh, token, comments)
     signal = issue_signal or comment_signal or payment_signal_override
 
@@ -680,10 +671,9 @@ def verify(
         lane = "paid"
     else:
         if comments is None:
-            loaded_comments, comments_reason = github.issue_comments_checked(fresh, token)
+            comments, comments_reason = github.issue_comments_checked(fresh, token)
             if comments_reason:
                 return None, comments_reason
-            comments = cast(list[dict[str, Any]], loaded_comments)
         reason = strategic_rejection(fresh, token, comments)
         if reason:
             return None, reason
@@ -724,7 +714,7 @@ def verify(
 
 
 def add_reject(
-    counts: dict[str, int], examples: list[RejectionRecord], item: Mapping[str, Any], reason: str
+    counts: dict[str, int], examples: list[RejectionRecord], item: GitHubIssue, reason: str
 ) -> None:
     counts[reason] = counts.get(reason, 0) + 1
     if len(examples) < 12:
