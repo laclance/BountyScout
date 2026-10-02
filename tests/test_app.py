@@ -14,7 +14,7 @@ import bountyscout.app as scout
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic import competition as competition_policy
-from bountyscout.types import GitHubIssue, RejectionRecord
+from bountyscout.types import GitHubComment, GitHubIssue, RejectionRecord, RepositoryMetadata
 from tests.helpers import FakeResponse
 
 
@@ -33,15 +33,15 @@ def issue(**overrides: Any) -> GitHubIssue:
     return cast(GitHubIssue, base)
 
 
-def repo_meta(**overrides: Any) -> dict[str, Any]:
-    base = {
+def repo_meta(**overrides: Any) -> RepositoryMetadata:
+    base: dict[str, Any] = {
         "stargazers_count": 1500,
         "pushed_at": datetime.now(timezone.utc).isoformat(),
         "language": "Go",
         "archived": False,
     }
     base.update(overrides)
-    return base
+    return cast(RepositoryMetadata, base)
 
 
 def candidate(**overrides: Any) -> dict[str, Any]:
@@ -572,7 +572,7 @@ class CalibrationTests(unittest.TestCase):
                 "linked pr",
             )
 
-        claim_comments = [
+        claim_comments: list[GitHubComment] = [
             {
                 "body": "I'm working on this",
                 "user": {"login": "dev"},
@@ -832,7 +832,7 @@ class VerificationTests(unittest.TestCase):
             title="Interpretation of date range in Grafana UI vs query_range API is wrong",
             labels=[{"name": "type/bug"}],
         )
-        loki_comments = [
+        loki_comments: list[GitHubComment] = [
             {
                 "body": (
                     "This particular issue came up as needs discussion, so I'm going to "
@@ -863,7 +863,7 @@ class VerificationTests(unittest.TestCase):
             title="Per-ingress request metrics",
             labels=[{"name": "kind/proposal"}],
         )
-        traefik_comments = [
+        traefik_comments: list[GitHubComment] = [
             {
                 "body": (
                     "We'd like to gauge community interest before committing. "
@@ -902,7 +902,7 @@ class VerificationTests(unittest.TestCase):
             title="HTTP/1.1 304 with Content-Length closes the connection",
             labels=[{"name": "bug"}],
         )
-        undici_comments = [
+        undici_comments: list[GitHubComment] = [
             {
                 "body": (
                     "Looks like this was fixed on main by #5864. "
@@ -920,7 +920,7 @@ class VerificationTests(unittest.TestCase):
             title="ResourceSet and kustomize.toolkit.fluxcd.io/ssa",
             labels=[],
         )
-        flux_comments = [
+        flux_comments: list[GitHubComment] = [
             {
                 "body": (
                     "A merge option would be the wrong solution for this. "
@@ -1018,7 +1018,7 @@ class VerificationTests(unittest.TestCase):
             title="api: no way to get query stats",
             comments=1,
         )
-        client_golang_comments = [
+        client_golang_comments: list[GitHubComment] = [
             {
                 "body": (
                     "I'd like to pick this up. On current main, WithStats sends stats=all, "
@@ -1090,7 +1090,7 @@ class VerificationTests(unittest.TestCase):
             ),
             comments=2,
         )
-        cloudflared_comments = [
+        cloudflared_comments: list[GitHubComment] = [
             {
                 "body": (
                     "I have that working with a test on a branch. But I don't think "
@@ -1111,7 +1111,7 @@ class VerificationTests(unittest.TestCase):
             user={"login": "mgol"},
             comments=2,
         )
-        cmux_comments = [
+        cmux_comments: list[GitHubComment] = [
             {
                 "body": (
                     "It looks like the issue got fixed after I reported it as I don't "
@@ -1129,7 +1129,7 @@ class VerificationTests(unittest.TestCase):
             title="Support constant histograms without a sum",
             comments=2,
         )
-        client_golang_comments = [
+        client_golang_comments: list[GitHubComment] = [
             {
                 "body": (
                     "Nobody bothered to implement this and OpenMetrics 2.0 will not "
@@ -1164,7 +1164,7 @@ class VerificationTests(unittest.TestCase):
             title="Generic deepmerge() function",
             comments=1,
         )
-        terraform_comments = [
+        terraform_comments: list[GitHubComment] = [
             {
                 "body": (
                     "The prevailing wisdom on the maintainer team is that there is no "
@@ -1195,7 +1195,7 @@ class VerificationTests(unittest.TestCase):
             title="support ConsoleMetricExporter options from declarative config",
             comments=2,
         )
-        otel_comments = [
+        otel_comments: list[GitHubComment] = [
             {
                 "body": (
                     "I poked at this locally. No breaking change needed. "
@@ -1229,7 +1229,7 @@ class VerificationTests(unittest.TestCase):
             title="manage controller CRD upgrades",
             comments=1,
         )
-        aws_comments = [
+        aws_comments: list[GitHubComment] = [
             {
                 "body": (
                     "Thanks for filing this. I agree the current CRD lifecycle experience "
@@ -1251,7 +1251,7 @@ class VerificationTests(unittest.TestCase):
             ),
             comments=1,
         )
-        controller_comments = [
+        controller_comments: list[GitHubComment] = [
             {
                 "body": "Let me know if I should add additional tasks to this umbrella issue.",
                 "author_association": "MEMBER",
@@ -1263,7 +1263,7 @@ class VerificationTests(unittest.TestCase):
             title="Should Fetch retry reusable request bodies after HTTP/2 GOAWAY?",
             comments=1,
         )
-        undici_comments = [
+        undici_comments: list[GitHubComment] = [
             {
                 "body": "https://github.com/KhafraDev/undici/tree/fetch/issue-5912",
                 "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -1361,7 +1361,7 @@ class VerificationTests(unittest.TestCase):
             labels=[{"name": "bug"}, {"name": "help wanted"}, {"name": "good first issue"}],
             comments=1,
         )
-        soup_comments = [
+        soup_comments: list[GitHubComment] = [
             {
                 "body": (
                     "Taking this one — I'll trace why --logs <file> yields an empty "
@@ -1397,7 +1397,7 @@ class VerificationTests(unittest.TestCase):
             title="ipamd attaches ENIs but never registers them",
             comments=1,
         )
-        aws_comments = [
+        aws_comments: list[GitHubComment] = [
             {
                 "body": (
                     "Could you share the node logs if you have collected them from the "
@@ -1416,7 +1416,7 @@ class VerificationTests(unittest.TestCase):
             title="Enhancement of IPv6 Connectivity and Address Selection",
             comments=1,
         )
-        undici_core_comments = [
+        undici_core_comments: list[GitHubComment] = [
             {
                 "body": (
                     "Closing it here would help it being backported to previous node. "
@@ -1431,7 +1431,7 @@ class VerificationTests(unittest.TestCase):
         )
 
     def test_readiness_gate_targeted_live_refinements(self) -> None:
-        profile_request = [
+        profile_request: list[GitHubComment] = [
             {
                 "body": "Would it be possible to provide a profile from the affected binary?",
                 "author_association": "MEMBER",
@@ -1442,7 +1442,7 @@ class VerificationTests(unittest.TestCase):
             "maintainer is waiting for requested diagnostic evidence",
         )
 
-        redirect = [
+        redirect: list[GitHubComment] = [
             {
                 "body": (
                     "This requires a change in the specification defined in "
@@ -1457,7 +1457,7 @@ class VerificationTests(unittest.TestCase):
             "maintainer redirected implementation/discussion to another project",
         )
 
-        duplicate = [
+        duplicate: list[GitHubComment] = [
             {
                 "body": (
                     "Looks like a (possible) duplicate of #123. "
@@ -1498,7 +1498,7 @@ class VerificationTests(unittest.TestCase):
                 "author_association": "MEMBER",
             }
         ]
-        revival = [
+        revival: list[GitHubComment] = [
             {
                 "body": "We are reviving this issue; this issue is active again.",
                 "author_association": "MEMBER",
@@ -1604,7 +1604,7 @@ class VerificationTests(unittest.TestCase):
 
     def test_readiness_gate_allows_explicit_ready_override_and_normal_features(self) -> None:
         pending = issue(labels=[{"name": "status/needs-reproduction"}])
-        ready_comments = [
+        ready_comments: list[GitHubComment] = [
             {
                 "body": "Reproduced and confirmed. This is ready for implementation.",
                 "author_association": "MEMBER",
@@ -1876,7 +1876,7 @@ class VerificationTests(unittest.TestCase):
 
     def test_verify_strategic_reuses_one_checked_comment_fetch(self) -> None:
         fresh = issue(body="", title="Parser task", comments=2)
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "author_association": "MEMBER",
                 "body": "The previous implementation needs cancellation regression tests.",
@@ -1921,7 +1921,7 @@ class VerificationTests(unittest.TestCase):
 
     def test_strategic_comment_payment_signal_reuses_checked_comments(self) -> None:
         fresh = issue(body="", title="Task", comments=1)
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "body": "/reward 50",
                 "author_association": "MEMBER",
@@ -3147,7 +3147,7 @@ class FormattingAndMainTests(unittest.TestCase):
 
 class CoverageGapTests(unittest.TestCase):
     def test_comment_payment_signal_can_reuse_supplied_comments(self) -> None:
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "body": "/reward 9",
                 "author_association": "OWNER",
@@ -3162,7 +3162,7 @@ class CoverageGapTests(unittest.TestCase):
         fetch.assert_not_called()
 
     def test_trusted_non_command_comment_falls_through_to_next_comment(self) -> None:
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "body": "I support funding this",
                 "author_association": "OWNER",
