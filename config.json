@@ -1,0 +1,29 @@
+{
+  "scanning": {
+    "strategic_threshold": 55,
+    "priority_threshold": 50,
+    "max_competitors": 5,
+    "effort_ranges": {
+      "low": [1, 3],
+      "medium": [3, 6],
+      "high": [6, 12]
+    },
+    "scoring_weights": {
+      "career": {
+        "repo_stars": 10,
+        "recent_activity": 5,
+        "codebase_language": 3,
+        "contribution_guide": 2,
+        "issue_activity": 3
+      },
+      "priority": {
+        "effort_bonus": 10,
+        "competition_penalty": 15
+      }
+    }
+  },
+  "tuning_candidates": {
+    "near_miss_threshold": 5,
+    "min_career_score": 20
+  }
+}
