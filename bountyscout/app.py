@@ -14,6 +14,7 @@ from bountyscout import reporting
 from bountyscout import scoring
 from bountyscout import sources
 from bountyscout.strategic import competition as competition_policy
+from bountyscout.strategic import discovery as strategic_discovery
 from bountyscout.strategic.claims import strategic_claim_text as strategic_claim_text
 from bountyscout.strategic.readiness import (
     TRUSTED_ASSOCIATIONS as TRUSTED_ASSOCIATIONS,
@@ -45,47 +46,20 @@ from bountyscout.types import (
     SearchBatch,
 )
 
-TARGET_REPOS = [
-    "aws/amazon-vpc-cni-k8s",
-    "kubernetes/kubernetes",
-    "kubernetes-sigs/controller-runtime",
-    "kubernetes-sigs/external-dns",
-    "kubernetes-sigs/aws-load-balancer-controller",
-    "tailscale/tailscale",
-    "cilium/cilium",
-    "prometheus/prometheus",
-    "prometheus/client_golang",
-    "grafana/loki",
-    "open-telemetry/opentelemetry-go",
-    "hashicorp/terraform",
-    "fluxcd/flux2",
-    "argoproj/argo-cd",
-    "golangci/golangci-lint",
-    "containerd/containerd",
-    "moby/moby",
-    "grpc/grpc-go",
-    "etcd-io/etcd",
-    "cloudflare/cloudflared",
-    "traefik/traefik",
-    "open-telemetry/opentelemetry-js",
-    "nodejs/undici",
-]
-STRATEGIC_GLOBAL_QUERIES = [
-    'is:issue is:open no:assignee label:"help wanted" (label:"bug" OR regression) sort:updated-desc',
-    'is:issue is:open no:assignee label:"good first issue" label:"bug" sort:updated-desc',
-]
-STRATEGIC_SEARCH_PER_PAGE = 20
-STRATEGIC_GLOBAL_SEARCH_PER_PAGE = 30
-TARGET_REPO_FETCH_PER_PAGE = 50
-TARGET_REPO_FETCH_PAGES = 3
-STRATEGIC_INSPECT_PER_REPO = 15
-STRATEGIC_ADAPTIVE_INSPECT_BUDGET = 24
+TARGET_REPOS = strategic_discovery.TARGET_REPOS
+STRATEGIC_GLOBAL_QUERIES = strategic_discovery.STRATEGIC_GLOBAL_QUERIES
+STRATEGIC_SEARCH_PER_PAGE = strategic_discovery.STRATEGIC_SEARCH_PER_PAGE
+STRATEGIC_GLOBAL_SEARCH_PER_PAGE = strategic_discovery.STRATEGIC_GLOBAL_SEARCH_PER_PAGE
+TARGET_REPO_FETCH_PER_PAGE = strategic_discovery.TARGET_REPO_FETCH_PER_PAGE
+TARGET_REPO_FETCH_PAGES = strategic_discovery.TARGET_REPO_FETCH_PAGES
+STRATEGIC_INSPECT_PER_REPO = strategic_discovery.STRATEGIC_INSPECT_PER_REPO
+STRATEGIC_ADAPTIVE_INSPECT_BUDGET = strategic_discovery.STRATEGIC_ADAPTIVE_INSPECT_BUDGET
 STRATEGIC_KEEP_PER_REPO = 3
 STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND = 11
 STRATEGIC_REFRESH_FAILURE_LIMIT = 2
 STRATEGIC_COVERAGE_WARNING_THRESHOLD = 5
 STRATEGIC_MIN_CAREER_SCORE = 55
-STRATEGIC_AUDIT_LIMIT = 20
+STRATEGIC_AUDIT_LIMIT = strategic_discovery.STRATEGIC_AUDIT_LIMIT
 PAID_MIN_CASH_SCORE = 55
 REPORT_LIMIT = 8
 NETWORK_WORKERS = 6
@@ -114,8 +88,8 @@ def target_repo_issue_pool(
     repo: str,
     token: str | None,
 ) -> tuple[list[GitHubIssue], str | None]:
-    """Fetch the configured bounded source pool for a curated repository."""
-    return sources.target_repo_issue_pool(
+    """Compatibility wrapper for bounded curated-repository discovery."""
+    return strategic_discovery.target_repo_issue_pool(
         repo,
         token,
         fetch_per_page=TARGET_REPO_FETCH_PER_PAGE,
@@ -825,76 +799,13 @@ def discover_paid(
 
 
 def possible_miss_signal(item: GitHubIssue) -> bool:
-    """Flag strong raw results that deserve scrutiny when filters discard them."""
-    typed_item = item
-    if (
-        security_disclosure_reason(typed_item)
-        or reward_history_reason(typed_item)
-        or manual_tracking_issue_reason(typed_item)
-        or automated_tracking_issue_reason(typed_item)
-        or release_tracking_reason(typed_item)
-    ):
-        return False
-
-    _, _, labels, text = issue_text(item)
-    updated = github.parse_github_datetime(item.get("updated_at"))
-    recent = bool(updated and (datetime.now(timezone.utc) - updated).days <= 60)
-    contributor_signal = any(
-        marker in labels
-        for marker in (
-            "help wanted",
-            "help-wanted",
-            "good first issue",
-            "triage/accepted",
-            "refined",
-            "contributor/wanted",
-            "contributor wanted",
-        )
-    )
-    bug_signal = "bug" in labels or bool(
-        re.search(r"\b(?:bug|regression|panic|deadlock|leak)\b", text)
-    )
-    return recent and (contributor_signal or bug_signal)
+    """Compatibility wrapper for strategic near-miss detection."""
+    return strategic_discovery.possible_miss_signal(item)
 
 
 def basic_rejection_audit_reason(item: GitHubIssue) -> str | None:
-    """Return only tunable/unknown basic-filter reasons worth auditing."""
-    if "pull_request" in item:
-        return None
-    if item.get("assignees"):
-        return None
-
-    url = str(item.get("html_url", "")).lower()
-    title = str(item.get("title", "")).lower()
-    body = str(item.get("body", "")).lower()
-    if "/bountyscout/issues/" in url:
-        return None
-    if any(
-        marker in title or marker in body
-        for marker in (
-            "bounty alert:",
-            "active bounty scan results",
-            "new opportunities found",
-            "new opportunityies found",
-        )
-    ):
-        return None
-    if any(
-        term in title or term in body
-        for term in (
-            "airdrop",
-            "referral",
-            "casino",
-            "gambling",
-            "trading bot",
-            "blog post",
-            "article writing",
-            "tutorial proposal",
-            "content creator",
-        )
-    ):
-        return None
-    return "strong-looking result rejected by an unrecognized basic eligibility filter rule"
+    """Compatibility wrapper for strategic basic-filter audit reasons."""
+    return strategic_discovery.basic_rejection_audit_reason(item)
 
 
 def add_audit(
@@ -902,43 +813,43 @@ def add_audit(
     item: GitHubIssue,
     reason: str,
 ) -> None:
-    if len(audit) >= STRATEGIC_AUDIT_LIMIT:
-        return
-    audit.append(
-        {
-            "url": item.get("html_url"),
-            "title": item.get("title"),
-            "reason": reason,
-        }
+    """Compatibility wrapper for bounded strategic audit collection."""
+    strategic_discovery.add_audit(
+        audit,
+        item,
+        reason,
+        limit=STRATEGIC_AUDIT_LIMIT,
     )
 
 
 def strategic_inspection_items(
     provisional: list[sources.IssueRow],
 ) -> dict[str, list[GitHubIssue]]:
-    """Select base per-repo candidates plus a globally bounded strong overflow."""
-    return sources.strategic_inspection_items(
+    """Compatibility wrapper for bounded strategic inspection selection."""
+    return strategic_discovery.strategic_inspection_items(
         provisional,
         base_per_repo=STRATEGIC_INSPECT_PER_REPO,
         adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
-        should_expand=possible_miss_signal,
     )
 
 
 def strategic_global_search_results(
     token: str | None,
 ) -> list[SearchBatch]:
-    """Reserve the strategic global Search calls before heavier API work begins."""
-    return [
-        (
-            query,
-            cast(
-                GitHubSearchResult,
-                bounty.search_github(query, token, per_page=STRATEGIC_GLOBAL_SEARCH_PER_PAGE),
-            ),
+    """Compatibility wrapper for strategic global Search orchestration."""
+
+    def search_github(query: str, search_token: str | None, per_page: int) -> GitHubSearchResult:
+        return cast(
+            GitHubSearchResult,
+            bounty.search_github(query, search_token, per_page=per_page),
         )
-        for query in STRATEGIC_GLOBAL_QUERIES
-    ]
+
+    return strategic_discovery.strategic_global_search_results(
+        token,
+        search_github,
+        queries=STRATEGIC_GLOBAL_QUERIES,
+        per_page=STRATEGIC_GLOBAL_SEARCH_PER_PAGE,
+    )
 
 
 def prefetch_discovery_searches(
@@ -975,136 +886,32 @@ def discover_strategic(
     list[RejectionRecord],
     list[RejectionRecord],
 ]:
-    provisional: list[sources.IssueRow] = []
-    touched: set[str] = set()
     rejected: dict[str, int] = {}
     examples: list[RejectionRecord] = []
-    audit: list[RejectionRecord] = []
-
-    source_batches: list[list[GitHubIssue]] = []
-    with ThreadPoolExecutor(
-        max_workers=min(NETWORK_WORKERS, max(1, len(TARGET_REPOS)))
-    ) as executor:
-        repo_results = executor.map(
-            lambda target_repo: (
-                target_repo,
-                target_repo_issue_pool(target_repo, token),
-            ),
-            TARGET_REPOS,
-        )
-        for target_repo, (items, source_error) in repo_results:
-            if source_error:
-                add_audit(
-                    audit,
-                    GitHubIssue(
-                        html_url=f"https://github.com/{target_repo}/issues",
-                        title=target_repo,
-                    ),
-                    source_error,
-                )
-            source_batches.append(items)
 
     if global_search_results is None:
         global_search_results = strategic_global_search_results(token)
 
-    for query, result in global_search_results:
-        global_items = result.get("items")
-        if not isinstance(global_items, list):
-            add_audit(
-                audit,
-                GitHubIssue(
-                    html_url="https://github.com/issues",
-                    title=f"Global GitHub Search: {query}",
-                ),
-                f"global strategic discovery search failed for query: {query}; "
-                "scan coverage incomplete",
-            )
-            continue
-        source_batches.append(global_items)
-
-    for items in source_batches:
-        for item in items:
-            url = item.get("html_url")
-            if not url or url in seen or url in paid_urls or url in touched:
-                continue
-            touched.add(url)
-            if not strategic_basic_candidate(item):
-                audit_reason = (
-                    basic_rejection_audit_reason(item) if possible_miss_signal(item) else None
-                )
-                if audit_reason:
-                    add_audit(audit, item, audit_reason)
-                continue
-            repo, _ = github.issue_repo_and_number(item)
-            if not repo:
-                continue
-            repo_key = repo
-            meta = github.cached_value(
-                repo_cache,
-                repo_key,
-                lambda: fetch_repo_metadata(repo_key, token),
-                CACHE_LOCKS,
-                namespace="repo",
-            )
-            if not meta or meta.get("archived"):
-                if possible_miss_signal(item):
-                    add_audit(
-                        audit,
-                        item,
-                        "strong-looking result skipped because repository metadata is unavailable or archived",
-                    )
-                continue
-            signal = bounty.payment_signal(item)
-            lane: CandidateLane = "paid" if signal else "strategic"
-            preview = build_candidate(item, lane, signal, meta, None)
-            provisional.append(
-                (
-                    preview["priority_score"],
-                    preview["career_score"],
-                    preview["cash_score"],
-                    item,
-                )
-            )
-
-    inspected = strategic_inspection_items(provisional)
-    inspected_urls = {
-        str(item.get("html_url"))
-        for items in inspected.values()
-        for item in items
-        if item.get("html_url")
-    }
-    for _, _, _, preview_item in provisional:
-        url = str(preview_item.get("html_url") or "")
-        if url and url not in inspected_urls and possible_miss_signal(preview_item):
-            add_audit(
-                audit,
-                preview_item,
-                "strong-looking result fell outside the adaptive repo inspection pool",
-            )
-
-    ranked_by_repo: dict[str, list[sources.IssueRow]] = {}
-    for repo, items in inspected.items():
-        ranked: list[sources.IssueRow] = []
-        for item in items:
-            signal = bounty.payment_signal(item)
-            lane = "paid" if signal else "strategic"
-            preview = build_candidate(
-                item,
-                lane,
-                signal,
-                repo_cache[repo],
-                None,
-            )
-            ranked.append(
-                (
-                    preview["priority_score"],
-                    preview["career_score"],
-                    preview["cash_score"],
-                    item,
-                )
-            )
-        ranked.sort(key=lambda row: row[:3], reverse=True)
-        ranked_by_repo[repo] = ranked
+    selection = strategic_discovery.select_strategic_candidates(
+        token,
+        seen,
+        paid_urls,
+        repo_cache,
+        global_search_results,
+        target_repos=TARGET_REPOS,
+        network_workers=NETWORK_WORKERS,
+        target_repo_pool=target_repo_issue_pool,
+        basic_candidate=strategic_basic_candidate,
+        fetch_repo_metadata=fetch_repo_metadata,
+        payment_signal=bounty.payment_signal,
+        build_candidate=build_candidate,
+        cache_locks=CACHE_LOCKS,
+        inspect_per_repo=STRATEGIC_INSPECT_PER_REPO,
+        adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
+        audit_limit=STRATEGIC_AUDIT_LIMIT,
+    )
+    ranked_by_repo = selection.ranked_by_repo
+    audit = selection.audit
 
     source_failure_reasons = {
         "could not refresh source issue",
@@ -1201,7 +1008,7 @@ def discover_strategic(
     ) as executor:
         repo_verification_results = list(executor.map(verify_repo, verification_inputs))
 
-    verified_by_repo: dict[str, list[Candidate]] = {repo: [] for repo in inspected}
+    verified_by_repo: dict[str, list[Candidate]] = {repo: [] for repo in ranked_by_repo}
     verified_rows = 0
     selected_rows = sum(len(rows) for rows in ranked_by_repo.values())
     for repo, outcomes, coverage_incomplete in repo_verification_results:
@@ -1256,7 +1063,7 @@ def discover_strategic(
     )
 
     found: list[Candidate] = []
-    for repo in inspected:
+    for repo in ranked_by_repo:
         verified_repo = verified_by_repo[repo]
         verified_repo.sort(
             key=lambda item: (
