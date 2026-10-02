@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Mapping, Sequence, cast
 
 from bountyscout import github
+
 IssueRow = tuple[int, int, int, dict[str, Any]]
 FetchText = Callable[[str], str]
 IssuePredicate = Callable[[Mapping[str, Any]], bool]
