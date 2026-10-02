@@ -113,7 +113,7 @@ class SeenStateParsingTests(unittest.TestCase):
             parse_seen_state([42])
 
         with self.assertRaisesRegex(SeenStateLoadError, "URL keys"):
-            parse_seen_state(current_document(seen={" ": {"reported_at": None, "last_checked_at": None}}))
+            parse_seen_state(\n                current_document(seen={" ": {"reported_at": None, "last_checked_at": None}})\n            )
 
         with self.assertRaisesRegex(SeenStateLoadError, "URL keys"):
             parse_seen_state(
@@ -251,7 +251,7 @@ class SeenStateLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "state.json"
             path.write_text("old-state\n", encoding="utf-8")
-            with patch.object(state_module.os, "replace", side_effect=OSError("replace failed")):
+            with patch("bountyscout.state.os.replace", side_effect=OSError("replace failed")):
                 with self.assertRaisesRegex(SeenStateSaveError, "Could not save seen-state"):
                     save_seen_state(SeenState.from_urls([URL_A]), path)
 
