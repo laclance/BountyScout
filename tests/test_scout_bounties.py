@@ -476,8 +476,6 @@ class MainTests(unittest.TestCase):
             scout.main()
             save.assert_not_called()
 
-
-
     def test_main_state_load_error_stops_before_discovery(self) -> None:
         with (
             patch.dict(os.environ, {}, clear=True),
@@ -512,6 +510,7 @@ class MainTests(unittest.TestCase):
             scout.main()
 
         save.assert_not_called()
+
 
 class CoverageGapTests(unittest.TestCase):
     def test_score_zero_reward_old_issue_and_no_star_branches(self) -> None:
