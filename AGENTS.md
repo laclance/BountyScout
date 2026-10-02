@@ -31,6 +31,7 @@ This file is the canonical working agreement for coding agents and human contrib
 - Give each function one clear responsibility. Prefer functions that fit comfortably on one screen; split a function when it mixes policy, I/O, parsing, scoring, or formatting.
 - Keep network and filesystem side effects at the edges. Put matching, scoring, normalization, and policy decisions in pure functions when practical.
 - New domain logic belongs in the smallest cohesive module that owns that concept. Leaf/domain modules must not import root `opportunity_scout.py` or reach back into `bountyscout.app`.
+- New package orchestration modules must not import root `scout_bounties.py`; keep transitional paid-scanner compatibility at an explicitly documented application edge or pass a narrow typed callable/value.
 - Use explicit type hints on function signatures and meaningful domain names. Prefer `Mapping` for read-only mapping inputs.
 - Put broadly shared stable mapping records and literals in `bountyscout/types.py`. Keep raw external JSON dynamic until validated, then prefer canonical domain types over repeated `dict[str, Any]` / `Mapping[str, Any]` interfaces.
 - Avoid new mutable global state. Static configuration constants are fine; shared runtime state needs an explicit reason and synchronization where applicable.
