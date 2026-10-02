@@ -14,7 +14,13 @@ import bountyscout.app as scout
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic import competition as competition_policy
-from bountyscout.types import GitHubComment, GitHubIssue, RejectionRecord, RepositoryMetadata
+from bountyscout.types import (
+    GitHubComment,
+    GitHubIssue,
+    RejectionRecord,
+    RepositoryMetadata,
+    SearchBatch,
+)
 from tests.helpers import FakeResponse
 
 
@@ -2891,12 +2897,12 @@ class DiscoveryTests(unittest.TestCase):
 class FormattingAndMainTests(unittest.TestCase):
     def test_main_prefetches_all_discovery_searches_before_paid_work(self) -> None:
         order: list[str] = []
-        paid_prefetch: list[tuple[str, dict[str, Any]]] = [("paid-q", {"items": []})]
-        strategic_prefetch: list[tuple[str, dict[str, Any]]] = [("global-q", {"items": []})]
+        paid_prefetch: list[SearchBatch] = [("paid-q", {"items": []})]
+        strategic_prefetch: list[SearchBatch] = [("global-q", {"items": []})]
 
         def prefetch(
             _token: str | None,
-        ) -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[str, dict[str, Any]]]]:
+        ) -> tuple[list[SearchBatch], list[SearchBatch]]:
             order.append("searches")
             return paid_prefetch, strategic_prefetch
 
@@ -3229,7 +3235,7 @@ class CoverageGapTests(unittest.TestCase):
 
     def test_verify_success_with_comment_signal_cached_repo_and_guide(self) -> None:
         fresh = issue(body="", title="Task", comments=1)
-        repo_cache: dict[str, dict[str, Any]] = {"example/project": repo_meta()}
+        repo_cache: dict[str, RepositoryMetadata] = {"example/project": repo_meta()}
         guide_cache: dict[str, str | None] = {"example/project": "cached-guide"}
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
