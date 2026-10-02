@@ -207,7 +207,7 @@ def extended_competition_reason(
     linked_pr_checker: LinkedPrChecker = linked_open_pr_reason,
     supplemental_claim_checker: SupplementalClaimChecker = supplemental_claim_reason,
 ) -> str | None:
-    """Apply paid-compatible competition checks using supplied issue comments."""
+    """Apply paid-lane competition checks using supplied issue comments."""
     repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return "could not identify repository/issue number"
