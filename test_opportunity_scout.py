@@ -2012,6 +2012,31 @@ class VerificationTests(unittest.TestCase):
         self.assertEqual(len(examples), 12)
 
 
+    def test_timeline_wrapper_and_preflight_diagnostic_boundary(self) -> None:
+        with patch.object(
+            scout.competition_policy,
+            "timeline_open_pr_reason",
+            return_value="timeline reason",
+        ):
+            self.assertEqual(
+                scout.timeline_open_pr_reason(issue(), "t"),
+                "timeline reason",
+            )
+
+        diagnostic = issue(
+            title="macOS M1 black screen after network change",
+            body=(
+                "Hard hang followed by kernel panic on Apple Silicon macOS. "
+                "No deterministic repro; collected sysdiagnose and panic logs."
+            ),
+            comments=0,
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(diagnostic),
+            "hardware/kernel diagnostic report without actionable contributor scope",
+        )
+
+
 class DiscoveryTests(unittest.TestCase):
     def test_strategic_inspection_items_keeps_top_fifteen_per_repo(self) -> None:
         rows = [
