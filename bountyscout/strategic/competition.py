@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
-from typing import Any, Callable, Mapping
+from typing import Callable
 
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic.claims import strategic_claim_text
+from bountyscout.types import GitHubComment, GitHubIssue
 
 STRATEGIC_CLAIM_MAX_AGE_DAYS = 365
 
@@ -30,13 +31,15 @@ SUPPLEMENTAL_CLAIM_PATTERNS = (
     r"\bworking on (?:a |the )?fix\b",
 )
 
-LinkedPrChecker = Callable[[Mapping[str, Any], str | None, list[dict[str, Any]]], str | None]
-ClaimChecker = Callable[[Mapping[str, Any], list[dict[str, Any]]], str | None]
-SupplementalClaimChecker = Callable[[Mapping[str, Any], list[dict[str, Any]]], str | None]
-TimelinePrChecker = Callable[[Mapping[str, Any], str | None], str | None]
+LinkedPrChecker = Callable[[GitHubIssue, str | None, list[GitHubComment]], str | None]
+ClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
+SupplementalClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
+TimelinePrChecker = Callable[[GitHubIssue, str | None], str | None]
 
 
-def claim_source_is_recent(source: Mapping[str, Any], *, issue_body: bool = False) -> bool:
+def claim_source_is_recent(
+    source: GitHubIssue | GitHubComment, *, issue_body: bool = False
+) -> bool:
     """Keep old claims from permanently suppressing strategic opportunities."""
     timestamp = (
         source.get("created_at")
@@ -51,8 +54,8 @@ def claim_source_is_recent(source: Mapping[str, Any], *, issue_body: bool = Fals
 
 
 def strategic_claim_reason(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]],
+    item: GitHubIssue,
+    comments: list[GitHubComment],
 ) -> str | None:
     """Detect active implementation ownership in the issue body and recent comments."""
     body = str(item.get("body", ""))
@@ -81,9 +84,9 @@ def strategic_claim_reason(
 
 
 def linked_open_pr_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]],
+    comments: list[GitHubComment],
 ) -> str | None:
     """Detect explicit implementation PR links in the issue body or comments."""
     repo, number = github.issue_repo_and_number(item)
@@ -149,7 +152,7 @@ def linked_open_pr_reason(
     return None
 
 
-def timeline_open_pr_reason(item: Mapping[str, Any], token: str | None) -> str | None:
+def timeline_open_pr_reason(item: GitHubIssue, token: str | None) -> str | None:
     """Detect open timeline-linked PRs and fail closed when timeline evidence is unavailable."""
     repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
@@ -179,8 +182,8 @@ def timeline_open_pr_reason(item: Mapping[str, Any], token: str | None) -> str |
 
 
 def supplemental_claim_reason(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]],
+    item: GitHubIssue,
+    comments: list[GitHubComment],
 ) -> str | None:
     """Detect clear work claims not covered by the upstream scanner."""
     if not int(item.get("comments") or 0):
@@ -196,9 +199,9 @@ def supplemental_claim_reason(
 
 
 def extended_competition_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]],
+    comments: list[GitHubComment],
     *,
     linked_pr_checker: LinkedPrChecker = linked_open_pr_reason,
     supplemental_claim_checker: SupplementalClaimChecker = supplemental_claim_reason,
@@ -227,9 +230,9 @@ def extended_competition_reason(
 
 
 def strategic_competition_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]],
+    comments: list[GitHubComment],
     *,
     timeline_pr_checker: TimelinePrChecker = timeline_open_pr_reason,
     linked_pr_checker: LinkedPrChecker = linked_open_pr_reason,
