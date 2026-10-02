@@ -101,9 +101,8 @@ def search_github(
     fetch_json: Callable[[str, str | None], Any] | None = None,
 ) -> GitHubSearchResult:
     """Fetch one GitHub Issues Search page with canonical request normalization."""
-    url = (
-        "https://api.github.com/search/issues?"
-        + urllib.parse.urlencode({"q": query, "per_page": per_page})
+    url = "https://api.github.com/search/issues?" + urllib.parse.urlencode(
+        {"q": query, "per_page": per_page}
     )
     data = github_get(url, token) if fetch_json is None else fetch_json(url, token)
     return cast(GitHubSearchResult, data) if isinstance(data, dict) else {}
