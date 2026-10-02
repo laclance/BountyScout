@@ -233,16 +233,19 @@ class CliTests(unittest.TestCase):
         env = {"GITHUB_REPOSITORY": "laclance/BountyScout", "GITHUB_TOKEN": "tok"}
         stdout = io.StringIO()
         dry = cleanup.CleanupResult((report_issue(),), 4, (), ())
-        with patch.dict(os.environ, env, clear=True), patch.object(
-            cleanup, "cleanup_reports", return_value=dry
-        ) as run, redirect_stdout(stdout):
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(cleanup, "cleanup_reports", return_value=dry) as run,
+            redirect_stdout(stdout),
+        ):
             self.assertEqual(cleanup.main([]), 0)
         run.assert_called_once_with("laclance/BountyScout", "tok", apply=False)
         self.assertIn("No mutations made", stdout.getvalue())
 
         failed = cleanup.CleanupResult((report_issue(),), 4, (), (10,))
-        with patch.dict(os.environ, env, clear=True), patch.object(
-            cleanup, "cleanup_reports", return_value=failed
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(cleanup, "cleanup_reports", return_value=failed),
         ):
             self.assertEqual(cleanup.main(["--apply"]), 1)
 
@@ -253,17 +256,25 @@ class CliTests(unittest.TestCase):
         self.assertIn("required", stderr.getvalue())
 
         stderr = io.StringIO()
-        with patch.dict(
-            os.environ, {"GITHUB_REPOSITORY": "invalid", "GITHUB_TOKEN": "tok"}, clear=True
-        ), patch.object(cleanup, "cleanup_reports") as run, redirect_stderr(stderr):
+        with (
+            patch.dict(
+                os.environ, {"GITHUB_REPOSITORY": "invalid", "GITHUB_TOKEN": "tok"}, clear=True
+            ),
+            patch.object(cleanup, "cleanup_reports") as run,
+            redirect_stderr(stderr),
+        ):
             self.assertEqual(cleanup.main([]), 1)
         run.assert_not_called()
 
         stderr = io.StringIO()
         env = {"GITHUB_REPOSITORY": "laclance/BountyScout", "GITHUB_TOKEN": "tok"}
-        with patch.dict(os.environ, env, clear=True), patch.object(
-            cleanup, "cleanup_reports", side_effect=cleanup.CleanupError("list failed")
-        ), redirect_stderr(stderr):
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(
+                cleanup, "cleanup_reports", side_effect=cleanup.CleanupError("list failed")
+            ),
+            redirect_stderr(stderr),
+        ):
             self.assertEqual(cleanup.main(["--apply"]), 1)
         self.assertIn("list failed", stderr.getvalue())
 
