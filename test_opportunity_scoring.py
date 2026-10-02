@@ -1261,7 +1261,10 @@ class ScoringRegressionTests(unittest.TestCase):
             target_repos={"example/project"},
             amount_pattern=AMOUNT_RE,
         )
-        self.assertIn("recent maintainer activity", older_second_comment["career_reasons"])
+        self.assertIn(
+            "recent maintainer activity",
+            older_second_comment["career_reasons"],
+        )
 
         missing_updated = scoring.build_candidate(
             issue(
@@ -1279,7 +1282,10 @@ class ScoringRegressionTests(unittest.TestCase):
             target_repos={"example/project"},
             amount_pattern=AMOUNT_RE,
         )
-        self.assertNotIn("issue active in last", " ".join(missing_updated["career_reasons"]))
+        self.assertNotIn(
+            "issue active in last",
+            " ".join(missing_updated["career_reasons"]),
+        )
 
         young_inactive = scoring.build_candidate(
             issue(
@@ -1296,7 +1302,10 @@ class ScoringRegressionTests(unittest.TestCase):
             target_repos={"example/project"},
             amount_pattern=AMOUNT_RE,
         )
-        self.assertNotIn("inactive backlog penalty", " ".join(young_inactive["career_reasons"]))
+        self.assertNotIn(
+            "inactive backlog penalty",
+            " ".join(young_inactive["career_reasons"]),
+        )
 
 
 if __name__ == "__main__":
