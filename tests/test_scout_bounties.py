@@ -375,9 +375,7 @@ class NotificationTests(unittest.TestCase):
         self.assertIn(b'"content": "hello"', req.data)
 
     def test_github_issue_report_is_closed_not_planned(self) -> None:
-        created = FakeResponse(
-            b'{"url": "https://api.github.com/repos/me/repo/issues/42"}'
-        )
+        created = FakeResponse(b'{"url": "https://api.github.com/repos/me/repo/issues/42"}')
         with patch.object(
             urllib.request,
             "urlopen",
@@ -412,9 +410,7 @@ class NotificationTests(unittest.TestCase):
             "urlopen",
             return_value=FakeResponse(b"{}"),
         ) as opened:
-            self.assertFalse(
-                scout.create_github_issue("me/repo", "tok", "title", "body")
-            )
+            self.assertFalse(scout.create_github_issue("me/repo", "tok", "title", "body"))
         opened.assert_called_once()
 
     def test_github_issue_report_rejects_non_object_create_response(self) -> None:
@@ -423,23 +419,17 @@ class NotificationTests(unittest.TestCase):
             "urlopen",
             return_value=FakeResponse(b"[]"),
         ) as opened:
-            self.assertFalse(
-                scout.create_github_issue("me/repo", "tok", "title", "body")
-            )
+            self.assertFalse(scout.create_github_issue("me/repo", "tok", "title", "body"))
         opened.assert_called_once()
 
     def test_github_issue_report_fails_when_auto_close_fails(self) -> None:
-        created = FakeResponse(
-            b'{"url": "https://api.github.com/repos/me/repo/issues/42"}'
-        )
+        created = FakeResponse(b'{"url": "https://api.github.com/repos/me/repo/issues/42"}')
         with patch.object(
             urllib.request,
             "urlopen",
             side_effect=[created, OSError("close failed")],
         ):
-            self.assertFalse(
-                scout.create_github_issue("me/repo", "tok", "title", "body")
-            )
+            self.assertFalse(scout.create_github_issue("me/repo", "tok", "title", "body"))
 
     def test_notification_failures(self) -> None:
         with patch.object(urllib.request, "urlopen", side_effect=OSError("x")):
