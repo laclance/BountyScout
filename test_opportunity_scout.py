@@ -6,13 +6,14 @@ import unittest
 import urllib.request
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any
 from unittest.mock import patch
 
 import opportunity_scout as scout
 import github_access as github
 import scout_bounties as bounty
 import strategic_competition as competition_policy
+from test_helpers import FakeResponse
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
@@ -69,20 +70,6 @@ def candidate(**overrides: Any) -> dict[str, Any]:
     }
     base.update(overrides)
     return base
-
-
-class FakeResponse:
-    def __init__(self, body: bytes = b"{}") -> None:
-        self.body = body
-
-    def __enter__(self) -> "FakeResponse":
-        return self
-
-    def __exit__(self, *args: Any) -> Literal[False]:
-        return False
-
-    def read(self) -> bytes:
-        return self.body
 
 
 class BasicHeuristicTests(unittest.TestCase):
