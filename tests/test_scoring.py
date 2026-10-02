@@ -790,11 +790,7 @@ class CompetitionVolumeTests(unittest.TestCase):
         ]
         self.assertEqual(scoring.competition(issue(comments=2), comments), "low")
         self.assertEqual(
-            scout.strategic_competition_reason(
-                issue(comments=2),
-                "t",
-                cast(list[dict[str, Any]], comments),
-            ),
+            scout.strategic_competition_reason(issue(comments=2), "t", comments),
             "active claim by @dev",
         )
 
