@@ -118,6 +118,13 @@ not make the paid-only entry point depend on combined application orchestration.
 - `bountyscout.scoring` no longer imports the root scanner
 - scoring behavior and standalone paid-scanner behavior remain unchanged
 
+### Phase 4E.2 — package-owned paid eligibility policy — complete
+
+- `bountyscout.paid` now owns basic paid eligibility and issue-level payment-signal recognition
+- root symbols remain compatibility aliases/wrappers
+- combined scanning consumes the package policy directly
+- request behavior and standalone paid-scanner behavior are unchanged
+
 Broader Phase 4E remains open.
 
 ## Deferred result-object work
