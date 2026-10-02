@@ -7,24 +7,11 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
 from threading import Lock
-from typing import Any, Literal
+from typing import Any
 from unittest.mock import patch
 
 import github_access as github
-
-
-class FakeResponse:
-    def __init__(self, body: bytes) -> None:
-        self.body = body
-
-    def __enter__(self) -> "FakeResponse":
-        return self
-
-    def __exit__(self, *args: Any) -> Literal[False]:
-        return False
-
-    def read(self) -> bytes:
-        return self.body
+from test_helpers import FakeResponse
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
