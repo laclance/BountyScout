@@ -80,7 +80,7 @@ def issue_repo_and_number(
 ) -> tuple[str | None, int | None]:
     """Extract owner/repo and issue number from a canonical GitHub issue URL."""
     url = str(item.get("html_url", ""))
-    match = re.match(r"https://github\\.com/([^/]+/[^/]+)/issues/(\\d+)", url)
+    match = re.match(r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)", url)
     if not match:
         return None, None
     return match.group(1), int(match.group(2))
