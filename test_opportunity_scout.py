@@ -214,6 +214,7 @@ class BasicHeuristicTests(unittest.TestCase):
             )
         fetch.assert_called_once_with("example/project", "t")
 
+
 class HttpAndPlatformTests(unittest.TestCase):
     def test_github_get_optional_success_failure_and_auth(self) -> None:
         with patch.object(
@@ -771,6 +772,7 @@ class CandidateTests(unittest.TestCase):
         self.assertGreater(result["career_score"], 0)
         self.assertEqual(result["competition"], "none")
         self.assertEqual(result["contribution_guide"], "guide")
+
 
 class VerificationTests(unittest.TestCase):
     def test_refresh_issue_all_paths(self) -> None:
