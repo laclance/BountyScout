@@ -2011,7 +2011,6 @@ class VerificationTests(unittest.TestCase):
         self.assertEqual(counts["why"], 15)
         self.assertEqual(len(examples), 12)
 
-
     def test_timeline_wrapper_and_preflight_diagnostic_boundary(self) -> None:
         with patch.object(
             scout.competition_policy,
