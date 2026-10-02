@@ -233,6 +233,23 @@ class StrategicVerificationTests(unittest.TestCase):
             [accepted[1]["html_url"], accepted[0]["html_url"], accepted[2]["html_url"]],
         )
 
+    def test_below_threshold_candidate_without_miss_signal_skips_audit(self) -> None:
+        weak = issue(
+            html_url="https://github.com/g/g/issues/9",
+            title="Documentation cleanup",
+            labels=[],
+            updated_at="2025-01-01T00:00:00Z",
+        )
+        result = verification.verify_strategic_selection(
+            selection({"g/g": [row(weak, priority=80, career=80)]}),
+            lambda item_: (verified_candidate(item_, score=40), None),
+            lambda _: None,
+        )
+
+        reason = "career score 40/100 below strategic threshold 55/100"
+        self.assertEqual(result.rejected[reason], 1)
+        self.assertEqual(result.audit, [])
+
     def test_rejection_examples_remain_bounded_to_twelve(self) -> None:
         items = [issue(html_url=f"https://github.com/g/g/issues/{index}") for index in range(1, 14)]
         result = verification.verify_strategic_selection(
