@@ -6,6 +6,7 @@ import unittest
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 from unittest.mock import patch
@@ -21,6 +22,31 @@ def issue(**overrides: Any) -> dict[str, Any]:
     }
     item.update(overrides)
     return item
+
+
+class GitHubParsingTests(unittest.TestCase):
+    def test_issue_repo_and_number_preserves_canonical_url_semantics(self) -> None:
+        repo, number = github.issue_repo_and_number(issue())
+        self.assertEqual((repo, number), ("example/project", 42))
+        self.assertIsInstance(number, int)
+        self.assertEqual(
+            github.issue_repo_and_number({"html_url": "https://example.com/no"}),
+            (None, None),
+        )
+        self.assertEqual(github.issue_repo_and_number({}), (None, None))
+
+    def test_parse_github_datetime_preserves_github_timestamp_semantics(self) -> None:
+        self.assertEqual(
+            github.parse_github_datetime("2026-09-30T12:00:00Z"),
+            datetime(2026, 9, 30, 12, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(
+            github.parse_github_datetime("2026-09-30T12:00:00+02:00"),
+            datetime(2026, 9, 30, 12, 0, tzinfo=timezone(timedelta(hours=2))),
+        )
+        self.assertIsNone(github.parse_github_datetime(""))
+        self.assertIsNone(github.parse_github_datetime(None))
+        self.assertIsNone(github.parse_github_datetime("not-a-date"))
 
 
 class GitHubHttpTests(unittest.TestCase):
