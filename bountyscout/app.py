@@ -5,7 +5,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from time import monotonic, sleep
-from typing import Any, Mapping, Sequence, cast
+from typing import Any, cast
 
 from bountyscout import github
 import scout_bounties as bounty
@@ -38,8 +38,10 @@ from bountyscout.types import (
     CandidateLane,
     GitHubComment,
     GitHubIssue,
+    GitHubSearchResult,
     RejectionRecord,
     RepositoryMetadata,
+    SearchBatch,
 )
 
 TARGET_REPOS = [
@@ -107,36 +109,18 @@ PLATFORM_FETCH_LIMIT = 20
 ISSUEHUNT_PAGES = 2
 
 
-def _github_issue(item: Mapping[str, Any]) -> GitHubIssue:
-    """Treat a validated issue mapping as the canonical internal issue record."""
-    return cast(GitHubIssue, item)
-
-
-def _github_comments(comments: list[dict[str, Any]]) -> list[GitHubComment]:
-    """Treat validated comment mappings as canonical internal comment records."""
-    return cast(list[GitHubComment], comments)
-
-
-def _optional_github_comments(
-    comments: list[dict[str, Any]] | None,
-) -> list[GitHubComment] | None:
-    """Narrow optional validated comment evidence for strategic policy."""
-    return cast(list[GitHubComment] | None, comments)
-
-
 def target_repo_issue_pool(
     repo: str,
     token: str | None,
-) -> tuple[list[dict[str, Any]], str | None]:
+) -> tuple[list[GitHubIssue], str | None]:
     """Fetch the configured bounded source pool for a curated repository."""
-    items, error = sources.target_repo_issue_pool(
+    return sources.target_repo_issue_pool(
         repo,
         token,
         fetch_per_page=TARGET_REPO_FETCH_PER_PAGE,
         fetch_pages=TARGET_REPO_FETCH_PAGES,
         result_limit=STRATEGIC_SEARCH_PER_PAGE,
     )
-    return cast(list[dict[str, Any]], items), error
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
@@ -144,9 +128,9 @@ def maintainer_ready_signal(labels_text: str) -> bool:
     return scoring.maintainer_ready_signal(labels_text)
 
 
-def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
+def issue_text(item: GitHubIssue) -> tuple[str, str, str, str]:
     """Compatibility wrapper for normalized issue text."""
-    return scoring.issue_text(_github_issue(item))
+    return scoring.issue_text(item)
 
 
 def code_reference_count(text: str) -> int:
@@ -154,7 +138,7 @@ def code_reference_count(text: str) -> int:
     return scoring.code_reference_count(text)
 
 
-def strategic_basic_candidate(item: Mapping[str, Any]) -> bool:
+def strategic_basic_candidate(item: GitHubIssue) -> bool:
     """Apply strategic eligibility without making comment volume disqualifying."""
     if bounty.is_clean_candidate(item):
         return True
@@ -176,9 +160,9 @@ def fetch_text(url: str, timeout: int = 12) -> str:
     return sources.fetch_text(url, timeout)
 
 
-def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str, Any]]:
+def issue_comments(item: GitHubIssue, token: str | None) -> list[GitHubComment]:
     """Compatibility wrapper for issue-comment GitHub fetching."""
-    return cast(list[dict[str, Any]], github.issue_comments(item, token))
+    return github.issue_comments(item, token)
 
 
 TRIAGE_PENDING_LABELS = {"needs-triage"}
@@ -187,86 +171,76 @@ STRATEGIC_CLAIM_MAX_AGE_DAYS = competition_policy.STRATEGIC_CLAIM_MAX_AGE_DAYS
 
 
 def strategic_claim_reason(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]],
+    item: GitHubIssue,
+    comments: list[GitHubComment],
 ) -> str | None:
     """Compatibility wrapper for strategic active-claim detection."""
-    return competition_policy.strategic_claim_reason(
-        _github_issue(item),
-        _github_comments(comments),
-    )
+    return competition_policy.strategic_claim_reason(item, comments)
 
 
 def linked_open_pr_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Compatibility wrapper for explicitly linked implementation PR detection."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
-    return competition_policy.linked_open_pr_reason(
-        _github_issue(item),
-        token,
-        _github_comments(loaded_comments),
-    )
+    return competition_policy.linked_open_pr_reason(item, token, loaded_comments)
 
 
-def timeline_open_pr_reason(item: Mapping[str, Any], token: str | None) -> str | None:
+def timeline_open_pr_reason(item: GitHubIssue, token: str | None) -> str | None:
     """Compatibility wrapper for timeline-linked implementation PR detection."""
-    return competition_policy.timeline_open_pr_reason(_github_issue(item), token)
+    return competition_policy.timeline_open_pr_reason(item, token)
 
 
 def supplemental_claim_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Compatibility wrapper for supplemental active-claim detection."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
-    return competition_policy.supplemental_claim_reason(
-        _github_issue(item),
-        _github_comments(loaded_comments),
-    )
+    return competition_policy.supplemental_claim_reason(item, loaded_comments)
 
 
 def extended_competition_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Apply paid-compatible competition checks through the extracted policy module."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
     return competition_policy.extended_competition_reason(
-        _github_issue(item),
+        item,
         token,
-        _github_comments(loaded_comments),
-        linked_pr_checker=cast(competition_policy.LinkedPrChecker, linked_open_pr_reason),
+        loaded_comments,
+        linked_pr_checker=linked_open_pr_reason,
         supplemental_claim_checker=lambda candidate, claim_comments: supplemental_claim_reason(
             candidate,
             token,
-            cast(list[dict[str, Any]], claim_comments),
+            claim_comments,
         ),
     )
 
 
 def strategic_competition_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Apply strategic-only competition checks through the extracted policy module."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
     return competition_policy.strategic_competition_reason(
-        _github_issue(item),
+        item,
         token,
-        _github_comments(loaded_comments),
-        timeline_pr_checker=cast(competition_policy.TimelinePrChecker, timeline_open_pr_reason),
-        linked_pr_checker=cast(competition_policy.LinkedPrChecker, linked_open_pr_reason),
-        strategic_claim_checker=cast(competition_policy.ClaimChecker, strategic_claim_reason),
+        loaded_comments,
+        timeline_pr_checker=timeline_open_pr_reason,
+        linked_pr_checker=linked_open_pr_reason,
+        strategic_claim_checker=strategic_claim_reason,
     )
 
 
-def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
+def supplemental_payment_signal(item: GitHubIssue) -> str | None:
     """Recognize explicit paid-work wording outside the upstream vocabulary."""
     title, body, labels, _ = issue_text(item)
     text = f"{title}\n{body}"
@@ -295,9 +269,9 @@ def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
 
 
 def comment_payment_signal(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Recognize payment signals while reusing comments already loaded by verification."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
@@ -357,9 +331,9 @@ def comment_payment_signal(
     return None
 
 
-def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
+def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     """Compatibility wrapper for platform-discovered GitHub issue fetching."""
-    return cast(dict[str, Any] | None, github.issue_from_github_url(url, token))
+    return github.issue_from_github_url(url, token)
 
 
 def issuehunt_platform_refs() -> dict[str, str]:
