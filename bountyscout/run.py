@@ -311,8 +311,7 @@ def run_combined_scan(
                         "html_url": "https://github.com/issues",
                         "title": f"Paid GitHub Search: {query}",
                     },
-                    f"paid discovery search failed for query: {query}; "
-                    "scan coverage incomplete",
+                    f"paid discovery search failed for query: {query}; scan coverage incomplete",
                 )
 
     strategic_seconds = monotonic() - strategic_started
