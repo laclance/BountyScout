@@ -140,44 +140,9 @@ def strategic_basic_candidate(item: Mapping[str, Any]) -> bool:
     return bounty.is_clean_candidate(relaxed)
 
 
-def documentation_microfix(item: Mapping[str, Any]) -> bool:
-    """Compatibility wrapper for docs micro-fix detection."""
-    return scoring.documentation_microfix(item)
-
-
-def estimate_effort_details(item: Mapping[str, Any]) -> scoring.EffortEstimate:
-    """Return effort bucket plus the signals that drove it."""
-    return scoring.estimate_effort_details(item)
-
-
-def estimate_effort(item: Mapping[str, Any]) -> str:
-    """Compatibility wrapper for implementation-effort estimation."""
-    return scoring.estimate_effort(item)
-
-
-def effort_hours(effort: str) -> float:
-    """Compatibility wrapper for paid expected-value representative hours."""
-    return scoring.effort_hours(effort)
-
-
 def competition(item: Mapping[str, Any]) -> str:
     """Compatibility wrapper for discussion-volume competition buckets."""
     return scoring.competition(item)
-
-
-def payment_confidence(signal: str | None) -> int:
-    """Compatibility wrapper for payment confidence scoring."""
-    return scoring.payment_confidence(signal)
-
-
-def reward_text(signal: str | None) -> str | None:
-    """Compatibility wrapper for reward display extraction."""
-    return scoring.reward_text(signal, EXTENDED_AMOUNT_RE)
-
-
-def repo_activity(repo_meta: Mapping[str, Any]) -> str:
-    """Compatibility wrapper for repository activity summaries."""
-    return scoring.repo_activity(repo_meta)
 
 
 def github_get_optional(url: str, token: str | None) -> Any:
@@ -198,15 +163,6 @@ def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str,
 TRIAGE_PENDING_LABELS = {"needs-triage"}
 TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
 STRATEGIC_CLAIM_MAX_AGE_DAYS = competition_policy.STRATEGIC_CLAIM_MAX_AGE_DAYS
-
-
-def claim_source_is_recent(
-    source: Mapping[str, Any],
-    *,
-    issue_body: bool = False,
-) -> bool:
-    """Compatibility wrapper for strategic competition claim-age policy."""
-    return competition_policy.claim_source_is_recent(source, issue_body=issue_body)
 
 
 def strategic_claim_reason(
@@ -505,10 +461,11 @@ def non_actionable_diagnostic_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
-def strategic_preflight_rejection(item: Mapping[str, Any]) -> str | None:
-    """Reject source-visible states that cannot be rescued by comment/timeline checks."""
+def _strategic_common_source_rejection(item: Mapping[str, Any]) -> str | None:
+    """Return source-only strategic rejections shared by preflight and full verification."""
     if not strategic_basic_candidate(item):
         return "failed basic eligibility filter"
+
     _, _, labels, text = issue_text(item)
     if "oss opportunity queue" in text:
         return "generated opportunity-scout report"
@@ -527,10 +484,37 @@ def strategic_preflight_rejection(item: Mapping[str, Any]) -> str | None:
     ):
         return "support/triage issue rather than a contributor task"
 
-    label_set = issue_label_set(item)
-    if "claimed" in label_set:
+    if "claimed" in issue_label_set(item):
         return "issue is marked claimed by the project"
+    return None
 
+
+def _strategic_classification_rejection(
+    item: Mapping[str, Any],
+    comments: list[dict[str, Any]],
+) -> str | None:
+    """Return ordered policy rejections that are pure over supplied issue evidence."""
+    for reason in (
+        security_disclosure_reason(item),
+        reporter_support_triage_reason(item),
+        manual_tracking_issue_reason(item, comments),
+        automated_tracking_issue_reason(item),
+        release_tracking_reason(item, comments),
+        maintainer_issue_decision_reason(item),
+        maintainer_submission_hold_reason(item),
+    ):
+        if reason:
+            return reason
+    return None
+
+
+def strategic_preflight_rejection(item: Mapping[str, Any]) -> str | None:
+    """Reject source-visible states that cannot be rescued by comment/timeline checks."""
+    common_reason = _strategic_common_source_rejection(item)
+    if common_reason:
+        return common_reason
+
+    label_set = issue_label_set(item)
     if not int(item.get("comments") or 0):
         labels_text = " ".join(label_set)
         accepted = bool(TRIAGE_ACCEPTED_LABELS & label_set) or maintainer_ready_signal(labels_text)
@@ -544,20 +528,15 @@ def strategic_preflight_rejection(item: Mapping[str, Any]) -> str | None:
         if pending and not accepted:
             return "awaiting maintainer triage"
 
-    for reason in (
-        security_disclosure_reason(item),
-        reporter_support_triage_reason(item),
-        manual_tracking_issue_reason(item, []),
-        automated_tracking_issue_reason(item),
-        release_tracking_reason(item, []),
-        maintainer_issue_decision_reason(item),
-        maintainer_submission_hold_reason(item),
-        non_actionable_diagnostic_reason(item),
-        strategic_claim_reason(item, []),
-    ):
-        if reason:
-            return reason
-    return None
+    classification_reason = _strategic_classification_rejection(item, [])
+    if classification_reason:
+        return classification_reason
+
+    diagnostic_reason = non_actionable_diagnostic_reason(item)
+    if diagnostic_reason:
+        return diagnostic_reason
+
+    return strategic_claim_reason(item, [])
 
 
 def strategic_rejection(
@@ -565,29 +544,11 @@ def strategic_rejection(
     token: str | None,
     comments: list[dict[str, Any]] | None = None,
 ) -> str | None:
-    if not strategic_basic_candidate(item):
-        return "failed basic eligibility filter"
-    _, _, labels, text = issue_text(item)
-    if "oss opportunity queue" in text:
-        return "generated opportunity-scout report"
-    if any(
-        x in labels
-        for x in (
-            "question",
-            "support",
-            "needs info",
-            "needs-info",
-            "needs-information",
-            "waiting for info",
-            "waiting-for-info",
-            "invalid",
-        )
-    ):
-        return "support/triage issue rather than a contributor task"
+    common_reason = _strategic_common_source_rejection(item)
+    if common_reason:
+        return common_reason
 
     label_set = issue_label_set(item)
-    if "claimed" in label_set:
-        return "issue is marked claimed by the project"
     labels_text = " ".join(label_set)
     comment_ready, comment_hold_reason = maintainer_readiness_comment_state(item, comments)
 
@@ -609,33 +570,9 @@ def strategic_rejection(
     if pending and not accepted:
         return "awaiting maintainer triage"
 
-    security_reason = security_disclosure_reason(item)
-    if security_reason:
-        return security_reason
-
-    support_reason = reporter_support_triage_reason(item)
-    if support_reason:
-        return support_reason
-
-    manual_tracking_reason = manual_tracking_issue_reason(item, comments)
-    if manual_tracking_reason:
-        return manual_tracking_reason
-
-    tracking_reason = automated_tracking_issue_reason(item)
-    if tracking_reason:
-        return tracking_reason
-
-    release_reason = release_tracking_reason(item, comments)
-    if release_reason:
-        return release_reason
-
-    decision_reason = maintainer_issue_decision_reason(item)
-    if decision_reason:
-        return decision_reason
-
-    submission_hold_reason = maintainer_submission_hold_reason(item)
-    if submission_hold_reason:
-        return submission_hold_reason
+    classification_reason = _strategic_classification_rejection(item, comments or [])
+    if classification_reason:
+        return classification_reason
 
     reporter_reason = reporter_resolution_reason(item, comments)
     if reporter_reason:
@@ -649,7 +586,6 @@ def strategic_rejection(
         return diagnostic_reason
 
     return strategic_competition_reason(item, token, comments)
-
 
 def verify(
     item: Mapping[str, Any],
@@ -1315,21 +1251,6 @@ def discover_strategic(
         found.extend(verified_repo[:STRATEGIC_KEEP_PER_REPO])
 
     return found, rejected, examples, audit
-
-
-def github_report_ref(text: Any) -> str:
-    """Compatibility wrapper for GitHub report URL redirection."""
-    return reporting.github_report_ref(text)
-
-
-def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
-    """Compatibility wrapper for GitHub candidate rendering."""
-    return reporting.markdown_candidate(candidate, idx)
-
-
-def notification_candidate(candidate: Mapping[str, Any], idx: int) -> list[str]:
-    """Compatibility wrapper for concise notification candidate rendering."""
-    return reporting.notification_candidate(candidate, idx)
 
 
 def main() -> None:
