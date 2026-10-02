@@ -281,9 +281,7 @@ class StrategicVerificationTests(unittest.TestCase):
         )
 
     def test_candidates_are_verified_sequentially_within_each_repo(self) -> None:
-        items = [
-            issue(html_url=f"https://github.com/g/g/issues/{index}") for index in range(1, 4)
-        ]
+        items = [issue(html_url=f"https://github.com/g/g/issues/{index}") for index in range(1, 4)]
         calls: list[str] = []
 
         def deep_verify(item_: GitHubIssue) -> tuple[Candidate | None, str | None]:
