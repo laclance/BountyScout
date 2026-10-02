@@ -85,9 +85,10 @@ class DeliveryTests(unittest.TestCase):
             request_json(create_req),
             {"title": "title", "body": "body", "labels": ["bounty-alert"]},
         )
+        self.assertEqual(create_req.get_header("Content-type"), "application/json")
         self.assertEqual(create_req.get_header("Accept"), "application/vnd.github+json")
         self.assertEqual(create_req.get_header("Authorization"), "Bearer tok")
-        self.assertEqual(create_req.get_header("User-agent"), "MyPersonalBountyScout")
+        self.assertEqual(create_req.get_header("User-agent"), "OSSOpportunityScout")
         self.assertEqual(create_req.get_header("X-github-api-version"), "2022-11-28")
         self.assertEqual(opened.call_args_list[0].kwargs["timeout"], 15)
 
@@ -97,12 +98,13 @@ class DeliveryTests(unittest.TestCase):
             request_json(close_req),
             {"state": "closed", "state_reason": "not_planned"},
         )
+        self.assertEqual(close_req.get_header("Content-type"), "application/json")
         self.assertEqual(close_req.get_header("Authorization"), "Bearer tok")
-        self.assertEqual(close_req.get_header("User-agent"), "MyPersonalBountyScout")
+        self.assertEqual(close_req.get_header("User-agent"), "OSSOpportunityScout")
         self.assertEqual(opened.call_args_list[1].kwargs["timeout"], 15)
 
-    def test_github_report_requires_nonempty_object_url(self) -> None:
-        for body in (b"{}", b"[]", b'{"url": ""}'):
+    def test_github_report_rejects_malformed_create_response(self) -> None:
+        for body in (b"not json", b"{}", b"[]", b'{"url": ""}'):
             with self.subTest(body=body):
                 with patch.object(
                     urllib.request,
