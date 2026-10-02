@@ -74,13 +74,14 @@ improves readability and testability.
 - `bountyscout.app.verify()` remains the transitional mixed paid/strategic compatibility edge and is supplied as a narrow callback
 - verification request budgets, source-failure semantics, upper-bound pruning, repo-slot settlement, and final per-repo ordering remain unchanged
 
-Remaining Phase 4C extraction areas include:
+### Phase 4C.3 — combined run lifecycle — complete
 
-- report delivery / run lifecycle where a cohesive boundary emerges
-- state commit/maintenance orchestration where it can remain independent of root paid-scanner ownership
+- `bountyscout.run` owns combined discovery coordination, final queue assembly, coverage accounting, delivery aggregation, and the transactional seen-state commit
+- `bountyscout.app.main()` is now a thin environment/callback assembly layer while remaining the transitional root paid-scanner compatibility edge
+- delivery/state semantics, Search budgets, cache lifetime, report lifecycle, and standalone paid-scanner behavior remain unchanged
+- root paid-scanner operations enter the run layer only through narrow typed callbacks
 
-Prefer concrete cohesive boundaries. Do not introduce generic service layers or a
-dependency-injection framework merely to reduce file size.
+**Phase 4C is complete.** The remaining `bountyscout.app` responsibilities are intentional compatibility/application seams rather than another decomposition target.
 
 ## Phase 4D — effort estimator decomposition
 
