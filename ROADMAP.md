@@ -68,9 +68,14 @@ improves readability and testability.
 - `bountyscout.app` retains compatibility wrappers and passes narrow paid-compatible callbacks rather than spreading the root `scout_bounties.py` dependency
 - discovery queries, request budgets, ordering, and cache lifetime remain unchanged
 
+### Phase 4C.2 — strategic verification orchestration — complete
+
+- `bountyscout.strategic.verification` owns ranked deep-verification orchestration, bounded per-repository settlement, source-failure handling, and final strategic selection
+- `bountyscout.app.verify()` remains the transitional mixed paid/strategic compatibility edge and is supplied as a narrow callback
+- verification request budgets, source-failure semantics, upper-bound pruning, repo-slot settlement, and final per-repo ordering remain unchanged
+
 Remaining Phase 4C extraction areas include:
 
-- strategic verification orchestration
 - report delivery / run lifecycle where a cohesive boundary emerges
 - state commit/maintenance orchestration where it can remain independent of root paid-scanner ownership
 
