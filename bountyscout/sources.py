@@ -81,7 +81,7 @@ def fetch_text(url: str, timeout: int = 12) -> str:
 
 def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
     """Fetch a GitHub source issue from a platform-discovered URL."""
-    return github.issue_from_github_url(url, token)
+    return cast(dict[str, Any] | None, github.issue_from_github_url(url, token))
 
 
 def issuehunt_platform_refs(
