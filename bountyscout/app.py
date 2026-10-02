@@ -1005,7 +1005,7 @@ def discover_strategic(
     list[RejectionRecord],
     list[RejectionRecord],
 ]:
-    provisional: list[tuple[int, int, int, dict[str, Any]]] = []
+    provisional: list[sources.IssueRow] = []
     touched: set[str] = set()
     rejected: dict[str, int] = {}
     examples: list[RejectionRecord] = []
@@ -1130,7 +1130,7 @@ def discover_strategic(
                     preview["priority_score"],
                     preview["career_score"],
                     preview["cash_score"],
-                    item,
+                    _github_issue(item),
                 )
             )
         ranked.sort(key=lambda row: row[:3], reverse=True)
