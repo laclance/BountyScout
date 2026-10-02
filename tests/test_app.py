@@ -1859,7 +1859,7 @@ class VerificationTests(unittest.TestCase):
 
     def test_verify_strategic_uses_supplied_comments_and_handles_missing_repo(self) -> None:
         fresh = issue(body="", title="Feature", comments=1)
-        supplied = [{"body": "Maintainer context"}]
+        supplied: list[GitHubComment] = [{"body": "Maintainer context"}]
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(scout, "strategic_basic_candidate", return_value=True),
@@ -2324,7 +2324,7 @@ class DiscoveryTests(unittest.TestCase):
             labels=[{"name": "help wanted"}, {"name": "bug"}],
         )
 
-        def meta(repo: str, token: str | None) -> dict[str, Any]:
+        def meta(repo: str, token: str | None) -> RepositoryMetadata:
             if repo == "x/y":
                 return repo_meta(archived=True)
             return repo_meta()
@@ -2857,7 +2857,7 @@ class DiscoveryTests(unittest.TestCase):
         paid = issue(html_url="https://github.com/p/p/issues/4", body="bounty $100")
         items = [invalid, archived, good, paid]
 
-        def meta(repo: str, token: str | None) -> dict[str, Any]:
+        def meta(repo: str, token: str | None) -> RepositoryMetadata:
             if repo == "x/y":
                 return repo_meta(archived=True)
             return repo_meta()
