@@ -1410,8 +1410,14 @@ def main() -> None:
         )
 
     if attempted and delivered and coverage_warning is None:
-        seen.update(x["url"] for x in queue)
-        bounty.save_seen_bounties(seen)
+        seen_state.mark_reported_many(
+            (x["url"] for x in queue),
+            reported_at=scan_time.isoformat().replace("+00:00", "Z"),
+        )
+        try:
+            state.save_seen_state(seen_state)
+        except state.SeenStateSaveError as exc:
+            print(f"Error saving state file: {exc}")
     elif attempted and delivered:
         print("Verification coverage incomplete; state was not updated.")
     else:
