@@ -1136,9 +1136,7 @@ class ScoringRegressionTests(unittest.TestCase):
     def test_owner_module_covers_strategic_freshness_activity_branches(self) -> None:
         now = datetime.now(timezone.utc)
 
-        def build(
-            updated_days: int, comments: list[dict[str, Any]] | None = None
-        ) -> Candidate:
+        def build(updated_days: int, comments: list[dict[str, Any]] | None = None) -> Candidate:
             return scoring.build_candidate(
                 issue(
                     title="Network bug",
