@@ -83,19 +83,19 @@ improves readability and testability.
 
 **Phase 4C is complete.** The remaining `bountyscout.app` responsibilities are intentional compatibility/application seams rather than another decomposition target.
 
-## Phase 4D — effort estimator decomposition
+## Phase 4D — effort estimator decomposition — complete
 
-Decompose `estimate_effort_details()` into smaller behavior-preserving helpers.
+`estimate_effort_details()` is now an explicit ordered decision flow over a private
+immutable effort context and cohesive private rule helpers.
 
-The refactor must preserve:
-
-- regex semantics
-- rule precedence
-- emitted reasons
-- effort buckets
+- effort buckets, emitted reasons, regex semantics, thresholds, and first-match precedence remain unchanged
+- trusted maintainer-comment evidence and documentation-specific behavior remain unchanged
+- no network or request behavior changed
 
 Any scoring behavior change discovered during decomposition belongs in a separate
 regression-backed change.
+
+**Phase 4D is complete.**
 
 ## Phase 4E — paid-scanner independence
 
