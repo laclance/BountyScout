@@ -136,7 +136,7 @@ def code_reference_count(text: str) -> int:
     return scoring.code_reference_count(text)
 
 
-def strategic_basic_candidate(item: Mapping[str, Any]) -> bool:
+def strategic_basic_candidate(item: GitHubIssue) -> bool:
     """Apply strategic eligibility without making comment volume disqualifying."""
     if bounty.is_clean_candidate(item):
         return True
@@ -386,7 +386,7 @@ def build_candidate(
     signal: str | None,
     repo_meta: Mapping[str, Any],
     guide: str | None,
-    activity_comments: list[dict[str, Any]] | None = None,
+    activity_comments: list[GitHubComment] | None = None,
 ) -> Candidate:
     """Build ranked candidate output through the extracted scoring module."""
     return scoring.build_candidate(
@@ -730,7 +730,7 @@ def discover_paid(
     touched: set[str] = set()
     rejected: dict[str, int] = {}
     examples: list[RejectionRecord] = []
-    pending: list[tuple[dict[str, Any], str | None, bool]] = []
+    pending: list[tuple[GitHubIssue, str | None, bool]] = []
 
     if search_results is None:
         search_results = [
@@ -774,9 +774,9 @@ def discover_paid(
             pending.append((item, platform_signal, True))
 
     def verify_paid(
-        row: tuple[dict[str, Any], str | None, bool],
+        row: tuple[GitHubIssue, str | None, bool],
     ) -> tuple[
-        tuple[dict[str, Any], str | None, bool],
+        tuple[GitHubIssue, str | None, bool],
         tuple[Candidate | None, str | None],
     ]:
         item, platform_signal, _ = row
@@ -818,7 +818,7 @@ def discover_paid(
     return found, rejected, examples
 
 
-def possible_miss_signal(item: Mapping[str, Any]) -> bool:
+def possible_miss_signal(item: GitHubIssue) -> bool:
     """Flag strong raw results that deserve scrutiny when filters discard them."""
     if (
         security_disclosure_reason(item)
@@ -850,7 +850,7 @@ def possible_miss_signal(item: Mapping[str, Any]) -> bool:
     return recent and (contributor_signal or bug_signal)
 
 
-def basic_rejection_audit_reason(item: Mapping[str, Any]) -> str | None:
+def basic_rejection_audit_reason(item: GitHubIssue) -> str | None:
     """Return only tunable/unknown basic-filter reasons worth auditing."""
     if "pull_request" in item:
         return None
@@ -892,7 +892,7 @@ def basic_rejection_audit_reason(item: Mapping[str, Any]) -> str | None:
 
 def add_audit(
     audit: list[RejectionRecord],
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     reason: str,
 ) -> None:
     if len(audit) >= STRATEGIC_AUDIT_LIMIT:
@@ -907,8 +907,8 @@ def add_audit(
 
 
 def strategic_inspection_items(
-    provisional: list[tuple[int, int, int, dict[str, Any]]],
-) -> dict[str, list[dict[str, Any]]]:
+    provisional: list[sources.IssueRow],
+) -> dict[str, list[GitHubIssue]]:
     """Select base per-repo candidates plus a globally bounded strong overflow."""
     return sources.strategic_inspection_items(
         provisional,
@@ -965,7 +965,7 @@ def discover_strategic(
     list[RejectionRecord],
     list[RejectionRecord],
 ]:
-    provisional: list[tuple[int, int, int, dict[str, Any]]] = []
+    provisional: list[sources.IssueRow] = []
     touched: set[str] = set()
     rejected: dict[str, int] = {}
     examples: list[RejectionRecord] = []
