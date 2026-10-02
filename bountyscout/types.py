@@ -43,6 +43,7 @@ class GitHubIssue(TypedDict, total=False):
     html_url: str
     title: str
     body: str | None
+    author_association: str
     state: str
     number: int
     comments: int
