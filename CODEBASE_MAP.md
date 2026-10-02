@@ -97,19 +97,19 @@
 
 ## `bountyscout/sources.py`
 
-- **function** `target_repo_issue_pool()` — line 21
-- **function** `github_get_optional()` — line 63
-- **function** `fetch_text()` — line 68
-- **function** `issue_from_github_url()` — line 80
-- **function** `issuehunt_platform_refs()` — line 85
-- **function** `opire_platform_refs()` — line 116
-- **function** `bountyhub_platform_refs()` — line 175
-- **function** `platform_paid_refs()` — line 231
-- **function** `contribution_guide()` — line 254
-- **function** `strategic_inspection_items()` — line 263
-- **function** `candidate_rank_key()` — line 297
-- **function** `strategic_verification_upper_bound()` — line 307
-- **function** `strategic_repo_slots_settled()` — line 322
+- **function** `target_repo_issue_pool()` — line 22
+- **function** `github_get_optional()` — line 64
+- **function** `fetch_text()` — line 69
+- **function** `issue_from_github_url()` — line 81
+- **function** `issuehunt_platform_refs()` — line 86
+- **function** `opire_platform_refs()` — line 117
+- **function** `bountyhub_platform_refs()` — line 176
+- **function** `platform_paid_refs()` — line 232
+- **function** `contribution_guide()` — line 255
+- **function** `strategic_inspection_items()` — line 264
+- **function** `candidate_rank_key()` — line 298
+- **function** `strategic_verification_upper_bound()` — line 308
+- **function** `strategic_repo_slots_settled()` — line 323
 
 ## `bountyscout/strategic/__init__.py`
 
