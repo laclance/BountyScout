@@ -48,7 +48,7 @@
 - **function** `strategic_global_search_results()` — line 837
 - **function** `prefetch_discovery_searches()` — line 856
 - **function** `discover_strategic()` — line 877
-- **function** `main()` — line 928
+- **function** `main()` — line 929
 ## `bountyscout/github.py`
 
 - **class** `IssueLifecycleResult` — line 31
