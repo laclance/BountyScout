@@ -44,7 +44,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | --- | --- | --- |
 | `scout_bounties.py` | Upstream-compatible paid discovery, payment signals, basic competition checks, notifications | Keep changes conservative to reduce upstream merge conflicts |
 | `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
-| `bountyscout/app.py` | Combined application coordination, mixed paid/strategic `verify()` compatibility edge, and delivery/state flow | Keeps the transitional root `scout_bounties.py` dependency localized and supplies narrow callbacks to strategic orchestration |
+| `bountyscout/app.py` | Executable/application assembly, environment wiring, mixed paid/strategic `verify()` compatibility edge, and root paid-scanner adapters | Keeps the transitional root `scout_bounties.py` dependency localized and supplies narrow callbacks to package orchestration |\n| `bountyscout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `scout_bounties.py`, `bountyscout.app`, or `opportunity_scout.py`; root transports enter only through typed callbacks |
 | `bountyscout/github.py` | Fork-owned GitHub JSON transport, generic issue/timestamp parsing, and keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
 | `bountyscout/types.py` | Canonical static domain literals and mapping records shared across package-owned scanner code | Dependency-light typing vocabulary only; raw external JSON remains dynamic until validated |
 | `bountyscout/state.py` | Canonical typed, versioned seen-state parsing, legacy migration, logical membership/mutation, and deterministic atomic persistence | Local-file state only; branch-agnostic and fail-closed for malformed or unsupported existing state |
@@ -67,7 +67,7 @@ opportunity_scout.py --> bountyscout.app
 
 bountyscout.app
     |-- bountyscout.github
-    |-- bountyscout.state
+    |-- bountyscout.run
     |-- scout_bounties.py
     |-- bountyscout.reporting
     |-- bountyscout.scoring
@@ -78,6 +78,11 @@ bountyscout.app
     |-- bountyscout.strategic.verification
     |-- bountyscout.strategic.readiness
 
+bountyscout.run --> bountyscout.reporting
+bountyscout.run --> bountyscout.state
+bountyscout.run -X-> scout_bounties.py
+bountyscout.run -X-> bountyscout.app
+bountyscout.run -X-> opportunity_scout.py
 bountyscout.types -X-> package policy / orchestration modules
 bountyscout.github -X-> scout_bounties.py
 bountyscout.sources --> bountyscout.github
@@ -112,7 +117,7 @@ Phase 3B makes generic GitHub issue parsing and timestamp parsing fork-owned in 
 
 Historical generated queue reports from before the current auto-close lifecycle were cleaned once with `scripts/close_legacy_scan_reports.py` after explicit report-identity verification. Current generated reports are auto-closed during normal delivery, and there is no recurring cleanup service.
 
-Phase 4C.1 moves strategic source collection, near-miss auditing, adaptive inspection, and pre-verification ranking into `bountyscout.strategic.discovery`. Phase 4C.2 moves ranked deep-verification orchestration, per-repository bounded settlement, source-failure handling, and final strategic selection into `bountyscout.strategic.verification`. `bountyscout.app` keeps compatibility wrappers and the transitional mixed paid/strategic `verify()` edge, supplying narrow callbacks rather than spreading the root `scout_bounties.py` dependency.
+Phase 4C.1 moves strategic source collection, near-miss auditing, adaptive inspection, and pre-verification ranking into `bountyscout.strategic.discovery`. Phase 4C.2 moves ranked deep-verification orchestration, per-repository bounded settlement, source-failure handling, and final strategic selection into `bountyscout.strategic.verification`. Phase 4C.3 moves the combined discovery lifecycle, final queue assembly, coverage accounting, delivery aggregation, and seen-state transaction into `bountyscout.run`. `bountyscout.app` now stays at the executable/compatibility edge: it reads environment configuration and supplies narrow paid-scanner transport/policy callbacks without spreading the root `scout_bounties.py` dependency.
 
 ## Invariants
 
