@@ -14,7 +14,13 @@ from typing import Any, Collection, Mapping, cast
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic.readiness import TRUSTED_ASSOCIATIONS
-from bountyscout.types import Candidate, CandidateLane, CompetitionLevel, EffortBucket
+from bountyscout.types import (
+    Candidate,
+    CandidateLane,
+    CompetitionLevel,
+    EffortBucket,
+    GitHubComment,
+)
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
@@ -162,7 +168,7 @@ def _cross_component_feature(text: str, file_refs: int) -> bool:
 
 
 def _trusted_history_complexity(
-    activity_comments: Collection[Mapping[str, Any]] | None,
+    activity_comments: Collection[GitHubComment] | None,
 ) -> bool:
     """Recognize maintainer-confirmed complexity exposed by earlier implementation work."""
     trusted_history = "\n".join(
@@ -215,7 +221,7 @@ class EffortEstimate:
 
 def estimate_effort_details(
     item: Mapping[str, Any],
-    activity_comments: Collection[Mapping[str, Any]] | None = None,
+    activity_comments: Collection[GitHubComment] | None = None,
 ) -> EffortEstimate:
     """Estimate implementation effort from source text and already-fetched discussion."""
     title, body, labels, text = issue_text(item)
@@ -410,7 +416,7 @@ LIFECYCLE_ADMIN_COMMAND_RE = re.compile(
 )
 
 
-def comment_contributes_to_competition(comment: Mapping[str, Any]) -> bool:
+def comment_contributes_to_competition(comment: GitHubComment) -> bool:
     """Return whether a comment is substantive enough to count as competition."""
     body = str(comment.get("body") or "").strip()
     if not body:
@@ -447,7 +453,7 @@ def comment_contributes_to_competition(comment: Mapping[str, Any]) -> bool:
 
 def competition(
     item: Mapping[str, Any],
-    activity_comments: Collection[Mapping[str, Any]] | None = None,
+    activity_comments: Collection[GitHubComment] | None = None,
 ) -> CompetitionLevel:
     comments = (
         sum(comment_contributes_to_competition(comment) for comment in activity_comments)
@@ -768,7 +774,7 @@ def _base_career_score(
 
 def _strategic_activity_adjustment(
     item: Mapping[str, Any],
-    activity_comments: list[dict[str, Any]] | None,
+    activity_comments: list[GitHubComment] | None,
     maintainer_ready: bool,
 ) -> tuple[int, list[str]]:
     now = datetime.now(timezone.utc)
@@ -854,7 +860,7 @@ def build_candidate(
     signal: str | None,
     repo_meta: Mapping[str, Any],
     guide: str | None,
-    activity_comments: list[dict[str, Any]] | None = None,
+    activity_comments: list[GitHubComment] | None = None,
     *,
     target_repos: Collection[str],
     amount_pattern: str,
