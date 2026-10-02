@@ -326,12 +326,16 @@ def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
     return None
 
 
-def comment_payment_signal(item: Mapping[str, Any], token: str | None) -> str | None:
-    """Recognize confirmed platform comments and trusted bounty commands."""
-    comments = issue_comments(item, token)
+def comment_payment_signal(
+    item: Mapping[str, Any],
+    token: str | None,
+    comments: list[dict[str, Any]] | None = None,
+) -> str | None:
+    """Recognize payment signals while reusing comments already loaded by verification."""
+    loaded_comments = issue_comments(item, token) if comments is None else comments
 
     # Prefer explicit bot/platform confirmations over the command that triggered them.
-    for comment in comments:
+    for comment in loaded_comments:
         body = str(comment.get("body", ""))
         login = str((comment.get("user") or {}).get("login", "")).lower()
         amount = re.search(EXTENDED_AMOUNT_RE, body, re.IGNORECASE)
@@ -360,7 +364,7 @@ def comment_payment_signal(item: Mapping[str, Any], token: str | None) -> str | 
             return f"confirmed bounty platform comment (BountyHub): {amount.group(0).strip()}"
 
     # Commands alone are accepted only from a repo owner/member/collaborator.
-    for comment in comments:
+    for comment in loaded_comments:
         body = str(comment.get("body", ""))
         association = str(comment.get("author_association", "")).upper()
         if association not in TRUSTED_ASSOCIATIONS:
@@ -700,10 +704,18 @@ def verify(
     if reward_history:
         return None, reward_history
 
+    comments = activity_comments
     issue_signal = bounty.payment_signal(fresh) or supplemental_payment_signal(fresh)
     comment_signal = None
     if not issue_signal and int(fresh.get("comments") or 0):
-        comment_signal = comment_payment_signal(fresh, token)
+        if require_paid:
+            comment_signal = comment_payment_signal(fresh, token)
+        else:
+            if comments is None:
+                comments, comments_reason = github.issue_comments_checked(fresh, token)
+                if comments_reason:
+                    return None, comments_reason
+            comment_signal = comment_payment_signal(fresh, token, comments)
     signal = issue_signal or comment_signal or payment_signal_override
 
     if require_paid or signal:
@@ -728,18 +740,16 @@ def verify(
         # only present in comments/platform feeds, so finish those checks here.
         if reason == "no explicit payment signal":
             repo, number = bounty.issue_repo_and_number(fresh)
-            competition_reason = extended_competition_reason(fresh, token)
+            competition_reason = extended_competition_reason(fresh, token, comments)
             if competition_reason:
                 return None, competition_reason
 
         lane = "paid"
     else:
-        if activity_comments is None:
+        if comments is None:
             comments, comments_reason = github.issue_comments_checked(fresh, token)
             if comments_reason:
                 return None, comments_reason
-        else:
-            comments = activity_comments
         reason = strategic_rejection(fresh, token, comments)
         if reason:
             return None, reason
