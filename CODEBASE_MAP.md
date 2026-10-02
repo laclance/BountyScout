@@ -75,7 +75,7 @@
 - **function** `markdown_examples()` — line 183
 - **function** `audit_summary()` — line 201
 - **function** `github_report_body()` — line 209
-- **function** `github_report_title()` — line 253
+- **function** `github_report_title()` — line 258
 
 ## `bountyscout/scoring.py`
 
@@ -176,4 +176,4 @@
 - **function** `send_telegram_notification()` — line 484
 - **function** `send_discord_notification()` — line 508
 - **function** `create_github_issue()` — line 526
-- **function** `main()` — line 555
+- **function** `main()` — line 577
