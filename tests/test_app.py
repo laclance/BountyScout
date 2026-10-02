@@ -2374,10 +2374,6 @@ class DiscoveryTests(unittest.TestCase):
             )
         )
 
-
-
-
-
     def test_discover_strategic_audits_target_source_failure(self) -> None:
         with (
             patch.object(scout, "TARGET_REPOS", ["a/a"]),
