@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import unittest
+
 from bountyscout import reporting
 from tests.helpers import candidate
-
 
 
 class MarkdownFormattingTests(unittest.TestCase):
