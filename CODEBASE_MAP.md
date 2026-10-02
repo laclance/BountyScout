@@ -34,21 +34,21 @@
 - **function** `fetch_repo_metadata()` — line 378
 - **function** `build_candidate()` — line 383
 - **function** `refresh_issue()` — line 404
-- **function** `upstream_wrapper_issue_url()` — line 420
-- **function** `non_actionable_diagnostic_reason()` — line 438
-- **function** `strategic_preflight_rejection()` — line 514
-- **function** `strategic_rejection()` — line 545
-- **function** `verify()` — line 594
-- **function** `add_reject()` — line 714
-- **function** `discover_paid()` — line 722
-- **function** `possible_miss_signal()` — line 821
-- **function** `basic_rejection_audit_reason()` — line 853
-- **function** `add_audit()` — line 893
-- **function** `strategic_inspection_items()` — line 909
-- **function** `strategic_global_search_results()` — line 921
-- **function** `prefetch_discovery_searches()` — line 934
-- **function** `discover_strategic()` — line 955
-- **function** `main()` — line 1261
+- **function** `upstream_wrapper_issue_url()` — line 418
+- **function** `non_actionable_diagnostic_reason()` — line 436
+- **function** `strategic_preflight_rejection()` — line 512
+- **function** `strategic_rejection()` — line 543
+- **function** `verify()` — line 592
+- **function** `add_reject()` — line 712
+- **function** `discover_paid()` — line 720
+- **function** `possible_miss_signal()` — line 819
+- **function** `basic_rejection_audit_reason()` — line 851
+- **function** `add_audit()` — line 891
+- **function** `strategic_inspection_items()` — line 907
+- **function** `strategic_global_search_results()` — line 919
+- **function** `prefetch_discovery_searches()` — line 932
+- **function** `discover_strategic()` — line 953
+- **function** `main()` — line 1259
 
 ## `bountyscout/github.py`
 
