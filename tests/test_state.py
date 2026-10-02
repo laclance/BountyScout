@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,6 +22,9 @@ FIXED_REPORTED_AT = "2026-10-02T08:30:00Z"
 FIXED_CHECKED_AT = "2026-10-02T10:00:00+02:00"
 URL_A = "https://github.com/example/project/issues/1"
 URL_B = "https://github.com/example/project/issues/2"
+URL_C = "https://github.com/example/project/issues/3"
+URL_D = "https://github.com/example/project/issues/4"
+NON_GITHUB_URL = "https://example.com/tasks/1"
 
 
 def current_document(
@@ -258,6 +262,193 @@ class SeenStateLogicTests(unittest.TestCase):
                     save_seen_state(SeenState.from_urls([URL_A]), path)
 
             self.assertEqual(path.read_text(encoding="utf-8"), "old-state\n")
+
+
+class SeenStateRetentionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.now = datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc)
+        self.stale = (self.now - timedelta(days=31)).isoformat()
+        self.older = (self.now - timedelta(days=60)).isoformat()
+        self.recent = (self.now - timedelta(days=10)).isoformat()
+
+    def test_selection_prioritizes_unknown_then_oldest_and_excludes_ineligible_urls(self) -> None:
+        seen = SeenState(
+            {
+                URL_B: state_module.SeenEntry(),
+                URL_A: state_module.SeenEntry(),
+                URL_C: state_module.SeenEntry(last_checked_at=self.stale),
+                URL_D: state_module.SeenEntry(last_checked_at=self.recent),
+                NON_GITHUB_URL: state_module.SeenEntry(),
+            }
+        )
+
+        self.assertEqual(
+            state_module.select_revalidation_batch(seen, self.now, limit=3),
+            [URL_A, URL_B, URL_C],
+        )
+        self.assertEqual(state_module.select_revalidation_batch(seen, self.now, limit=0), [])
+
+    def test_selection_orders_checked_entries_oldest_first(self) -> None:
+        seen = SeenState(
+            {
+                URL_A: state_module.SeenEntry(last_checked_at=self.stale),
+                URL_B: state_module.SeenEntry(last_checked_at=self.older),
+            }
+        )
+        self.assertEqual(
+            state_module.select_revalidation_batch(seen, self.now),
+            [URL_B, URL_A],
+        )
+
+    def test_eligibility_handles_unknown_stale_and_recent_entries(self) -> None:
+        self.assertTrue(
+            state_module.eligible_for_revalidation(state_module.SeenEntry(), self.now)
+        )
+        self.assertTrue(
+            state_module.eligible_for_revalidation(
+                state_module.SeenEntry(last_checked_at=self.stale),
+                self.now,
+            )
+        )
+        self.assertFalse(
+            state_module.eligible_for_revalidation(
+                state_module.SeenEntry(last_checked_at=self.recent),
+                self.now,
+            )
+        )
+
+    def test_mark_checked_remove_and_copy_do_not_expose_or_mutate_original(self) -> None:
+        original = SeenState.from_urls([URL_A])
+        copied = original.copy()
+
+        self.assertTrue(copied.mark_checked(URL_A, checked_at=FIXED_CHECKED_AT))
+        self.assertFalse(copied.mark_checked(URL_B, checked_at=FIXED_CHECKED_AT))
+        self.assertFalse(copied.remove(URL_B))
+        self.assertTrue(copied.remove(URL_A))
+
+        self.assertTrue(original.contains(URL_A))
+        self.assertEqual(original.record(URL_A), state_module.SeenEntry())
+
+    def test_apply_results_prunes_only_closed_and_updates_attempt_timestamps(self) -> None:
+        seen = SeenState.from_urls([URL_A, URL_B, URL_C, URL_D])
+        expected_checked = "2026-10-02T10:00:00Z"
+
+        state_module.apply_revalidation_result(seen, URL_A, "open", self.now)
+        state_module.apply_revalidation_result(seen, URL_B, "not_found", self.now)
+        state_module.apply_revalidation_result(seen, URL_C, "failed", self.now)
+        state_module.apply_revalidation_result(seen, URL_D, "closed", self.now)
+
+        self.assertEqual(seen.record(URL_A).last_checked_at, expected_checked)
+        self.assertEqual(seen.record(URL_B).last_checked_at, expected_checked)
+        self.assertEqual(seen.record(URL_C).last_checked_at, expected_checked)
+        self.assertFalse(seen.contains(URL_D))
+        state_module.apply_revalidation_result(seen, URL_D, "failed", self.now)
+        self.assertFalse(seen.contains(URL_D))
+
+    def test_maintenance_walks_unknown_entries_progressively(self) -> None:
+        seen = SeenState.from_urls([URL_B, URL_A])
+        first = state_module.maintain_seen_state(
+            seen,
+            self.now,
+            lambda _url: "open",
+            limit=1,
+        )
+        second_batch = state_module.select_revalidation_batch(
+            first.state,
+            self.now,
+            limit=1,
+        )
+
+        self.assertEqual(first.checked_urls, (URL_A,))
+        self.assertEqual(second_batch, [URL_B])
+        self.assertIsNone(seen.record(URL_A).last_checked_at)
+
+    def test_maintenance_prunes_closed_retains_failures_and_catches_checker_exceptions(self) -> None:
+        seen = SeenState.from_urls([URL_A, URL_B, URL_C, URL_D])
+        statuses = {
+            URL_A: "open",
+            URL_B: "closed",
+            URL_C: "not_found",
+        }
+
+        def checker(url: str) -> state_module.IssueLifecycleStatus:
+            if url == URL_D:
+                raise RuntimeError("transport exploded")
+            return statuses[url]
+
+        result = state_module.maintain_seen_state(
+            seen,
+            self.now,
+            checker,
+            limit=4,
+        )
+
+        self.assertEqual(result.checked_urls, (URL_A, URL_B, URL_C, URL_D))
+        self.assertEqual(result.pruned_urls, (URL_B,))
+        self.assertTrue(result.state.contains(URL_A))
+        self.assertFalse(result.state.contains(URL_B))
+        self.assertTrue(result.state.contains(URL_C))
+        self.assertTrue(result.state.contains(URL_D))
+        self.assertIsNotNone(result.state.record(URL_D).last_checked_at)
+        self.assertTrue(seen.contains(URL_B))
+
+    def test_empty_or_non_github_state_produces_no_maintenance_changes(self) -> None:
+        seen = SeenState.from_urls([NON_GITHUB_URL])
+        result = state_module.maintain_seen_state(
+            seen,
+            self.now,
+            lambda _url: "closed",
+        )
+        self.assertEqual(result.checked_urls, ())
+        self.assertEqual(result.pruned_urls, ())
+        self.assertTrue(result.state.contains(NON_GITHUB_URL))
+
+    def test_large_state_never_exceeds_configured_check_limit(self) -> None:
+        urls = [
+            f"https://github.com/example/project/issues/{number}"
+            for number in range(1, 10_051)
+        ]
+        seen = SeenState.from_urls(urls)
+        calls: list[str] = []
+
+        def checker(url: str) -> state_module.IssueLifecycleStatus:
+            calls.append(url)
+            return "open"
+
+        result = state_module.maintain_seen_state(seen, self.now, checker)
+
+        self.assertEqual(len(calls), state_module.SEEN_STATE_REVALIDATION_LIMIT)
+        self.assertEqual(len(result.checked_urls), state_module.SEEN_STATE_REVALIDATION_LIMIT)
+
+    def test_confirmed_closed_issue_can_be_discovered_again_if_reopened_later(self) -> None:
+        seen = SeenState.from_urls([URL_A])
+        maintained = state_module.maintain_seen_state(
+            seen,
+            self.now,
+            lambda _url: "closed",
+            limit=1,
+        ).state
+
+        self.assertFalse(maintained.contains(URL_A))
+        self.assertNotIn(URL_A, maintained.urls())
+
+    def test_maintained_serialization_remains_deterministic_v2(self) -> None:
+        seen = SeenState.from_urls([URL_B, URL_A])
+        maintained = state_module.maintain_seen_state(
+            seen,
+            self.now,
+            lambda _url: "open",
+            limit=1,
+        ).state
+
+        document = maintained.to_document()
+        self.assertEqual(document["version"], 2)
+        self.assertEqual(list(document["seen"]), [URL_A, URL_B])
+        self.assertEqual(
+            document["seen"][URL_A]["last_checked_at"],
+            "2026-10-02T10:00:00Z",
+        )
+
 
 
 if __name__ == "__main__":
