@@ -55,7 +55,7 @@ jobs:
           fi
 
       - name: Compile Python
-        run: python -m compileall -q opportunity_scout.py scout_bounties.py bountyscout tests scripts
+        run: python -m compileall -q opportunity_scout.py bountyscout tests scripts
 
       - name: Type check with mypy
         run: mypy

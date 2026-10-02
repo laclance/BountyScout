@@ -235,25 +235,6 @@
 
 - No public top-level classes or functions.
 
-## `scout_bounties.py`
-
-- **function** `github_get()` — line 39
-- **function** `search_github()` — line 44
-- **function** `payment_signal()` — line 52
-- **function** `issue_repo_and_number()` — line 57
-- **function** `has_existing_implementation_pr()` — line 66
-- **function** `active_claim_reason()` — line 76
-- **function** `is_clean_candidate()` — line 89
-- **function** `candidate_rejection_reason()` — line 94
-- **function** `parse_github_datetime()` — line 106
-- **function** `usd_like_amount_from_signal()` — line 116
-- **function** `fetch_repo_metadata()` — line 121
-- **function** `score_candidate()` — line 127
-- **function** `send_telegram_notification()` — line 253
-- **function** `send_discord_notification()` — line 258
-- **function** `create_github_issue()` — line 263
-- **function** `main()` — line 268
-
 ## `scripts/__init__.py`
 
 - No public top-level classes or functions.

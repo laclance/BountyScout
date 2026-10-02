@@ -2,7 +2,6 @@
 branch = True
 source =
     bountyscout
-    scout_bounties
     opportunity_scout
 
 [report]
