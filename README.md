@@ -9,19 +9,22 @@ The scout runs hourly, ranks new opportunities, creates a GitHub issue report, a
 
 ## Architecture
 
-The paid scanner remains intentionally close to upstream, while fork-specific strategic behavior is being split into focused modules:
+The paid scanner remains intentionally close to upstream, while fork-owned implementation lives under the `bountyscout/` package and focused strategic policy lives under `bountyscout/strategic/`:
 
 - `scout_bounties.py` — upstream-compatible paid bounty discovery and strict payment/competition filters.
-- `opportunity_scout.py` — application orchestration and strategic scanner composition.
-- `github_access.py` — shared fork-owned GitHub JSON access and keyed per-scan cache fills.
-- `opportunity_reporting.py` — GitHub queue reports, reject/audit summaries, and length-safe notification formatting.
-- `opportunity_scoring.py` — effort estimation and cash/career ranking over verified evidence.
-- `opportunity_sources.py` — GitHub/platform source adapters and bounded adaptive inspection selection.
-- `strategic_claims.py` — pure contributor ownership/implementation claim detection.
-- `strategic_competition.py` — active-claim and implementation-PR competition checks.
-- `strategic_readiness.py` — pure maintainer-readiness and lifecycle policy.
+- `opportunity_scout.py` — stable root executable shim; `python opportunity_scout.py` remains the runtime command.
+- `bountyscout/app.py` — combined application orchestration and strategic scanner composition.
+- `bountyscout/github.py` — shared fork-owned GitHub JSON access and keyed per-scan cache fills.
+- `bountyscout/reporting.py` — GitHub queue reports, reject/audit summaries, and length-safe notification formatting.
+- `bountyscout/scoring.py` — effort estimation and cash/career ranking over verified evidence.
+- `bountyscout/sources.py` — GitHub/platform source adapters and bounded adaptive inspection selection.
+- `bountyscout/strategic/claims.py` — pure contributor ownership/implementation claim detection.
+- `bountyscout/strategic/competition.py` — active-claim and implementation-PR competition checks.
+- `bountyscout/strategic/readiness.py` — pure maintainer-readiness and lifecycle policy.
 - `seen_bounties.json` — shared notification state.
 - `.github/workflows/bounty-scout.yml` — hourly runner.
+
+`scout_bounties.py` remains separate for upstream compatibility. The remaining generic helper dependencies from `bountyscout/` into that module are intentionally deferred to Phase 3B.
 
 See `ARCHITECTURE.md` for data flow and module boundaries, `AGENTS.md` for AI/human implementation rules, and `CODEBASE_MAP.md` for the generated structural index.
 

@@ -5,9 +5,9 @@ import urllib.request
 from typing import Any
 from unittest.mock import patch
 
-import opportunity_sources as sources
-import github_access as github
-from test_helpers import FakeResponse
+from bountyscout import sources
+from bountyscout import github
+from tests.helpers import FakeResponse
 
 
 def issue(number: int, **overrides: Any) -> dict[str, Any]:

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any, Collection, Mapping
 
 import scout_bounties as bounty
-from strategic_readiness import TRUSTED_ASSOCIATIONS
+from bountyscout.strategic.readiness import TRUSTED_ASSOCIATIONS
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:

@@ -34,8 +34,9 @@ make quality     # local quality gate
 ## Where changes belong
 
 - Keep upstream-compatible paid-bounty behavior in `scout_bounties.py` unless the change is intentionally fork-specific.
-- Put focused strategic policy in small domain modules.
-- Keep `opportunity_scout.py` as the composition/orchestration layer as code is gradually extracted.
+- Put focused strategic policy in `bountyscout/strategic/`.
+- Keep root `opportunity_scout.py` as the thin stable executable entry point; combined composition/orchestration lives in `bountyscout/app.py`.
+- Keep generic helper extraction from `scout_bounties.py` out of structure-only changes; that dependency cleanup is Phase 3B.
 - Keep pure policy separate from network I/O where practical.
 
 ## Tests

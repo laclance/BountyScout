@@ -7,7 +7,7 @@ This file is the canonical working agreement for coding agents and human contrib
 1. `README.md` — what the scout does and how to run it.
 2. `ARCHITECTURE.md` — data flow, module boundaries, and invariants.
 3. `CODEBASE_MAP.md` — generated structural index of production Python.
-4. Relevant `test_*.py` tests — executable behavior and regression cases.
+4. Relevant tests under `tests/` — executable behavior and regression cases.
 
 ## Project constraints
 
@@ -15,14 +15,14 @@ This file is the canonical working agreement for coding agents and human contrib
 - Prefer the standard library unless a dependency has a clear maintenance payoff.
 - Ruff is the formatter/linter, mypy runs in strict mode, and coverage requires 100% statement and branch coverage.
 - `scout_bounties.py` stays close to the upstream paid-bounty scanner so upstream merges remain low-conflict.
-- Strategic OSS behavior should move toward focused modules; `opportunity_scout.py` should become orchestration rather than a permanent monolith.
+- Fork-owned implementation lives under `bountyscout/`; strategic policy lives under `bountyscout/strategic/`. Root `opportunity_scout.py` is only the stable executable shim.
 - Never weaken paid-bounty verification while changing strategic discovery.
 
 ## Design rules
 
 - Give each function one clear responsibility. Prefer functions that fit comfortably on one screen; split a function when it mixes policy, I/O, parsing, scoring, or formatting.
 - Keep network and filesystem side effects at the edges. Put matching, scoring, normalization, and policy decisions in pure functions when practical.
-- New domain logic belongs in the smallest cohesive module that owns that concept. Leaf/domain modules must not import `opportunity_scout.py`.
+- New domain logic belongs in the smallest cohesive module that owns that concept. Leaf/domain modules must not import root `opportunity_scout.py` or reach back into `bountyscout.app`.
 - Use explicit type hints on function signatures and meaningful domain names. Prefer `Mapping` for read-only mapping inputs.
 - Avoid new mutable global state. Static configuration constants are fine; shared runtime state needs an explicit reason and synchronization where applicable.
 - Docstrings should explain intent, invariants, or surprising behavior. Do not add ceremonial `Args`/`Returns` sections that only repeat obvious type hints.

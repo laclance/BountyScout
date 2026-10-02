@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from typing import Any
 
-import strategic_readiness as readiness
+from bountyscout.strategic import readiness
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
