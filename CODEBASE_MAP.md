@@ -206,6 +206,10 @@
 - **function** `create_github_issue()` — line 503
 - **function** `main()` — line 554
 
+## `scripts/__init__.py`
+
+- No public top-level classes or functions.
+
 ## `scripts/close_legacy_scan_reports.py`
 
 - **class** `ReportIssue` — line 27
