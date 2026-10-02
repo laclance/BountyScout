@@ -41,14 +41,14 @@
 - **function** `verify()` — line 594
 - **function** `add_reject()` — line 714
 - **function** `discover_paid()` — line 722
-- **function** `possible_miss_signal()` — line 822
-- **function** `basic_rejection_audit_reason()` — line 855
-- **function** `add_audit()` — line 895
-- **function** `strategic_inspection_items()` — line 911
-- **function** `strategic_global_search_results()` — line 923
-- **function** `prefetch_discovery_searches()` — line 939
-- **function** `discover_strategic()` — line 960
-- **function** `main()` — line 1270
+- **function** `possible_miss_signal()` — line 826
+- **function** `basic_rejection_audit_reason()` — line 859
+- **function** `add_audit()` — line 899
+- **function** `strategic_inspection_items()` — line 915
+- **function** `strategic_global_search_results()` — line 927
+- **function** `prefetch_discovery_searches()` — line 943
+- **function** `discover_strategic()` — line 964
+- **function** `main()` — line 1274
 
 ## `bountyscout/github.py`
 
