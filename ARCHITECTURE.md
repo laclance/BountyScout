@@ -44,7 +44,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | --- | --- | --- |
 | `scout_bounties.py` | Upstream-compatible paid discovery, payment signals, basic competition checks, notifications | Keep changes conservative to reduce upstream merge conflicts |
 | `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
-| `bountyscout/app.py` | Combined application coordination, paid-scanner compatibility edge, strategic verification settlement, and delivery/state flow | Keeps the transitional root `scout_bounties.py` dependency localized |
+| `bountyscout/app.py` | Combined application coordination, mixed paid/strategic `verify()` compatibility edge, and delivery/state flow | Keeps the transitional root `scout_bounties.py` dependency localized and supplies narrow callbacks to strategic orchestration |
 | `bountyscout/github.py` | Fork-owned GitHub JSON transport, generic issue/timestamp parsing, and keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
 | `bountyscout/types.py` | Canonical static domain literals and mapping records shared across package-owned scanner code | Dependency-light typing vocabulary only; raw external JSON remains dynamic until validated |
 | `bountyscout/state.py` | Canonical typed, versioned seen-state parsing, legacy migration, logical membership/mutation, and deterministic atomic persistence | Local-file state only; branch-agnostic and fail-closed for malformed or unsupported existing state |
@@ -54,6 +54,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `bountyscout/strategic/claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
 | `bountyscout/strategic/competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses local evidence before timeline I/O; never imports `opportunity_scout.py` |
 | `bountyscout/strategic/discovery.py` | Strategic source-pool collection, near-miss audit diagnostics, adaptive inspection selection, and deterministic pre-verification ranking | Accepts narrow app adapters for transitional paid-compatible predicates/signals; never imports root `scout_bounties.py` or `bountyscout.app` |
+| `bountyscout/strategic/verification.py` | Ranked strategic deep-verification orchestration, bounded per-repo settlement, source-failure handling, and final strategic selection | Accepts typed app callbacks for mixed verification/preflight behavior; never imports root `scout_bounties.py` or `bountyscout.app` |
 | `bountyscout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` | Local runtime seen-state file | Version 2 is canonical; legacy URL lists load losslessly and rewrite as version 2 on the next successful save |
 | `.github/workflows/bounty-scout.yml` | Scheduled scanner execution | Runtime workflow, not the quality gate |
@@ -74,6 +75,7 @@ bountyscout.app
     |-- bountyscout.strategic.claims
     |-- bountyscout.strategic.competition
     |-- bountyscout.strategic.discovery
+    |-- bountyscout.strategic.verification
     |-- bountyscout.strategic.readiness
 
 bountyscout.types -X-> package policy / orchestration modules
@@ -90,6 +92,10 @@ bountyscout.strategic.discovery --> bountyscout.scoring
 bountyscout.strategic.discovery --> bountyscout.sources
 bountyscout.strategic.discovery --> bountyscout.strategic.readiness
 bountyscout.strategic.discovery -X-> scout_bounties.py
+bountyscout.strategic.verification --> bountyscout.sources
+bountyscout.strategic.verification --> bountyscout.strategic.discovery
+bountyscout.strategic.verification -X-> scout_bounties.py
+bountyscout.strategic.verification -X-> bountyscout.app
 bountyscout.strategic.readiness --> bountyscout.strategic.claims
 
 package/domain modules -X-> opportunity_scout.py
@@ -106,7 +112,7 @@ Phase 3B makes generic GitHub issue parsing and timestamp parsing fork-owned in 
 
 Historical generated queue reports from before the current auto-close lifecycle were cleaned once with `scripts/close_legacy_scan_reports.py` after explicit report-identity verification. Current generated reports are auto-closed during normal delivery, and there is no recurring cleanup service.
 
-Phase 4C.1 moves strategic source collection, near-miss auditing, adaptive inspection, and pre-verification ranking into `bountyscout.strategic.discovery`. `bountyscout.app` keeps compatibility wrappers and supplies narrow callbacks for paid-compatible behavior still owned by `scout_bounties.py`; verification settlement remains in `app.py` for the next decomposition step.
+Phase 4C.1 moves strategic source collection, near-miss auditing, adaptive inspection, and pre-verification ranking into `bountyscout.strategic.discovery`. Phase 4C.2 moves ranked deep-verification orchestration, per-repository bounded settlement, source-failure handling, and final strategic selection into `bountyscout.strategic.verification`. `bountyscout.app` keeps compatibility wrappers and the transitional mixed paid/strategic `verify()` edge, supplying narrow callbacks rather than spreading the root `scout_bounties.py` dependency.
 
 ## Invariants
 
