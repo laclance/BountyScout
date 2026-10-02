@@ -5,7 +5,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from time import monotonic, sleep
-from typing import Any, Mapping, cast
+from typing import Any, Mapping, Sequence, cast
 
 from bountyscout import github
 import scout_bounties as bounty
@@ -236,7 +236,7 @@ def extended_competition_reason(
         supplemental_claim_checker=lambda candidate, claim_comments: supplemental_claim_reason(
             candidate,
             token,
-            claim_comments,
+            cast(list[dict[str, Any]], claim_comments),
         ),
     )
 
@@ -661,9 +661,10 @@ def verify(
             comment_signal = comment_payment_signal(fresh, token)
         else:
             if comments is None:
-                comments, comments_reason = github.issue_comments_checked(fresh, token)
+                loaded_comments, comments_reason = github.issue_comments_checked(fresh, token)
                 if comments_reason:
                     return None, comments_reason
+                comments = cast(list[dict[str, Any]], loaded_comments)
             comment_signal = comment_payment_signal(fresh, token, comments)
     signal = issue_signal or comment_signal or payment_signal_override
 
@@ -697,9 +698,10 @@ def verify(
         lane = "paid"
     else:
         if comments is None:
-            comments, comments_reason = github.issue_comments_checked(fresh, token)
+            loaded_comments, comments_reason = github.issue_comments_checked(fresh, token)
             if comments_reason:
                 return None, comments_reason
+            comments = cast(list[dict[str, Any]], loaded_comments)
         reason = strategic_rejection(fresh, token, comments)
         if reason:
             return None, reason
@@ -936,11 +938,11 @@ def add_audit(
 
 
 def strategic_inspection_items(
-    provisional: list[tuple[int, int, int, dict[str, Any]]],
+    provisional: Sequence[tuple[int, int, int, Mapping[str, Any]]],
 ) -> dict[str, list[dict[str, Any]]]:
     """Select base per-repo candidates plus a globally bounded strong overflow."""
     return sources.strategic_inspection_items(
-        provisional,
+        cast(list[sources.IssueRow], list(provisional)),
         base_per_repo=STRATEGIC_INSPECT_PER_REPO,
         adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
         should_expand=possible_miss_signal,
