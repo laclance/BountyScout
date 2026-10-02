@@ -52,16 +52,18 @@
 
 ## `bountyscout/github.py`
 
-- **class** `KeyedLockPool` — line 23
-- **function** `cached_value()` — line 36
-- **function** `github_get()` — line 54
-- **function** `issue_repo_and_number()` — line 80
-- **function** `parse_github_datetime()` — line 91
-- **function** `repo_metadata()` — line 101
-- **function** `issue_comments_checked()` — line 107
-- **function** `issue_comments()` — line 127
-- **function** `contribution_guide()` — line 136
-- **function** `issue_from_github_url()` — line 153
+- **class** `IssueLifecycleResult` — line 31
+- **class** `KeyedLockPool` — line 35
+- **function** `cached_value()` — line 48
+- **function** `github_get()` — line 77
+- **function** `issue_repo_and_number()` — line 102
+- **function** `parse_github_datetime()` — line 109
+- **function** `issue_lifecycle()` — line 119
+- **function** `repo_metadata()` — line 151
+- **function** `issue_comments_checked()` — line 157
+- **function** `issue_comments()` — line 177
+- **function** `contribution_guide()` — line 186
+- **function** `issue_from_github_url()` — line 203
 
 ## `bountyscout/reporting.py`
 
@@ -113,15 +115,20 @@
 
 ## `bountyscout/state.py`
 
-- **class** `SeenEntryDocument` — line 16
-- **class** `SeenStateDocument` — line 21
-- **class** `SeenEntry` — line 27
-- **class** `SeenStateLoadError` — line 32
-- **class** `SeenStateSaveError` — line 36
-- **class** `SeenState` — line 40
-- **function** `parse_seen_state()` — line 147
-- **function** `load_seen_state()` — line 156
-- **function** `save_seen_state()` — line 173
+- **class** `SeenEntryDocument` — line 25
+- **class** `SeenStateDocument` — line 30
+- **class** `SeenEntry` — line 36
+- **class** `SeenStateMaintenanceResult` — line 42
+- **class** `SeenStateLoadError` — line 48
+- **class** `SeenStateSaveError` — line 52
+- **class** `SeenState` — line 56
+- **function** `eligible_for_revalidation()` — line 134
+- **function** `select_revalidation_batch()` — line 145
+- **function** `apply_revalidation_result()` — line 171
+- **function** `maintain_seen_state()` — line 184
+- **function** `parse_seen_state()` — line 273
+- **function** `load_seen_state()` — line 282
+- **function** `save_seen_state()` — line 299
 
 ## `bountyscout/strategic/__init__.py`
 
@@ -167,14 +174,14 @@
 
 ## `bountyscout/types.py`
 
-- **class** `GitHubLabel` — line 18
-- **class** `GitHubUser` — line 24
-- **class** `GitHubComment` — line 30
-- **class** `GitHubIssue` — line 40
-- **class** `RepositoryMetadata` — line 59
-- **class** `GitHubSearchResult` — line 68
-- **class** `Candidate` — line 78
-- **class** `RejectionRecord` — line 108
+- **class** `GitHubLabel` — line 19
+- **class** `GitHubUser` — line 25
+- **class** `GitHubComment` — line 31
+- **class** `GitHubIssue` — line 41
+- **class** `RepositoryMetadata` — line 60
+- **class** `GitHubSearchResult` — line 69
+- **class** `Candidate` — line 79
+- **class** `RejectionRecord` — line 109
 
 ## `opportunity_scout.py`
 
