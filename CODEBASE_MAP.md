@@ -115,20 +115,20 @@
 
 ## `bountyscout/state.py`
 
-- **class** `SeenEntryDocument` — line 25
-- **class** `SeenStateDocument` — line 30
-- **class** `SeenEntry` — line 36
-- **class** `SeenStateMaintenanceResult` — line 42
-- **class** `SeenStateLoadError` — line 48
-- **class** `SeenStateSaveError` — line 52
-- **class** `SeenState` — line 56
-- **function** `eligible_for_revalidation()` — line 134
-- **function** `select_revalidation_batch()` — line 145
-- **function** `apply_revalidation_result()` — line 171
-- **function** `maintain_seen_state()` — line 184
-- **function** `parse_seen_state()` — line 273
-- **function** `load_seen_state()` — line 282
-- **function** `save_seen_state()` — line 299
+- **class** `SeenEntryDocument` — line 23
+- **class** `SeenStateDocument` — line 28
+- **class** `SeenEntry` — line 34
+- **class** `SeenStateMaintenanceResult` — line 40
+- **class** `SeenStateLoadError` — line 46
+- **class** `SeenStateSaveError` — line 50
+- **class** `SeenState` — line 54
+- **function** `eligible_for_revalidation()` — line 132
+- **function** `select_revalidation_batch()` — line 143
+- **function** `apply_revalidation_result()` — line 169
+- **function** `maintain_seen_state()` — line 182
+- **function** `parse_seen_state()` — line 271
+- **function** `load_seen_state()` — line 280
+- **function** `save_seen_state()` — line 297
 
 ## `bountyscout/strategic/__init__.py`
 
