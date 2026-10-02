@@ -995,7 +995,6 @@ class ScoringRegressionTests(unittest.TestCase):
         missing = scoring.repo_activity({"pushed_at": None})
         self.assertEqual(missing, "unknown")
 
-
     def test_owner_module_covers_effort_payment_and_activity_buckets(self) -> None:
         estimate = scoring.estimate_effort_details(
             issue(
@@ -1136,7 +1135,9 @@ class ScoringRegressionTests(unittest.TestCase):
     def test_owner_module_covers_strategic_freshness_activity_branches(self) -> None:
         now = datetime.now(timezone.utc)
 
-        def build(updated_days: int, comments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        def build(
+            updated_days: int, comments: list[dict[str, Any]] | None = None
+        ) -> dict[str, Any]:
             return scoring.build_candidate(
                 issue(
                     title="Network bug",
