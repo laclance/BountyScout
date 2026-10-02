@@ -304,6 +304,45 @@ class MaintainerReadinessTests(unittest.TestCase):
             (False, "proposal is still gathering feedback"),
         )
 
+    def test_hold_reason_branches_are_directly_owned_here(self) -> None:
+        regular = issue(title="Network bug")
+        proposal = issue(title="Network metrics", labels=[{"name": "kind/proposal"}])
+
+        cases = (
+            (
+                "We need more investigation before coding.",
+                "maintainer says issue still needs investigation",
+            ),
+            (
+                "Are you sure you reproduced this on the current CLI?",
+                "maintainer says reproduction is still required",
+            ),
+            (
+                "We need clarification on the API contract.",
+                "maintainer says issue still needs clarification",
+            ),
+        )
+        for body, expected in cases:
+            with self.subTest(body=body):
+                state, reason = readiness.maintainer_readiness_comment_state(
+                    regular,
+                    [{"body": body, "author_association": "MEMBER"}],
+                )
+                self.assertFalse(state)
+                self.assertEqual(reason, expected)
+
+        state, reason = readiness.maintainer_readiness_comment_state(
+            proposal,
+            [
+                {
+                    "body": "This discussion is time-boxed to six months.",
+                    "author_association": "OWNER",
+                }
+            ],
+        )
+        self.assertFalse(state)
+        self.assertEqual(reason, "proposal is still gathering feedback")
+
 
 class SubmissionAndReporterResolutionTests(unittest.TestCase):
     def test_trusted_issue_author_can_explicitly_forbid_prs(self) -> None:

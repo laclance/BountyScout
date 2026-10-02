@@ -2,25 +2,12 @@ from __future__ import annotations
 
 import unittest
 import urllib.request
-from typing import Any, Literal
+from typing import Any
 from unittest.mock import patch
 
 import opportunity_sources as sources
 import github_access as github
-
-
-class FakeResponse:
-    def __init__(self, body: bytes = b"{}") -> None:
-        self.body = body
-
-    def __enter__(self) -> "FakeResponse":
-        return self
-
-    def __exit__(self, *args: Any) -> Literal[False]:
-        return False
-
-    def read(self) -> bytes:
-        return self.body
+from test_helpers import FakeResponse
 
 
 def issue(number: int, **overrides: Any) -> dict[str, Any]:

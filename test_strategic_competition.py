@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import patch
 
-import opportunity_scout as scout
 import github_access as github
 import scout_bounties as bounty
 import strategic_competition as competition
@@ -21,15 +20,6 @@ def issue(**overrides: Any) -> dict[str, Any]:
     }
     item.update(overrides)
     return item
-
-
-class CompatibilityWrapperTests(unittest.TestCase):
-    def test_opportunity_scout_preserves_claim_recency_export(self) -> None:
-        self.assertTrue(scout.claim_source_is_recent({}))
-        self.assertEqual(
-            scout.STRATEGIC_CLAIM_MAX_AGE_DAYS,
-            competition.STRATEGIC_CLAIM_MAX_AGE_DAYS,
-        )
 
 
 class ClaimCompetitionTests(unittest.TestCase):
@@ -475,6 +465,46 @@ class TimelinePullRequestTests(unittest.TestCase):
             competition.timeline_open_pr_reason({"html_url": "bad"}, "t"),
             "could not identify repository/issue number",
         )
+
+    def test_timeline_handles_invalid_failure_and_no_match_paths(self) -> None:
+        self.assertEqual(
+            competition.timeline_open_pr_reason({"html_url": "bad"}, "t"),
+            "could not identify repository/issue number",
+        )
+
+        with patch.object(github, "github_get", return_value={}):
+            self.assertEqual(
+                competition.timeline_open_pr_reason(issue(), "t"),
+                "could not verify open implementation PR timeline",
+            )
+
+        no_match_timeline = [
+            {"event": "commented"},
+            {"event": "cross-referenced", "source": "invalid"},
+            {"event": "cross-referenced", "source": {"issue": "invalid"}},
+            {"event": "cross-referenced", "source": {"issue": {"state": "open"}}},
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {"url": "x"},
+                        "state": "closed",
+                        "html_url": "https://github.com/example/project/pull/11",
+                    }
+                },
+            },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {"url": "y"},
+                        "state": "open",
+                    }
+                },
+            },
+        ]
+        with patch.object(github, "github_get", return_value=no_match_timeline):
+            self.assertIsNone(competition.timeline_open_pr_reason(issue(), "t"))
 
 
 class CompetitionOrchestrationTests(unittest.TestCase):

@@ -6,12 +6,14 @@ import unittest
 import urllib.request
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any
 from unittest.mock import patch
 
 import opportunity_scout as scout
 import github_access as github
 import scout_bounties as bounty
+import strategic_competition as competition_policy
+from test_helpers import FakeResponse
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
@@ -68,20 +70,6 @@ def candidate(**overrides: Any) -> dict[str, Any]:
     }
     base.update(overrides)
     return base
-
-
-class FakeResponse:
-    def __init__(self, body: bytes = b"{}") -> None:
-        self.body = body
-
-    def __enter__(self) -> "FakeResponse":
-        return self
-
-    def __exit__(self, *args: Any) -> Literal[False]:
-        return False
-
-    def read(self) -> bytes:
-        return self.body
 
 
 class BasicHeuristicTests(unittest.TestCase):
@@ -206,104 +194,6 @@ class BasicHeuristicTests(unittest.TestCase):
         self.assertFalse(scout.strategic_basic_candidate(crowded_assigned))
         self.assertFalse(scout.strategic_basic_candidate(assigned))
 
-    def test_issue_text_handles_dict_and_string_labels(self) -> None:
-        title, body, labels, text = scout.issue_text(
-            issue(title="ABC", body="DEF", labels=[{"name": "Help Wanted"}, "Bug"])
-        )
-        self.assertEqual((title, body), ("ABC", "DEF"))
-        self.assertEqual(labels, "help wanted bug")
-        self.assertEqual(text, "abc\ndef")
-
-        self.assertTrue(scout.maintainer_ready_signal("Status: Help Wanted"))
-        self.assertTrue(scout.maintainer_ready_signal("contributor/help-wanted"))
-        self.assertFalse(scout.maintainer_ready_signal("bug"))
-        self.assertTrue(scout.triage_pending_signal("needs/triage"))
-        self.assertTrue(scout.triage_pending_signal("kind/bug/possible"))
-        self.assertFalse(scout.triage_pending_signal("triage/accepted"))
-
-    def test_effort_all_buckets(self) -> None:
-        self.assertEqual(scout.code_reference_count("a.go a.go pkg/b.sh docs/c.yaml"), 3)
-        self.assertEqual(scout.estimate_effort(issue(title="Architecture rewrite")), "1d+")
-        self.assertEqual(scout.estimate_effort(issue(title="FR: Support ExternalName")), "1d+")
-        self.assertEqual(
-            scout.estimate_effort(
-                issue(title="Add support for Connection Pool", labels=["kind/feature"])
-            ),
-            "1d+",
-        )
-        self.assertEqual(
-            scout.estimate_effort(
-                issue(title="Android DNS regression", body="dual SIM device reproduction")
-            ),
-            "1d+",
-        )
-        self.assertEqual(
-            scout.estimate_effort(
-                issue(title="Support multi-homed pods", labels=["feature request"])
-            ),
-            "1d+",
-        )
-        self.assertEqual(
-            scout.estimate_effort(
-                issue(title="Move iptables initialization into batch", labels=["enhancement"])
-            ),
-            "6–12h",
-        )
-        self.assertEqual(
-            scout.estimate_effort(
-                issue(
-                    title="Intermittent ENI race",
-                    body="We haven't been able to reproduce on demand; low-probability race.",
-                )
-            ),
-            "1d+",
-        )
-        self.assertEqual(scout.estimate_effort(issue(title="README typo", body="small")), "<1h")
-        self.assertEqual(
-            scout.estimate_effort(issue(title="TCP mode leaks upstream connection", comments=0)),
-            "1–3h",
-        )
-        self.assertEqual(
-            scout.estimate_effort(
-                issue(
-                    title="Broad logger cleanup",
-                    body="a.go b.go c.go d.go",
-                    comments=1,
-                )
-            ),
-            "6–12h",
-        )
-        self.assertEqual(
-            scout.estimate_effort(issue(title="Broad bug", body="x" * 9000, comments=1)),
-            "6–12h",
-        )
-        self.assertEqual(
-            scout.estimate_effort(
-                issue(
-                    title="Android split tunnel bug",
-                    body="### Steps to reproduce\n\n_No response_",
-                    labels=["OS-android"],
-                    comments=8,
-                )
-            ),
-            "6–12h",
-        )
-        self.assertEqual(
-            scout.estimate_effort(
-                issue(
-                    title="Watcher backlog",
-                    body="Suggested fixes\n- first\n- second\n- third",
-                    comments=0,
-                )
-            ),
-            "6–12h",
-        )
-        self.assertEqual(scout.estimate_effort(issue(title="Feature", body="x" * 13000)), "1d+")
-        self.assertEqual(scout.estimate_effort(issue(title="Feature", comments=13)), "3–6h")
-        self.assertEqual(
-            scout.estimate_effort(issue(title="Feature", body="normal", comments=4)), "3–6h"
-        )
-
     def test_fetch_repo_metadata_compatibility_wrapper(self) -> None:
         with patch.object(github, "repo_metadata", return_value={"stargazers_count": 7}) as fetch:
             self.assertEqual(
@@ -311,47 +201,6 @@ class BasicHeuristicTests(unittest.TestCase):
                 {"stargazers_count": 7},
             )
         fetch.assert_called_once_with("example/project", "t")
-
-    def test_effort_hours_and_competition(self) -> None:
-        self.assertEqual(scout.effort_hours("<1h"), 0.75)
-        self.assertEqual(scout.effort_hours("1–3h"), 2.0)
-        self.assertEqual(scout.effort_hours("3–6h"), 4.5)
-        self.assertEqual(scout.effort_hours("6–12h"), 9.0)
-        self.assertEqual(scout.effort_hours("1d+"), 16.0)
-        for comments, expected in [(0, "none"), (3, "low"), (8, "medium"), (9, "high")]:
-            self.assertEqual(scout.competition(issue(comments=comments)), expected)
-
-    def test_payment_confidence_all_classes(self) -> None:
-        cases = [
-            (None, 0),
-            ("confirmed bounty platform feed (Opire)", 100),
-            ("explicit bounty command: $1", 100),
-            ("explicit /reward comment: $1", 98),
-            ("explicit /bounty comment: $1", 98),
-            ("bounty labels: $1", 95),
-            ("named bounty platform + funding language", 90),
-            ("payment term + amount: $1", 85),
-        ]
-        for signal, expected in cases:
-            self.assertEqual(scout.payment_confidence(signal), expected)
-
-    def test_reward_text_and_repo_activity(self) -> None:
-        self.assertIsNone(scout.reward_text(None))
-        self.assertEqual(scout.reward_text("reward 25 CAD"), "25 CAD")
-        self.assertEqual(scout.reward_text("20 USDC bounty"), "20 USDC")
-        self.assertIsNone(scout.reward_text("Ethereum-mainnet ERC-20 USDC/USDT address"))
-        self.assertIsNone(scout.reward_text("funded externally"))
-
-        self.assertEqual(scout.repo_activity({}), "unknown")
-        now = datetime.now(timezone.utc)
-        for days, prefix in [
-            (2, "active in last 7d"),
-            (20, "active in last 30d"),
-            (60, "active in last 90d"),
-            (120, "last push"),
-        ]:
-            meta = {"pushed_at": (now - timedelta(days=days)).isoformat()}
-            self.assertTrue(scout.repo_activity(meta).startswith(prefix))
 
 
 class HttpAndPlatformTests(unittest.TestCase):
@@ -567,353 +416,6 @@ class HttpAndPlatformTests(unittest.TestCase):
 
 
 class CalibrationTests(unittest.TestCase):
-    def test_linked_open_pr_reason_paths(self) -> None:
-        self.assertIsNone(
-            scout.linked_open_pr_reason(
-                {"html_url": "bad", "comments": 1},
-                "t",
-            )
-        )
-        self.assertIsNone(scout.linked_open_pr_reason(issue(comments=0), "t"))
-
-        direct_comments = [
-            {
-                "body": "This is the related PR: https://github.com/example/project/pull/142565",
-            }
-        ]
-        with (
-            patch.object(scout, "issue_comments", return_value=direct_comments),
-            patch.object(
-                github,
-                "github_get",
-                return_value={"state": "open"},
-            ),
-        ):
-            self.assertEqual(
-                scout.linked_open_pr_reason(issue(comments=1), "t"),
-                "existing open implementation PR: https://github.com/example/project/pull/142565",
-            )
-
-        phrase_comments = [
-            {"body": "submitted PR #10"},
-            {"body": "implementation pull request #11"},
-        ]
-        with patch.object(
-            github,
-            "github_get",
-            side_effect=[
-                {"state": "closed", "html_url": "https://github.com/example/project/pull/10"},
-                {"state": "open", "html_url": "https://github.com/example/project/pull/11"},
-            ],
-        ):
-            self.assertEqual(
-                scout.linked_open_pr_reason(issue(comments=2), "t", phrase_comments),
-                "existing open implementation PR: https://github.com/example/project/pull/11",
-            )
-
-        with patch.object(github, "github_get", return_value=[]):
-            self.assertIsNone(
-                scout.linked_open_pr_reason(
-                    issue(comments=1),
-                    "t",
-                    [{"body": "opened PR #12"}],
-                )
-            )
-
-        with patch.object(
-            github,
-            "github_get",
-            return_value={
-                "state": "open",
-                "html_url": "https://github.com/example/project/pull/21804",
-            },
-        ):
-            self.assertEqual(
-                scout.linked_open_pr_reason(
-                    issue(comments=1),
-                    "t",
-                    [{"body": "There is also a related draft fix in #21804 waiting for review."}],
-                ),
-                "existing open implementation PR: https://github.com/example/project/pull/21804",
-            )
-
-    def test_supplemental_claim_reason_paths(self) -> None:
-        self.assertIsNone(scout.supplemental_claim_reason(issue(comments=0), "t"))
-
-        with patch.object(
-            scout,
-            "issue_comments",
-            return_value=[{"body": "Planning a fix:"}],
-        ):
-            self.assertEqual(
-                scout.supplemental_claim_reason(issue(comments=1), "t"),
-                "active claim by @someone",
-            )
-
-        self.assertEqual(
-            scout.supplemental_claim_reason(
-                issue(comments=1),
-                "t",
-                [
-                    {
-                        "body": "I'll implement this",
-                        "user": {"login": "dev"},
-                    }
-                ],
-            ),
-            "active claim by @dev",
-        )
-        self.assertIsNone(
-            scout.supplemental_claim_reason(
-                issue(comments=1),
-                "t",
-                [{"body": "Thanks for the report"}],
-            )
-        )
-
-    def test_supplemental_claim_reason_take_phrases(self) -> None:
-        for body in ("I can take this one.", "I'll take a look at this one."):
-            with self.subTest(body=body):
-                self.assertEqual(
-                    scout.supplemental_claim_reason(
-                        issue(comments=1),
-                        "t",
-                        [{"body": body, "user": {"login": "dev"}}],
-                    ),
-                    "active claim by @dev",
-                )
-
-    def test_strategic_claim_matcher_required_phrases(self) -> None:
-        claims = (
-            "I'd like to work on this.",
-            "I would like to work on this for check config.",
-            "I would love to work on implementing this refactoring.",
-            "Before I write code, I'd like to agree on the shape.",
-            "I'm interested in working on this and can send a PR.",
-            "My plan is to add X, update Y, and open a PR.",
-            "I'll take a look at implementing this.",
-            "I've implemented this locally and added tests.",
-            "I have implemented this locally and added tests.",
-            "I have a fix with tests and can open a PR.",
-            "I've got a fix ready; would you welcome a PR?",
-            "I’ve implemented this locally.",
-            "I'm going to change X and add Y.",
-            "Before submitting the PR, I want to confirm the API.",
-            "Currently implementing this.",
-            "I have tests ready.",
-            "I have one ready and tested on a 2.2 node.",
-            "If so, I would be happy to submit the PR for review.",
-            "I can start working on a Pull Request for it.",
-            "Claiming this DBIP. Plan: validator rule in json-tools.",
-            "Claiming this issue.",
-            "I'm claiming this task.",
-            "I'll claim this.",
-        )
-        for body in claims:
-            with self.subTest(body=body):
-                self.assertTrue(scout.strategic_claim_text(body))
-
-    def test_strategic_claim_matcher_avoids_non_claims(self) -> None:
-        non_claims = (
-            "I'd like to see this fixed.",
-            "I'd love to see this fixed.",
-            "I think we should implement this using X.",
-            "Someone could add a test here.",
-            "I reproduced this on Linux.",
-            "This looks straightforward to fix.",
-            "I investigated this and the problem is in X.",
-            "One solution might be to change X.",
-            "Someone else is planning a fix.",
-            "The maintainer is currently implementing this.",
-            "Feel free to submit a PR.",
-            "We would welcome a PR for this.",
-            "I can start reviewing a Pull Request for it.",
-            "We have prepared reproduction steps and logs.",
-            "The docs claim this behavior is supported.",
-            "The claimable balance is zero.",
-            "This is an insurance claim.",
-            "This issue claims that the parser is broken.",
-            "Someone claimed this was fixed already.",
-            "I am claiming this was fixed already.",
-        )
-        for body in non_claims:
-            with self.subTest(body=body):
-                self.assertFalse(scout.strategic_claim_text(body))
-
-    def test_strategic_claim_live_regression_snippets(self) -> None:
-        recent = datetime.now(timezone.utc).isoformat()
-        terraform = [
-            {
-                "body": (
-                    "I've implemented this locally and verified the reproduction now passes, "
-                    "and added unit + e2e regression tests. Would the team welcome a PR for this?"
-                ),
-                "created_at": recent,
-                "user": {"login": "adisivaprasad"},
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_claim_reason(issue(), terraform),
-            "active claim by @adisivaprasad",
-        )
-
-        moby = issue(
-            comments=0,
-            created_at=recent,
-            body=(
-                "I found this with Claude Code while I worked on another issue, and I checked "
-                "the analysis myself. I have a fix with tests, and I can open a PR if you agree."
-            ),
-        )
-        self.assertEqual(
-            scout.strategic_claim_reason(moby, []),
-            "issue author already has an implementation/fix in progress",
-        )
-
-        prometheus = [
-            {
-                "body": (
-                    "I would like to work on this for check config. "
-                    "Proposal for check config: read the config from standard input."
-                ),
-                "created_at": recent,
-                "user": {"login": "LudwigJMarx"},
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_claim_reason(issue(), prometheus),
-            "active claim by @LudwigJMarx",
-        )
-
-        traefik = [
-            {
-                "body": (
-                    "I'd like to work on this, since it was marked contributor/wanted after triage. "
-                    "Before I write code, I'd like to agree on the shape. "
-                    "First PR: a middleware that only edits the query string."
-                ),
-                "created_at": recent,
-                "user": {"login": "IslamElsayed"},
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_claim_reason(issue(), traefik),
-            "active claim by @IslamElsayed",
-        )
-
-        terraform_35703 = [
-            {
-                "body": (
-                    "We have prepared a deterministic unit test for pagination. "
-                    "If so, I would be happy to submit the PR for review."
-                ),
-                "created_at": recent,
-                "user": {"login": "rksharma-owg"},
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_claim_reason(issue(), terraform_35703),
-            "active claim by @rksharma-owg",
-        )
-
-        containerd_14275 = issue(
-            comments=0,
-            created_at=recent,
-            body=(
-                "release/2.2 has its own copy, so it needs a port. "
-                "I have one ready and tested on a 2.2 node. "
-                "I'd open it as a draft until the upstream PR merges."
-            ),
-        )
-        self.assertEqual(
-            scout.strategic_claim_reason(containerd_14275, []),
-            "issue author already has an implementation/fix in progress",
-        )
-
-        omi_prepared = issue(
-            comments=0,
-            created_at=recent,
-            body=(
-                "I prepared a focused candidate that requires a complete explicit decision "
-                "payload. If approved, I can provide the prepared patch and tests for review."
-            ),
-        )
-        self.assertEqual(
-            scout.strategic_claim_reason(omi_prepared, []),
-            "issue author already has an implementation/fix in progress",
-        )
-
-        client_golang_2129 = [
-            {
-                "body": (
-                    "I have analyzed this part of the codebase and would love to work on "
-                    "implementing this refactoring. I can start working on a Pull Request for it!"
-                ),
-                "created_at": recent,
-                "user": {"login": "AbdulKreemShah2408"},
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_claim_reason(issue(), client_golang_2129),
-            "active claim by @AbdulKreemShah2408",
-        )
-
-    def test_strategic_claim_recency_does_not_permanently_suppress(self) -> None:
-        recent = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-        stale = (
-            datetime.now(timezone.utc) - timedelta(days=scout.STRATEGIC_CLAIM_MAX_AGE_DAYS + 30)
-        ).isoformat()
-
-        recent_comment = {
-            "body": "I'm working on this.",
-            "created_at": recent,
-            "user": {"login": "recent-dev"},
-        }
-        stale_comment = {
-            "body": "I'm working on this.",
-            "created_at": stale,
-            "user": {"login": "old-dev"},
-        }
-        self.assertEqual(
-            scout.strategic_claim_reason(issue(), [recent_comment]),
-            "active claim by @recent-dev",
-        )
-        self.assertIsNone(scout.strategic_claim_reason(issue(), [stale_comment]))
-        self.assertIsNone(
-            scout.strategic_claim_reason(
-                issue(),
-                [
-                    {
-                        "body": "I reproduced this on Linux.",
-                        "created_at": recent,
-                        "user": {"login": "reporter"},
-                    }
-                ],
-            )
-        )
-
-        recent_body = issue(
-            created_at=recent,
-            body="I have a patch and can open a PR.",
-        )
-        stale_body = issue(
-            created_at=stale,
-            body="I have a patch and can open a PR.",
-        )
-        self.assertEqual(
-            scout.strategic_claim_reason(recent_body, []),
-            "issue author already has an implementation/fix in progress",
-        )
-        self.assertIsNone(scout.strategic_claim_reason(stale_body, []))
-
-        self.assertEqual(
-            scout.strategic_claim_reason(
-                issue(),
-                [{"body": "Planning a fix", "user": {"login": "dev"}}],
-            ),
-            "active claim by @dev",
-        )
-
     def test_strategic_competition_reason_paths(self) -> None:
         self.assertEqual(
             scout.strategic_competition_reason({"html_url": "bad"}, "t", []),
@@ -955,74 +457,6 @@ class CalibrationTests(unittest.TestCase):
             self.assertIsNone(
                 scout.strategic_competition_reason(issue(body="", comments=0), "t", [])
             )
-
-    def test_timeline_open_pr_reason(self) -> None:
-        self.assertEqual(
-            scout.timeline_open_pr_reason({"html_url": "bad"}, "t"),
-            "could not identify repository/issue number",
-        )
-
-        timeline = [
-            {
-                "event": "cross-referenced",
-                "source": {
-                    "issue": {
-                        "pull_request": {"url": "x"},
-                        "state": "closed",
-                        "html_url": "https://github.com/example/project/pull/9",
-                    }
-                },
-            },
-            {
-                "event": "cross-referenced",
-                "source": {
-                    "issue": {
-                        "pull_request": {"url": "y"},
-                        "state": "open",
-                        "html_url": "https://github.com/example/project/pull/10",
-                    }
-                },
-            },
-        ]
-        with patch.object(github, "github_get", return_value=timeline):
-            self.assertEqual(
-                scout.timeline_open_pr_reason(issue(), "t"),
-                "existing open implementation PR: https://github.com/example/project/pull/10",
-            )
-
-        with patch.object(github, "github_get", return_value={}):
-            self.assertEqual(
-                scout.timeline_open_pr_reason(issue(), "t"),
-                "could not verify open implementation PR timeline",
-            )
-
-        no_match_timeline = [
-            {"event": "commented"},
-            {"event": "cross-referenced", "source": "invalid"},
-            {"event": "cross-referenced", "source": {"issue": "invalid"}},
-            {"event": "cross-referenced", "source": {"issue": {"state": "open"}}},
-            {
-                "event": "cross-referenced",
-                "source": {
-                    "issue": {
-                        "pull_request": {"url": "x"},
-                        "state": "closed",
-                        "html_url": "https://github.com/example/project/pull/11",
-                    }
-                },
-            },
-            {
-                "event": "cross-referenced",
-                "source": {
-                    "issue": {
-                        "pull_request": {"url": "y"},
-                        "state": "open",
-                    }
-                },
-            },
-        ]
-        with patch.object(github, "github_get", return_value=no_match_timeline):
-            self.assertIsNone(scout.timeline_open_pr_reason(issue(), "t"))
 
     def test_wrapper_and_non_actionable_diagnostic_detection(self) -> None:
         wrapper = issue(
@@ -1217,7 +651,6 @@ class CalibrationTests(unittest.TestCase):
             labels=[{"name": "bug"}, {"name": "good first issue"}],
             comments=1,
         )
-        self.assertEqual(scout.estimate_effort(aws), "1–3h")
         with (
             patch.object(
                 scout,
@@ -1250,17 +683,10 @@ class CalibrationTests(unittest.TestCase):
             body="I would like to propose adding support.",
             labels=[{"name": "kind/feature"}, {"name": "needs-triage"}],
         )
-        self.assertEqual(scout.estimate_effort(connection_pool), "1d+")
         self.assertEqual(
             scout.strategic_rejection(connection_pool, "t"),
             "awaiting maintainer triage",
         )
-
-        tailscale = issue(
-            title="Android DNS regression",
-            body="dual SIM + Wi-Fi reproduction on a physical phone",
-        )
-        self.assertEqual(scout.estimate_effort(tailscale), "1d+")
 
     def test_verify_resolves_aggregator_wrapper_to_upstream(self) -> None:
         wrapper = issue(
@@ -1307,217 +733,6 @@ class CalibrationTests(unittest.TestCase):
 
 
 class CandidateTests(unittest.TestCase):
-    def test_strategic_freshness_uses_issue_and_comment_activity(self) -> None:
-        now = datetime.now(timezone.utc)
-        old = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=0,
-                created_at=(now - timedelta(days=900)).isoformat(),
-                updated_at=(now - timedelta(days=500)).isoformat(),
-            ),
-            "strategic",
-            None,
-            repo_meta(),
-            None,
-        )
-        middle = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=0,
-                created_at=(now - timedelta(days=500)).isoformat(),
-                updated_at=(now - timedelta(days=250)).isoformat(),
-            ),
-            "strategic",
-            None,
-            repo_meta(),
-            None,
-        )
-        active_old = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=2,
-                created_at=(now - timedelta(days=900)).isoformat(),
-                updated_at=(now - timedelta(days=20)).isoformat(),
-            ),
-            "strategic",
-            None,
-            repo_meta(),
-            None,
-            [
-                {
-                    "body": "Still worth fixing.",
-                    "created_at": (now - timedelta(days=10)).isoformat(),
-                    "author_association": "MEMBER",
-                }
-            ],
-        )
-        discussion = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=2,
-                created_at=(now - timedelta(days=900)).isoformat(),
-                updated_at=(now - timedelta(days=120)).isoformat(),
-            ),
-            "strategic",
-            None,
-            repo_meta(),
-            None,
-            [
-                {
-                    "body": "Reproduced.",
-                    "created_at": (now - timedelta(days=5)).isoformat(),
-                    "author_association": "NONE",
-                }
-            ],
-        )
-        ready = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=0,
-                created_at=(now - timedelta(days=900)).isoformat(),
-                updated_at=(now - timedelta(days=500)).isoformat(),
-                labels=[{"name": "help wanted"}],
-            ),
-            "strategic",
-            None,
-            repo_meta(),
-            None,
-        )
-        paid = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=0,
-                created_at=(now - timedelta(days=900)).isoformat(),
-                updated_at=(now - timedelta(days=500)).isoformat(),
-            ),
-            "paid",
-            "payment term + amount: $25",
-            repo_meta(),
-            None,
-        )
-        fresh = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=0,
-                created_at=(now - timedelta(days=30)).isoformat(),
-                updated_at=(now - timedelta(days=3)).isoformat(),
-            ),
-            "strategic",
-            None,
-            repo_meta(),
-            None,
-        )
-
-        self.assertIn("stale inactive backlog penalty", old["career_reasons"])
-        self.assertIn("older inactive backlog penalty", middle["career_reasons"])
-        self.assertIn("issue active in last 60d", active_old["career_reasons"])
-        self.assertIn("recent maintainer activity", active_old["career_reasons"])
-        self.assertIn("recent active discussion", discussion["career_reasons"])
-        self.assertNotIn("stale inactive backlog penalty", active_old["career_reasons"])
-        self.assertNotIn("stale inactive backlog penalty", ready["career_reasons"])
-        self.assertNotIn("stale inactive backlog penalty", paid["career_reasons"])
-        self.assertIn("issue active in last 14d", fresh["career_reasons"])
-        self.assertLess(old["career_score"], active_old["career_score"])
-
-        missing_dates = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=1,
-                created_at=None,
-                updated_at=None,
-            ),
-            "strategic",
-            None,
-            repo_meta(),
-            None,
-            [{"body": "old", "created_at": "not-a-date"}],
-        )
-        self.assertNotIn("issue active in last", " ".join(missing_dates["career_reasons"]))
-
-        multiple_comments = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=2,
-                created_at=(now - timedelta(days=900)).isoformat(),
-                updated_at=(now - timedelta(days=120)).isoformat(),
-            ),
-            "strategic",
-            None,
-            repo_meta(),
-            None,
-            [
-                {
-                    "created_at": (now - timedelta(days=5)).isoformat(),
-                    "author_association": "MEMBER",
-                },
-                {
-                    "created_at": (now - timedelta(days=20)).isoformat(),
-                    "author_association": "MEMBER",
-                },
-            ],
-        )
-        self.assertIn("recent maintainer activity", multiple_comments["career_reasons"])
-
-        young_inactive = scout.build_candidate(
-            issue(
-                title="Network bug",
-                body="network regression",
-                comments=0,
-                created_at=(now - timedelta(days=300)).isoformat(),
-                updated_at=(now - timedelta(days=300)).isoformat(),
-            ),
-            "strategic",
-            None,
-            repo_meta(),
-            None,
-        )
-        self.assertNotIn("inactive backlog penalty", " ".join(young_inactive["career_reasons"]))
-
-    def test_documentation_microfix_is_capped_below_strategic_floor(self) -> None:
-        docs_issue = issue(
-            html_url="https://github.com/moby/moby/issues/53789",
-            title="docs(libnetwork): broken image link in design.md",
-            body=(
-                "The docs image is broken. Suggested fix: change "
-                "daemon/libnetwork/docs/design.md to use the local image link."
-            ),
-            comments=0,
-        )
-        substantive_docs = issue(
-            title="docs: explain proxy controller internals",
-            body="Update docs and pkg/proxy/controller.go for the new behavior.",
-            comments=0,
-        )
-        non_micro = issue(
-            title="docs: expand architecture guide",
-            body="Document controller behavior and operational tradeoffs.",
-            comments=0,
-        )
-
-        self.assertTrue(scout.documentation_microfix(docs_issue))
-        self.assertFalse(scout.documentation_microfix(substantive_docs))
-        self.assertFalse(scout.documentation_microfix(non_micro))
-
-        result = scout.build_candidate(
-            docs_issue,
-            "strategic",
-            None,
-            repo_meta(language="Go", stargazers_count=72000),
-            "guide",
-        )
-        self.assertEqual(result["career_score"], 45)
-        self.assertIn("documentation-only micro-fix cap", result["career_reasons"])
-
     def test_build_paid_candidate_scoring(self) -> None:
         item_ = issue(
             body="network concurrency regression tests",
@@ -1537,97 +752,6 @@ class CandidateTests(unittest.TestCase):
         self.assertGreater(result["career_score"], 0)
         self.assertEqual(result["competition"], "none")
         self.assertEqual(result["contribution_guide"], "guide")
-
-    def test_issue_specific_ranking_breaks_repo_score_ties(self) -> None:
-        meta = repo_meta(language="Go", stargazers_count=37000)
-        quick = scout.build_candidate(
-            issue(
-                html_url="https://github.com/tailscale/tailscale/issues/21590",
-                title="cmd/tsnet-proxy: TCP mode leaks upstream connection",
-                body="proxyTCP never closes the upstream connection.",
-                comments=0,
-            ),
-            "strategic",
-            None,
-            meta,
-            "guide",
-        )
-        broad = scout.build_candidate(
-            issue(
-                html_url="https://github.com/tailscale/tailscale/issues/20958",
-                title="containerboot watcher backlog",
-                body=(
-                    "Cause (from source): watcher queue blocks.\n"
-                    "Steps to reproduce\n1. trigger a netmap burst\n"
-                    "cmd/containerboot/main.go kube/services/services.go\n"
-                    "Suggested fix\n- move refresh\n- resubscribe\n- skip no-op"
-                ),
-                comments=0,
-            ),
-            "strategic",
-            None,
-            meta,
-            "guide",
-        )
-        accepted = scout.build_candidate(
-            issue(
-                html_url="https://github.com/kubernetes/kubernetes/issues/142384",
-                title="gsutil will no longer be available",
-                body="get-kube.sh log-dump/log-dump.sh gce/util.sh gce/gci/mounter/stage-upload.sh",
-                labels=[{"name": "help wanted"}, {"name": "triage/accepted"}],
-                comments=7,
-            ),
-            "strategic",
-            None,
-            meta,
-            "guide",
-        )
-
-        self.assertEqual(quick["effort"], "1–3h")
-        self.assertEqual(broad["effort"], "6–12h")
-        self.assertEqual(accepted["effort"], "6–12h")
-        self.assertGreaterEqual(
-            len({quick["career_score"], broad["career_score"], accepted["career_score"]}), 2
-        )
-        self.assertIn("maintainer-ready signal", accepted["career_reasons"])
-
-    def test_build_strategic_candidate_and_non_usd_paid(self) -> None:
-        strategic = scout.build_candidate(
-            issue(title="Feature", body="api", comments=9),
-            "strategic",
-            None,
-            repo_meta(language="PHP", stargazers_count=15, pushed_at=None),
-            None,
-        )
-        self.assertFalse(strategic["paid"])
-        self.assertEqual(strategic["cash_score"], 0)
-        self.assertEqual(strategic["competition"], "high")
-
-        paid = scout.build_candidate(
-            issue(title="Feature", body="", comments=4),
-            "paid",
-            "confirmed bounty platform feed (X): €25",
-            repo_meta(language="Unknown", stargazers_count=150),
-            None,
-        )
-        self.assertIsNone(paid["expected_hourly"])
-        self.assertIn("reward not USD-comparable", paid["cash_reasons"])
-
-    def test_build_candidate_language_effort_competition_branches(self) -> None:
-        languages = ["TypeScript", "JavaScript", "Ruby", "HCL", "Rust"]
-        for lang in languages:
-            result = scout.build_candidate(
-                issue(
-                    title="README typo" if lang == "Rust" else "Feature",
-                    body="storage protocol",
-                    comments=2,
-                ),
-                "strategic",
-                None,
-                repo_meta(language=lang, stargazers_count=500),
-                None,
-            )
-            self.assertEqual(result["language"], lang)
 
 
 class VerificationTests(unittest.TestCase):
@@ -2505,106 +1629,6 @@ class VerificationTests(unittest.TestCase):
             )
         )
 
-    def test_readiness_helpers_cover_release_tracking_and_maintainer_waits(self) -> None:
-        self.assertEqual(
-            scout.release_tracking_reason(issue(title="Release 2.0 tracking checklist")),
-            "release planning/tracking issue, not implementation work",
-        )
-        wait_comments = [
-            {
-                "body": "Please wait before implementing; we need to clarify the expected API.",
-                "author_association": "COLLABORATOR",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(issue(title="API behavior change"), "t", wait_comments),
-            "maintainer asked contributors to wait before implementation",
-        )
-
-    def test_readiness_helper_branch_coverage(self) -> None:
-        regular = issue(title="Network bug")
-        proposal = issue(title="Network metrics", labels=[{"name": "kind/proposal"}])
-
-        self.assertTrue(
-            scout.maintainer_comment_authority({"body": "Thanks.", "author_association": "MEMBER"})
-        )
-        self.assertTrue(
-            scout.maintainer_comment_authority(
-                {
-                    "body": "I'm going to hand it off to the Engineering team.",
-                    "author_association": "CONTRIBUTOR",
-                }
-            )
-        )
-        self.assertFalse(
-            scout.maintainer_comment_authority(
-                {"body": "Thanks.", "author_association": "CONTRIBUTOR"}
-            )
-        )
-        self.assertFalse(
-            scout.maintainer_comment_authority(
-                {
-                    "body": "I'll hand it off to the Engineering team.",
-                    "author_association": "NONE",
-                }
-            )
-        )
-
-        state, reason = scout.maintainer_readiness_comment_state(
-            regular,
-            [{"body": "needs discussion", "author_association": "NONE"}],
-        )
-        self.assertIsNone(state)
-        self.assertIsNone(reason)
-
-        cases = (
-            (
-                "We need more investigation before coding.",
-                "maintainer says issue still needs investigation",
-            ),
-            (
-                "Are you sure you reproduced this on the current CLI?",
-                "maintainer says reproduction is still required",
-            ),
-            (
-                "We need clarification on the API contract.",
-                "maintainer says issue still needs clarification",
-            ),
-        )
-        for body, expected in cases:
-            with self.subTest(body=body):
-                state, reason = scout.maintainer_readiness_comment_state(
-                    regular,
-                    [{"body": body, "author_association": "MEMBER"}],
-                )
-                self.assertFalse(state)
-                self.assertEqual(reason, expected)
-
-        state, reason = scout.maintainer_readiness_comment_state(
-            proposal,
-            [
-                {
-                    "body": "This discussion is time-boxed to six months.",
-                    "author_association": "OWNER",
-                }
-            ],
-        )
-        self.assertFalse(state)
-        self.assertEqual(reason, "proposal is still gathering feedback")
-
-        state, reason = scout.maintainer_readiness_comment_state(
-            regular,
-            [{"body": "Thanks for the report.", "author_association": "COLLABORATOR"}],
-        )
-        self.assertIsNone(state)
-        self.assertIsNone(reason)
-
-        self.assertIsNone(
-            scout.automated_tracking_issue_reason(
-                issue(title="Routine bot report", user={"login": "example[bot]"})
-            )
-        )
-
     def test_verify_refresh_and_clean_failures(self) -> None:
         with patch.object(scout, "refresh_issue", return_value=(None, "closed")):
             self.assertEqual(scout.verify(issue(), "t", {}, {})[1], "closed")
@@ -2974,6 +1998,27 @@ class VerificationTests(unittest.TestCase):
             scout.add_reject(counts, examples, {"html_url": str(i), "title": str(i)}, "why")
         self.assertEqual(counts["why"], 15)
         self.assertEqual(len(examples), 12)
+
+    def test_timeline_wrapper_and_preflight_diagnostic_boundary(self) -> None:
+        with patch.object(
+            competition_policy,
+            "timeline_open_pr_reason",
+            return_value="timeline reason",
+        ):
+            self.assertEqual(scout.timeline_open_pr_reason(issue(), "t"), "timeline reason")
+
+        diagnostic = issue(
+            title="macOS M1 black screen after network change",
+            body=(
+                "Hard hang followed by kernel panic on Apple Silicon macOS. "
+                "No deterministic repro; collected sysdiagnose and panic logs."
+            ),
+            comments=0,
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(diagnostic),
+            "hardware/kernel diagnostic report without actionable contributor scope",
+        )
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -3842,57 +2887,6 @@ class DiscoveryTests(unittest.TestCase):
 
 
 class FormattingAndMainTests(unittest.TestCase):
-    def test_markdown_and_notification_formatting(self) -> None:
-        self.assertEqual(
-            scout.github_report_ref(
-                "https://github.com/acme/widget/issues/42 and "
-                "https://github.com/acme/widget/pull/9 plus #77"
-            ),
-            "https://redirect.github.com/acme/widget/issues/42 and "
-            "https://redirect.github.com/acme/widget/pull/9 plus #77",
-        )
-        self.assertEqual(scout.github_report_ref(None), "")
-
-        md = scout.markdown_candidate(
-            candidate(title="Fix regression after #850"),
-            1,
-        )
-        self.assertIn("Cash score", md)
-        self.assertNotIn("Career score", md)
-        self.assertNotIn("Paid / unpaid", md)
-        self.assertNotIn("Rejection reason", md)
-        self.assertIn("contribution guide", md)
-        self.assertNotIn("https://github.com/example/project/issues/42", md)
-        self.assertIn(
-            "https://redirect.github.com/example/project/issues/42",
-            md,
-        )
-        self.assertIn("#850", md)
-
-        no_guide = scout.markdown_candidate(
-            candidate(expected_hourly=None, contribution_guide=None, paid=False, reward=None),
-            2,
-        )
-        self.assertIn("Career score", no_guide)
-        self.assertNotIn("Cash score", no_guide)
-        self.assertNotIn("Reward", no_guide)
-        self.assertNotIn("Payment confidence", no_guide)
-        self.assertNotIn("Expected hourly value", no_guide)
-        self.assertNotIn("Rejection reason", no_guide)
-        self.assertIn("not found at common paths", no_guide)
-
-        long = candidate(title="x" * 150)
-        lines = scout.notification_candidate(long, 1)
-        self.assertLessEqual(len(lines[0]), 160)
-        self.assertIn("paid bounty", "\n".join(lines))
-        self.assertNotIn("career:", "\n".join(lines))
-
-        strategic_lines = scout.notification_candidate(candidate(paid=False), 2)
-        self.assertIn("strategic OSS", "\n".join(strategic_lines))
-        self.assertIn("career:", "\n".join(strategic_lines))
-        self.assertNotIn("reward:", "\n".join(strategic_lines))
-        self.assertNotIn("cash:", "\n".join(strategic_lines))
-
     def test_main_prefetches_all_discovery_searches_before_paid_work(self) -> None:
         order: list[str] = []
         paid_prefetch: list[tuple[str, dict[str, Any]]] = [("paid-q", {"items": []})]
@@ -4184,22 +3178,6 @@ class CoverageGapTests(unittest.TestCase):
                 "explicit /reward comment: $7",
             )
 
-    def test_paid_candidate_under_100_stars(self) -> None:
-        result = scout.build_candidate(
-            issue(title="Feature", body="plain", comments=4),
-            "paid",
-            "payment term + amount: $25",
-            repo_meta(
-                stargazers_count=50,
-                pushed_at=(datetime.now(timezone.utc) - timedelta(days=120)).isoformat(),
-                language="Rust",
-            ),
-            None,
-        )
-        self.assertTrue(result["paid"])
-        self.assertEqual(result["stars"], 50)
-        self.assertGreater(result["cash_score"], 0)
-
     def test_platform_detail_empty_amount_and_no_amount_branches(self) -> None:
         opire_pages = {
             "https://app.opire.dev/home": (
@@ -4246,61 +3224,6 @@ class CoverageGapTests(unittest.TestCase):
             refs["https://github.com/acme/widget/issues/5"],
             "confirmed bounty platform feed (BountyHub)",
         )
-
-    def test_build_candidate_remaining_star_activity_target_and_effort_branches(self) -> None:
-        inactive = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
-        cases = [
-            (
-                issue(title="Feature", body="plain", comments=4),
-                "paid",
-                "payment term + amount: $25",
-                repo_meta(stargazers_count=500, pushed_at=inactive, language="Rust"),
-            ),
-            (
-                issue(title="Feature", body="plain", comments=4),
-                "strategic",
-                None,
-                repo_meta(stargazers_count=1500, pushed_at=inactive, language="Rust"),
-            ),
-            (
-                issue(title="Feature", body="plain", comments=4),
-                "strategic",
-                None,
-                repo_meta(stargazers_count=150, pushed_at=inactive, language="Rust"),
-            ),
-            (
-                issue(title="Feature", body="plain", comments=4),
-                "strategic",
-                None,
-                repo_meta(stargazers_count=0, pushed_at=inactive, language="Rust"),
-            ),
-            (
-                issue(
-                    html_url="https://github.com/tailscale/tailscale/issues/99",
-                    title="Feature",
-                    body="plain",
-                    comments=4,
-                ),
-                "strategic",
-                None,
-                repo_meta(stargazers_count=50, pushed_at=inactive, language="Go"),
-            ),
-            (
-                issue(title="Architecture redesign", body="plain", comments=0),
-                "strategic",
-                None,
-                repo_meta(stargazers_count=50, pushed_at=inactive, language="Rust"),
-            ),
-        ]
-        results = [
-            scout.build_candidate(item_, lane, signal, meta, None)
-            for item_, lane, signal, meta in cases
-        ]
-        self.assertEqual(results[0]["cash_score"] > 0, True)
-        self.assertEqual(results[1]["stars"], 1500)
-        self.assertEqual(results[3]["stars"], 0)
-        self.assertIn("target repo bonus", results[4]["career_reasons"])
-        self.assertIn("large-scope penalty", results[5]["career_reasons"])
 
     def test_verify_success_with_comment_signal_cached_repo_and_guide(self) -> None:
         fresh = issue(body="", title="Task", comments=1)
