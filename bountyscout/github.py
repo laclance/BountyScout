@@ -15,7 +15,7 @@ from collections.abc import Callable, MutableMapping
 from dataclasses import dataclass
 from datetime import datetime
 from threading import Lock
-from typing import Any, TypeVar, cast
+from typing import Any, Final, TypeVar, cast
 
 from bountyscout.types import (
     GitHubComment,
@@ -26,6 +26,9 @@ from bountyscout.types import (
 )
 
 T = TypeVar("T")
+
+DEFAULT_USER_AGENT: Final = "OSSOpportunityScout"
+PAID_SCANNER_USER_AGENT: Final = "MyPersonalBountyScout"
 
 
 @dataclass(frozen=True)
@@ -64,10 +67,14 @@ def cached_value(
         return cache[key]
 
 
-def _github_headers(token: str | None) -> dict[str, str]:
+def _github_headers(
+    token: str | None,
+    *,
+    user_agent: str = DEFAULT_USER_AGENT,
+) -> dict[str, str]:
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "OSSOpportunityScout",
+        "User-Agent": user_agent,
         "X-GitHub-Api-Version": "2022-11-28",
     }
     if token:
@@ -81,9 +88,13 @@ def github_get(
     timeout: int = 20,
     *,
     log_errors: bool = True,
+    user_agent: str = DEFAULT_USER_AGENT,
 ) -> Any:
     """Fetch JSON from GitHub with the scanner's standard API headers."""
-    request = urllib.request.Request(url, headers=_github_headers(token))
+    request = urllib.request.Request(
+        url,
+        headers=_github_headers(token, user_agent=user_agent),
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -91,6 +102,20 @@ def github_get(
         if log_errors:
             print(f"GitHub API Error for {url}: {exc}")
         return None
+
+
+def paid_github_get(
+    url: str,
+    token: str | None = None,
+    timeout: int = 20,
+) -> Any:
+    """Fetch GitHub JSON using the historical paid-scanner request identity."""
+    return github_get(
+        url,
+        token,
+        timeout,
+        user_agent=PAID_SCANNER_USER_AGENT,
+    )
 
 
 def search_github(

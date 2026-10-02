@@ -15,7 +15,6 @@ from bountyscout import delivery, github
 from bountyscout import paid as paid_policy
 from bountyscout import paid_verification
 from bountyscout import state
-import scout_bounties as bounty
 from bountyscout.strategic import competition as competition_policy
 from bountyscout.types import (
     GitHubComment,
@@ -2431,7 +2430,10 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in search.call_args_list], ["p1", "p2", "s1", "s2"])
         self.assertEqual(search.call_args_list[0].kwargs["per_page"], 15)
         self.assertTrue(
-            all(call.kwargs["fetch_json"] is bounty.github_get for call in search.call_args_list)
+            all(
+                call.kwargs["fetch_json"] is github.paid_github_get
+                for call in search.call_args_list
+            )
         )
         self.assertEqual(sleeper.call_count, 3)
         sleeper.assert_called_with(scout.DISCOVERY_SEARCH_INTERVAL_SECONDS)
