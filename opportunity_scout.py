@@ -139,12 +139,6 @@ def strategic_basic_candidate(item: Mapping[str, Any]) -> bool:
     relaxed["comments"] = bounty.MAX_COMMENTS
     return bounty.is_clean_candidate(relaxed)
 
-
-def competition(item: Mapping[str, Any]) -> str:
-    """Compatibility wrapper for discussion-volume competition buckets."""
-    return scoring.competition(item)
-
-
 def github_get_optional(url: str, token: str | None) -> Any:
     """Compatibility wrapper for optional GitHub JSON fetching."""
     return github.github_get(url, token, timeout=10, log_errors=False)
