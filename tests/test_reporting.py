@@ -219,7 +219,9 @@ class ReportAssemblyTests(unittest.TestCase):
             ],
             reject_counts={"active claim by @dev": 3, "not ready": 1},
         )
-        self.assertTrue(body.startswith("<!-- bountyscout-report: automated; actionable: false -->"))
+        self.assertTrue(
+            body.startswith("<!-- bountyscout-report: automated; actionable: false -->")
+        )
         self.assertIn("Automated BountyScout scan report — not a development task.", body)
         self.assertIn("Do not claim this report or open a pull request to resolve it.", body)
         self.assertIn("career score measures long-term value", body)
