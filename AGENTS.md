@@ -45,10 +45,14 @@ This file is the canonical working agreement for coding agents and human contrib
 
 Before calling a change complete:
 
-1. Run `make format` if Python changed.
-2. Run `make quality`.
-3. Run `make map` whenever production Python symbols or module boundaries change, then commit `CODEBASE_MAP.md`.
+1. Finish the logical code, test, and documentation edits first.
+2. If Python changed, run `make format` once across the completed worktree.
+3. If production Python symbols or module boundaries changed, run `make map` and include the regenerated `CODEBASE_MAP.md`.
 4. Update `ARCHITECTURE.md` when responsibilities, dependencies, data flow, or invariants change.
 5. Update `README.md` or `CONTRIBUTING.md` when user-facing commands or contributor workflow changes.
+6. Run `make quality`.
+7. Commit the finalized formatted/generated result together with the logical change where practical.
+
+Avoid mechanical one-file-at-a-time formatter churn or a new commit for each Ruff correction. Legitimate follow-up commits are fine when behavior or substance changes; do not require contributors to rewrite ordinary history solely to satisfy this preference. When using repository/API tooling, batch related finalized file changes into one commit/tree where practical.
 
 `CODEBASE_MAP.md` is generated. Do not edit it by hand.

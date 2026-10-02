@@ -35,7 +35,7 @@ make quality     # local quality gate
 
 - Keep upstream-compatible paid-bounty behavior in `scout_bounties.py` unless the change is intentionally fork-specific.
 - Put focused strategic policy in `bountyscout/strategic/`.
-- Keep root `opportunity_scout.py` as the thin stable executable entry point; combined composition/orchestration lives in `bountyscout/app.py`.
+- Keep root `opportunity_scout.py` as the thin stable executable entry point. `bountyscout.app` owns application/environment assembly and compatibility adapters; `bountyscout.run` owns the combined scan lifecycle.
 - Keep generic helper extraction from `scout_bounties.py` out of structure-only changes; that dependency cleanup is Phase 3B.
 - Keep pure policy separate from network I/O where practical.
 
@@ -47,7 +47,9 @@ If production Python symbols move or change, run `make map` and commit the updat
 
 ## Pull requests
 
-Keep each PR focused on one behavior or one refactoring boundary. Describe:
+Keep each PR focused on one behavior or one refactoring boundary. Finish the logical change before running `make format`, then run `make quality`. Prefer committing the finalized formatted result with the logical change rather than adding repeated formatter-only commits.
+
+Describe:
 
 - what changed
 - why the old behavior/structure was a problem
