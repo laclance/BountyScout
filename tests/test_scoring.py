@@ -174,7 +174,7 @@ class EffortCalibrationTests(unittest.TestCase):
             title="Reduce response buffering",
             body="Parse the response more directly to reduce memory use.",
         )
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "author_association": "MEMBER",
                 "body": (
@@ -191,7 +191,7 @@ class EffortCalibrationTests(unittest.TestCase):
             title="Reduce response buffering",
             body="Parse the response more directly to reduce memory use.",
         )
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "author_association": "MEMBER",
                 "body": (
@@ -212,7 +212,7 @@ class EffortCalibrationTests(unittest.TestCase):
             title="Reduce response buffering",
             body="Parse the response more directly to reduce memory use.",
         )
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "author_association": "NONE",
                 "body": (
@@ -228,7 +228,7 @@ class EffortCalibrationTests(unittest.TestCase):
             title="Reduce response buffering",
             body="Parse the response more directly to reduce memory use.",
         )
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "author_association": "MEMBER",
                 "body": "Cancellation needs a regression test and a benchmark.",
@@ -241,7 +241,7 @@ class EffortCalibrationTests(unittest.TestCase):
             title="Architecture rewrite",
             body="Redesign the parser and transport architecture.",
         )
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "author_association": "MEMBER",
                 "body": (
@@ -267,7 +267,7 @@ class EffortCalibrationTests(unittest.TestCase):
             ],
             comments=11,
         )
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "author_association": "MEMBER",
                 "body": (
@@ -311,7 +311,7 @@ class EffortCalibrationTests(unittest.TestCase):
             title="Reduce response buffering",
             body="Parse the response more directly to reduce memory use.",
         )
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "author_association": "MEMBER",
                 "body": (
@@ -746,11 +746,11 @@ class CompetitionVolumeTests(unittest.TestCase):
         )
 
     def test_multiple_substantive_comments_still_reach_medium_and_high(self) -> None:
-        medium = [
+        medium: list[GitHubComment] = [
             {"body": f"Implementation discussion {index}", "user": {"login": f"dev-{index}"}}
             for index in range(4)
         ]
-        high = [
+        high: list[GitHubComment] = [
             {"body": f"Implementation discussion {index}", "user": {"login": f"dev-{index}"}}
             for index in range(9)
         ]
@@ -776,7 +776,7 @@ class CompetitionVolumeTests(unittest.TestCase):
 
     def test_active_claim_still_rejects_even_when_lifecycle_noise_is_filtered(self) -> None:
         recent = datetime.now(timezone.utc).isoformat()
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "body": "This bot triages issues after inactivity. /lifecycle stale",
                 "updated_at": recent,
