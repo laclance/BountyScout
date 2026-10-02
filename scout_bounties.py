@@ -6,7 +6,7 @@ import urllib.request
 import urllib.parse
 import re
 from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 # Configuration
 STATE_FILE = "seen_bounties.json"
@@ -59,30 +59,6 @@ META_ALERT_MARKERS = [
     "bounty-watch",
     "bounty watch",
 ]
-
-
-def load_seen_bounties() -> set[str]:
-    """Load previously seen bounty URLs from the state file."""
-    if os.path.exists(STATE_FILE):
-        try:
-            with open(STATE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    return set(data)
-        except Exception as e:
-            print(f"Error loading state file: {e}")
-    return set()
-
-
-def save_seen_bounties(seen_urls: Iterable[str]) -> bool:
-    """Save the updated list of seen bounty URLs."""
-    try:
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(sorted(seen_urls), f, indent=2)
-        return True
-    except Exception as e:
-        print(f"Error saving state file: {e}")
-        return False
 
 
 def github_get(url: str, token: str | None = None, timeout: int = 20) -> Any:
@@ -721,8 +697,15 @@ def main() -> None:
         )
 
     if notification_attempted and notification_succeeded:
-        seen_urls.update(new_bounty_urls)
-        if save_seen_bounties(seen_urls):
+        seen_state.mark_reported_many(
+            new_bounty_urls,
+            reported_at=scan_time.isoformat().replace("+00:00", "Z"),
+        )
+        try:
+            state.save_seen_state(seen_state)
+        except state.SeenStateSaveError as exc:
+            print(f"Error saving state file: {exc}")
+        else:
             print("State saved successfully.")
     else:
         print("No notification was delivered; state not updated so these bounties will be retried.")
