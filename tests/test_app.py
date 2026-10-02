@@ -3224,8 +3224,10 @@ class FormattingAndMainTests(unittest.TestCase):
         lifecycle.assert_called_once_with(old_url, None)
         save.assert_called_once()
         saved = save.call_args.args[0]
-        self.assertIsNotNone(saved.record(old_url))
-        self.assertIsNotNone(saved.record(old_url).last_checked_at)
+        record = saved.record(old_url)
+        self.assertIsNotNone(record)
+        assert record is not None
+        self.assertIsNotNone(record.last_checked_at)
 
     def test_main_quiet_maintenance_save_failure_is_reported(self) -> None:
         old_url = "https://github.com/example/project/issues/99"
