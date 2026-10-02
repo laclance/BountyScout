@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Mapping, Sequence, cast
 
 from bountyscout import github
+from bountyscout.types import Candidate
 
 IssueRow = tuple[int, int, int, dict[str, Any]]
 FetchText = Callable[[str], str]
@@ -295,7 +296,7 @@ def strategic_inspection_items(
     return {repo: [row[3] for row in rows] for repo, rows in selected_rows.items()}
 
 
-def candidate_rank_key(candidate: Mapping[str, Any]) -> tuple[int, int, int, int]:
+def candidate_rank_key(candidate: Candidate) -> tuple[int, int, int, int]:
     """Return the final strategic queue ordering key for a verified candidate."""
     return (
         int(candidate["priority_score"]),
@@ -321,7 +322,7 @@ def strategic_verification_upper_bound(
 
 
 def strategic_repo_slots_settled(
-    verified: Sequence[Mapping[str, Any]],
+    verified: Sequence[Candidate],
     remaining: Sequence[IssueRow],
     *,
     keep_per_repo: int,
