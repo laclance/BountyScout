@@ -8,8 +8,9 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
+from bountyscout import state
+
 # Configuration
-STATE_FILE = "seen_bounties.json"
 MAX_COMMENTS = 25  # Filter out overcrowded threads
 
 # GitHub search queries for active bounty opportunities
@@ -559,7 +560,8 @@ def main() -> None:
     telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
 
-    seen_urls = load_seen_bounties()
+    seen_state = state.load_seen_state()
+    seen_urls = seen_state.urls()
     new_bounties: list[dict[str, Any]] = []
     new_bounty_urls: set[str] = set()
     rejected: dict[str, int] = {}
@@ -620,7 +622,8 @@ def main() -> None:
 
     print(f"Discovered {len(new_bounties)} NEW clean paid bounty opportunities!")
 
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    scan_time = datetime.now(timezone.utc)
+    now_str = scan_time.strftime("%Y-%m-%d %H:%M UTC")
 
     notif_lines = [
         f"🎯 *New Bounty Alert* ({now_str})",
