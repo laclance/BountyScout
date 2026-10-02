@@ -10,6 +10,7 @@ from bountyscout.types import (
     CandidateLane,
     GitHubIssue,
     GitHubSearchResult,
+    RejectionRecord,
     RepositoryMetadata,
 )
 from tests.helpers import candidate, issue
@@ -48,7 +49,7 @@ class StrategicDiscoveryTests(unittest.TestCase):
             discovery.basic_rejection_audit_reason(strong) or "",
         )
 
-        audit = []
+        audit: list[RejectionRecord] = []
         discovery.add_audit(audit, strong, "one", limit=1)
         discovery.add_audit(audit, strong, "two", limit=1)
         self.assertEqual([item["reason"] for item in audit], ["one"])
@@ -179,7 +180,10 @@ class StrategicDiscoveryTests(unittest.TestCase):
             any("target repo discovery failed" in item["reason"] for item in selection.audit)
         )
         self.assertTrue(
-            any("global strategic discovery search failed" in item["reason"] for item in selection.audit)
+            any(
+                "global strategic discovery search failed" in item["reason"]
+                for item in selection.audit
+            )
         )
         self.assertTrue(
             any("repository metadata" in item["reason"] for item in selection.audit)
