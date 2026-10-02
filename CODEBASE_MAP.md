@@ -79,6 +79,17 @@
 - **function** `github_report_body()` — line 211
 - **function** `github_report_title()` — line 260
 
+## `bountyscout/run.py`
+
+- **class** `RunConfig` — line 69
+- **class** `RunDependencies` — line 80
+- **class** `CoverageStatus` — line 94
+- **class** `DeliveryResult` — line 104
+- **class** `CombinedRunResult` — line 112
+- **function** `assemble_queue()` — line 121
+- **function** `coverage_status()` — line 146
+- **function** `run_combined_scan()` — line 257
+
 ## `bountyscout/scoring.py`
 
 - **function** `maintainer_ready_signal()` — line 28
