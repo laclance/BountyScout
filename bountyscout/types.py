@@ -65,6 +65,9 @@ class RepositoryMetadata(TypedDict, total=False):
     language: str | None
 
 
+IssueRow: TypeAlias = tuple[int, int, int, GitHubIssue]
+
+
 class Candidate(TypedDict):
     """Canonical ranked candidate shape shared by ranking and presentation."""
 
