@@ -89,7 +89,6 @@ class GitHubHttpTests(unittest.TestCase):
             )
             self.assertEqual(output.getvalue(), "")
 
-
     def test_issue_lifecycle_returns_open_and_closed_from_direct_issue_endpoint(self) -> None:
         with patch.object(
             urllib.request,
