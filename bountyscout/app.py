@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from time import sleep
 from typing import Any, cast
 
-from bountyscout import github, paid
+from bountyscout import github, paid, paid_verification
 import scout_bounties as bounty
 from bountyscout import reporting as reporting
 from bountyscout import run
@@ -190,6 +190,14 @@ def extended_competition_reason(
         item,
         token,
         loaded_comments,
+        existing_pr_checker=lambda repo, number, auth: (
+            paid_verification.has_existing_implementation_pr(
+                repo,
+                number,
+                auth,
+                fetch_json=bounty.github_get,
+            )
+        ),
         linked_pr_checker=linked_open_pr_reason,
         supplemental_claim_checker=lambda candidate, claim_comments: supplemental_claim_reason(
             candidate,
@@ -621,9 +629,10 @@ def verify(
         if issue_author_claim:
             return None, issue_author_claim
 
-        reason, verified_issue_signal = bounty.candidate_rejection_reason(
+        reason, verified_issue_signal = paid_verification.candidate_rejection_reason(
             fresh,
             token,
+            fetch_json=bounty.github_get,
         )
         if reason and reason != "no explicit payment signal":
             return None, reason

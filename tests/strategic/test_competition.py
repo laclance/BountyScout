@@ -4,8 +4,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from bountyscout import github
-import scout_bounties as bounty
+from bountyscout import github, paid_verification
 from bountyscout.strategic import competition
 from bountyscout.types import GitHubComment
 from tests.helpers import comment, issue
@@ -545,7 +544,7 @@ class CompetitionOrchestrationTests(unittest.TestCase):
         )
 
     def test_extended_competition_preserves_paid_claim_rules_then_supplemental(self) -> None:
-        with patch.object(bounty, "has_existing_implementation_pr", return_value=None):
+        with patch.object(paid_verification, "has_existing_implementation_pr", return_value=None):
             self.assertEqual(
                 competition.extended_competition_reason(
                     issue(),
@@ -575,7 +574,7 @@ class CompetitionOrchestrationTests(unittest.TestCase):
 
     def test_competition_rejects_unidentifiable_issue_without_network_calls(self) -> None:
         bad = issue(html_url="bad", comments=1)
-        with patch.object(bounty, "has_existing_implementation_pr") as existing:
+        with patch.object(paid_verification, "has_existing_implementation_pr") as existing:
             self.assertEqual(
                 competition.strategic_competition_reason(bad, "t", []),
                 "could not identify repository/issue number",
