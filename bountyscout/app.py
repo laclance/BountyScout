@@ -1360,11 +1360,21 @@ def main() -> None:
         )
         print(f"WARNING: {coverage_warning}")
 
+    scan_time = datetime.now(timezone.utc)
     if not queue and coverage_warning is None:
         print("No new verified OSS opportunities found.")
+        maintenance = state.maintain_seen_state(
+            seen_state,
+            scan_time,
+            lambda url: github.issue_lifecycle(url, token).status,
+        )
+        if maintenance.checked_urls:
+            try:
+                state.save_seen_state(maintenance.state)
+            except state.SeenStateSaveError as exc:
+                print(f"Error saving state file: {exc}")
         return
 
-    scan_time = datetime.now(timezone.utc)
     now = scan_time.strftime("%Y-%m-%d %H:%M UTC")
     message = reporting.notification_message(queue, now, warning=coverage_warning)
 
@@ -1413,12 +1423,18 @@ def main() -> None:
         )
 
     if attempted and delivered and coverage_warning is None:
-        seen_state.mark_reported_many(
+        maintenance = state.maintain_seen_state(
+            seen_state,
+            scan_time,
+            lambda url: github.issue_lifecycle(url, token).status,
+        )
+        next_state = maintenance.state
+        next_state.mark_reported_many(
             (x["url"] for x in queue),
             reported_at=scan_time.isoformat().replace("+00:00", "Z"),
         )
         try:
-            state.save_seen_state(seen_state)
+            state.save_seen_state(next_state)
         except state.SeenStateSaveError as exc:
             print(f"Error saving state file: {exc}")
     elif attempted and delivered:
