@@ -4,13 +4,13 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from time import monotonic, sleep
+from time import sleep
 from typing import Any, cast
 
 from bountyscout import github
-from bountyscout import state
 import scout_bounties as bounty
 from bountyscout import reporting
+from bountyscout import run
 from bountyscout import scoring
 from bountyscout import sources
 from bountyscout.strategic import competition as competition_policy
@@ -58,11 +58,11 @@ STRATEGIC_ADAPTIVE_INSPECT_BUDGET = strategic_discovery.STRATEGIC_ADAPTIVE_INSPE
 STRATEGIC_KEEP_PER_REPO = strategic_verification.STRATEGIC_KEEP_PER_REPO
 STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND = strategic_verification.STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND
 STRATEGIC_REFRESH_FAILURE_LIMIT = strategic_verification.STRATEGIC_REFRESH_FAILURE_LIMIT
-STRATEGIC_COVERAGE_WARNING_THRESHOLD = 5
+STRATEGIC_COVERAGE_WARNING_THRESHOLD = run.STRATEGIC_COVERAGE_WARNING_THRESHOLD
 STRATEGIC_MIN_CAREER_SCORE = strategic_verification.STRATEGIC_MIN_CAREER_SCORE
 STRATEGIC_AUDIT_LIMIT = strategic_discovery.STRATEGIC_AUDIT_LIMIT
 PAID_MIN_CASH_SCORE = 55
-REPORT_LIMIT = 8
+REPORT_LIMIT = run.REPORT_LIMIT
 NETWORK_WORKERS = 6
 STRATEGIC_VERIFY_WORKERS = strategic_verification.STRATEGIC_VERIFY_WORKERS
 DISCOVERY_SEARCH_INTERVAL_SECONDS = 2.1
@@ -929,173 +929,30 @@ def discover_strategic(
 def main() -> None:
     token = os.environ.get("GITHUB_TOKEN")
     repo_fullname = os.environ.get("GITHUB_REPOSITORY")
-    seen_state = state.load_seen_state()
-    seen = seen_state.urls()
-    repo_cache: dict[str, RepositoryMetadata] = {}
-    guide_cache: dict[str, str | None] = {}
-
-    started = monotonic()
-    prefetched_paid_searches: list[SearchBatch] | None = None
-    prefetched_global_searches: list[SearchBatch] | None = None
-    if token and repo_fullname:
-        prefetched_paid_searches, prefetched_global_searches = prefetch_discovery_searches(token)
-    paid_started = monotonic()
-    paid, paid_rejects, paid_examples = discover_paid(
-        token, seen, repo_cache, guide_cache, prefetched_paid_searches
+    config = run.RunConfig(
+        token=token,
+        repo_fullname=repo_fullname,
+        telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN"),
+        telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID"),
+        discord_webhook=os.environ.get("DISCORD_WEBHOOK_URL"),
     )
-    paid_seconds = monotonic() - paid_started
-
-    strategic_started = monotonic()
-    strategic, strategic_rejects, strategic_examples, strategic_audit = discover_strategic(
-        token,
-        seen,
-        {x["url"] for x in paid},
-        repo_cache,
-        guide_cache,
-        prefetched_global_searches,
+    dependencies = run.RunDependencies(
+        discover_paid=discover_paid,
+        discover_strategic=discover_strategic,
+        prefetch_discovery_searches=prefetch_discovery_searches,
+        append_audit=add_audit,
+        send_telegram=bounty.send_telegram_notification,
+        send_discord=bounty.send_discord_notification,
+        send_github_report=bounty.create_github_issue,
+        issue_lifecycle=lambda url: github.issue_lifecycle(url, token).status,
     )
-    if prefetched_paid_searches is not None:
-        for query, result in prefetched_paid_searches:
-            if not isinstance(result.get("items"), list):
-                add_audit(
-                    strategic_audit,
-                    {
-                        "html_url": "https://github.com/issues",
-                        "title": f"Paid GitHub Search: {query}",
-                    },
-                    f"paid discovery search failed for query: {query}; scan coverage incomplete",
-                )
-
-    strategic_seconds = monotonic() - strategic_started
-    print(
-        "Scout performance: "
-        f"paid={paid_seconds:.1f}s, strategic={strategic_seconds:.1f}s, "
-        f"total={monotonic() - started:.1f}s"
+    run.run_combined_scan(
+        config,
+        dependencies,
+        datetime.now(timezone.utc),
+        report_limit=REPORT_LIMIT,
+        coverage_warning_threshold=STRATEGIC_COVERAGE_WARNING_THRESHOLD,
     )
-
-    by_url: dict[str, Candidate] = {}
-    for candidate in paid + strategic:
-        old = by_url.get(candidate["url"])
-        if not old or candidate["priority_score"] > old["priority_score"]:
-            by_url[candidate["url"]] = candidate
-    queue = sorted(
-        by_url.values(),
-        key=lambda x: (x["priority_score"], x["career_score"], x["cash_score"], -x["comments"]),
-        reverse=True,
-    )[:REPORT_LIMIT]
-    if strategic_audit:
-        print("=== POTENTIAL SCANNER MISSES ===")
-        for item in strategic_audit:
-            print(f"- {item['url']}: {item['reason']}")
-
-    rejects = reporting.rejection_summary(paid_rejects, strategic_rejects)
-    verification_failures = sum(
-        strategic_rejects.get(reason, 0)
-        for reason in (
-            "could not refresh source issue",
-            "could not refresh issue comments",
-            "could not verify open implementation PR timeline",
-        )
-    )
-    discovery_failures = sum(
-        1
-        for item in strategic_audit
-        if "scan coverage incomplete" in str(item.get("reason", "")).lower()
-    )
-    coverage_failures = verification_failures + discovery_failures
-    # A failed discovery batch can hide an entire source, so even one marks the run incomplete.
-    coverage_warning = None
-    if discovery_failures or verification_failures >= STRATEGIC_COVERAGE_WARNING_THRESHOLD:
-        coverage_warning = (
-            "Opportunity discovery/verification coverage is incomplete: "
-            f"{coverage_failures} discovery/source/comment/competition checks failed, "
-            "so this ranking may omit stronger candidates. "
-            "Seen-state will not be advanced for this run."
-        )
-        print(f"WARNING: {coverage_warning}")
-
-    scan_time = datetime.now(timezone.utc)
-    if not queue and coverage_warning is None:
-        print("No new verified OSS opportunities found.")
-        maintenance = state.maintain_seen_state(
-            seen_state,
-            scan_time,
-            lambda url: github.issue_lifecycle(url, token).status,
-        )
-        if maintenance.checked_urls:
-            try:
-                state.save_seen_state(maintenance.state)
-            except state.SeenStateSaveError as exc:
-                print(f"Error saving state file: {exc}")
-        return
-
-    now = scan_time.strftime("%Y-%m-%d %H:%M UTC")
-    message = reporting.notification_message(queue, now, warning=coverage_warning)
-
-    attempted = False
-    delivered = False
-    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-    discord_webhook = os.environ.get("DISCORD_WEBHOOK_URL")
-    if telegram_token and telegram_chat_id:
-        attempted = True
-        delivered = (
-            bounty.send_telegram_notification(telegram_token, telegram_chat_id, message)
-            or delivered
-        )
-    if discord_webhook:
-        attempted = True
-        delivered = (
-            bounty.send_discord_notification(discord_webhook, message.replace("•", "-"))
-            or delivered
-        )
-
-    if token and repo_fullname:
-        attempted = True
-        body = reporting.github_report_body(
-            queue,
-            now,
-            verification_examples=paid_examples + strategic_examples,
-            strategic_audit=strategic_audit,
-            reject_counts=rejects,
-            coverage_warning=coverage_warning,
-        )
-        delivered = (
-            bounty.create_github_issue(
-                repo_fullname,
-                token,
-                reporting.github_report_title(len(queue)),
-                body,
-            )
-            or delivered
-        )
-
-    if rejects:
-        print(
-            "Filtered verified candidates: "
-            + ", ".join(f"{k}={v}" for k, v in sorted(rejects.items()))
-        )
-
-    if attempted and delivered and coverage_warning is None:
-        maintenance = state.maintain_seen_state(
-            seen_state,
-            scan_time,
-            lambda url: github.issue_lifecycle(url, token).status,
-        )
-        next_state = maintenance.state
-        next_state.mark_reported_many(
-            (x["url"] for x in queue),
-            reported_at=scan_time.isoformat().replace("+00:00", "Z"),
-        )
-        try:
-            state.save_seen_state(next_state)
-        except state.SeenStateSaveError as exc:
-            print(f"Error saving state file: {exc}")
-    elif attempted and delivered:
-        print("Verification coverage incomplete; state was not updated.")
-    else:
-        print("No notification was delivered; state was not updated.")
-
 
 if __name__ == "__main__":
     main()
