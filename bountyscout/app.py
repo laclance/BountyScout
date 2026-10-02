@@ -925,6 +925,7 @@ def discover_strategic(
     )
     return result.candidates, result.rejected, result.examples, result.audit
 
+
 def main() -> None:
     token = os.environ.get("GITHUB_TOKEN")
     repo_fullname = os.environ.get("GITHUB_REPOSITORY")
