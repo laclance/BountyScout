@@ -33,7 +33,14 @@ from bountyscout.strategic.readiness import (
     release_tracking_reason as release_tracking_reason,
     triage_pending_signal as triage_pending_signal,
 )
-from bountyscout.types import Candidate, CandidateLane, GitHubComment, GitHubIssue, RejectionRecord
+from bountyscout.types import (
+    Candidate,
+    CandidateLane,
+    GitHubComment,
+    GitHubIssue,
+    RejectionRecord,
+    RepositoryMetadata,
+)
 
 TARGET_REPOS = [
     "aws/amazon-vpc-cni-k8s",
@@ -122,13 +129,14 @@ def target_repo_issue_pool(
     token: str | None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Fetch the configured bounded source pool for a curated repository."""
-    return sources.target_repo_issue_pool(
+    items, error = sources.target_repo_issue_pool(
         repo,
         token,
         fetch_per_page=TARGET_REPO_FETCH_PER_PAGE,
         fetch_pages=TARGET_REPO_FETCH_PAGES,
         result_limit=STRATEGIC_SEARCH_PER_PAGE,
     )
+    return cast(list[dict[str, Any]], items), error
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
@@ -138,7 +146,7 @@ def maintainer_ready_signal(labels_text: str) -> bool:
 
 def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
     """Compatibility wrapper for normalized issue text."""
-    return scoring.issue_text(item)
+    return scoring.issue_text(_github_issue(item))
 
 
 def code_reference_count(text: str) -> int:
@@ -410,12 +418,12 @@ def build_candidate(
 ) -> Candidate:
     """Build ranked candidate output through the extracted scoring module."""
     return scoring.build_candidate(
-        item,
+        _github_issue(item),
         lane,
         signal,
-        repo_meta,
+        cast(RepositoryMetadata, repo_meta),
         guide,
-        activity_comments,
+        _optional_github_comments(activity_comments),
         target_repos=TARGET_REPOS,
         amount_pattern=EXTENDED_AMOUNT_RE,
     )
@@ -941,12 +949,13 @@ def strategic_inspection_items(
     provisional: Sequence[tuple[int, int, int, Mapping[str, Any]]],
 ) -> dict[str, list[dict[str, Any]]]:
     """Select base per-repo candidates plus a globally bounded strong overflow."""
-    return sources.strategic_inspection_items(
+    selected = sources.strategic_inspection_items(
         cast(list[sources.IssueRow], list(provisional)),
         base_per_repo=STRATEGIC_INSPECT_PER_REPO,
         adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
-        should_expand=possible_miss_signal,
+        should_expand=cast(sources.IssuePredicate, possible_miss_signal),
     )
+    return cast(dict[str, list[dict[str, Any]]], selected)
 
 
 def strategic_global_search_results(
@@ -996,7 +1005,7 @@ def discover_strategic(
     list[RejectionRecord],
     list[RejectionRecord],
 ]:
-    provisional: list[tuple[int, int, int, dict[str, Any]]] = []
+    provisional: list[sources.IssueRow] = []
     touched: set[str] = set()
     rejected: dict[str, int] = {}
     examples: list[RejectionRecord] = []
@@ -1083,7 +1092,7 @@ def discover_strategic(
                     preview["priority_score"],
                     preview["career_score"],
                     preview["cash_score"],
-                    item,
+                    _github_issue(item),
                 )
             )
 
@@ -1094,12 +1103,12 @@ def discover_strategic(
         for item in items
         if item.get("html_url")
     }
-    for _, _, _, item in provisional:
-        url = str(item.get("html_url") or "")
-        if url and url not in inspected_urls and possible_miss_signal(item):
+    for _, _, _, preview_item in provisional:
+        url = str(preview_item.get("html_url") or "")
+        if url and url not in inspected_urls and possible_miss_signal(preview_item):
             add_audit(
                 audit,
-                item,
+                preview_item,
                 "strong-looking result fell outside the adaptive repo inspection pool",
             )
 
@@ -1121,7 +1130,7 @@ def discover_strategic(
                     preview["priority_score"],
                     preview["career_score"],
                     preview["cash_score"],
-                    item,
+                    _github_issue(item),
                 )
             )
         ranked.sort(key=lambda row: row[:3], reverse=True)
@@ -1228,12 +1237,16 @@ def discover_strategic(
     for repo, outcomes, coverage_incomplete in repo_verification_results:
         verified_rows += sum(1 for _, _, _, network_checked in outcomes if network_checked)
         for row, candidate, reason, _ in outcomes:
-            item = row[3]
+            verified_item = row[3]
             if reason:
-                add_reject(rejected, examples, item, reason)
-                if reason.startswith("career score ") and possible_miss_signal(item):
-                    add_audit(audit, item, f"strong-looking near miss: {reason}")
-                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+                add_reject(rejected, examples, verified_item, reason)
+                if reason.startswith("career score ") and possible_miss_signal(verified_item):
+                    add_audit(
+                        audit,
+                        verified_item,
+                        f"strong-looking near miss: {reason}",
+                    )
+                print(f"Skipping strategic candidate {verified_item.get('html_url')}: {reason}")
                 continue
 
             assert candidate is not None
@@ -1242,14 +1255,14 @@ def discover_strategic(
                     f"career score {candidate['career_score']}/100 below strategic threshold "
                     f"{STRATEGIC_MIN_CAREER_SCORE}/100"
                 )
-                add_reject(rejected, examples, item, reason)
-                if possible_miss_signal(item):
+                add_reject(rejected, examples, verified_item, reason)
+                if possible_miss_signal(verified_item):
                     add_audit(
                         audit,
-                        item,
+                        verified_item,
                         f"strong-looking near miss: {reason}",
                     )
-                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+                print(f"Skipping strategic candidate {verified_item.get('html_url')}: {reason}")
                 continue
 
             verified_by_repo[repo].append(candidate)

@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import unittest
 import urllib.request
-from typing import Any
+from typing import Any, cast
 from unittest.mock import patch
 
 from bountyscout import sources
 from bountyscout import github
+from bountyscout.types import GitHubIssue
 from tests.helpers import FakeResponse, candidate
 
 
-def issue(number: int, **overrides: Any) -> dict[str, Any]:
+def issue(number: int, **overrides: Any) -> GitHubIssue:
     item: dict[str, Any] = {
         "html_url": f"https://github.com/example/project/issues/{number}",
         "title": f"Issue {number}",
@@ -19,7 +20,7 @@ def issue(number: int, **overrides: Any) -> dict[str, Any]:
         "labels": [],
     }
     item.update(overrides)
-    return item
+    return cast(GitHubIssue, item)
 
 
 class TargetRepoSourceTests(unittest.TestCase):
