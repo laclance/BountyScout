@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Collection, Mapping
 
+from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic.readiness import TRUSTED_ASSOCIATIONS
 
@@ -487,7 +488,7 @@ def reward_text(signal: str | None, amount_pattern: str) -> str | None:
 
 
 def repo_activity(repo_meta: Mapping[str, Any]) -> str:
-    pushed = bounty.parse_github_datetime(repo_meta.get("pushed_at"))
+    pushed = github.parse_github_datetime(repo_meta.get("pushed_at"))
     if not pushed:
         return "unknown"
     days = max(0, (datetime.now(timezone.utc) - pushed).days)
@@ -770,8 +771,8 @@ def _strategic_activity_adjustment(
     maintainer_ready: bool,
 ) -> tuple[int, list[str]]:
     now = datetime.now(timezone.utc)
-    created = bounty.parse_github_datetime(item.get("created_at"))
-    updated = bounty.parse_github_datetime(item.get("updated_at"))
+    created = github.parse_github_datetime(item.get("created_at"))
+    updated = github.parse_github_datetime(item.get("updated_at"))
     created_days = max(0, (now - created).days) if created else None
 
     recent_comment_days: int | None = None
@@ -779,7 +780,7 @@ def _strategic_activity_adjustment(
     latest_bot_comment: datetime | None = None
     latest_human_comment: datetime | None = None
     for comment in activity_comments or []:
-        stamp = bounty.parse_github_datetime(comment.get("updated_at") or comment.get("created_at"))
+        stamp = github.parse_github_datetime(comment.get("updated_at") or comment.get("created_at"))
         if not stamp:
             continue
 
@@ -857,7 +858,7 @@ def build_candidate(
     target_repos: Collection[str],
     amount_pattern: str,
 ) -> dict[str, Any]:
-    repo, number = bounty.issue_repo_and_number(item)
+    repo, number = github.issue_repo_and_number(item)
     effort_estimate = estimate_effort_details(
         item,
         activity_comments if lane == "strategic" else None,
@@ -865,7 +866,7 @@ def build_candidate(
     effort = effort_estimate.bucket
     competition_level = competition(item, activity_comments if lane == "strategic" else None)
     stars = int(repo_meta.get("stargazers_count") or 0)
-    pushed = bounty.parse_github_datetime(repo_meta.get("pushed_at"))
+    pushed = github.parse_github_datetime(repo_meta.get("pushed_at"))
     active_30d = bool(pushed and (datetime.now(timezone.utc) - pushed).days <= 30)
     _, _, labels_text, text = issue_text(item)
 

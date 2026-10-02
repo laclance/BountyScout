@@ -45,7 +45,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `scout_bounties.py` | Upstream-compatible paid discovery, payment signals, basic competition checks, notifications | Keep changes conservative to reduce upstream merge conflicts |
 | `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
 | `bountyscout/app.py` | Combined application orchestration plus strategic discovery, verification, and delivery | Canonical fork-owned application implementation |
-| `bountyscout/github.py` | Fork-owned GitHub JSON transport plus keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
+| `bountyscout/github.py` | Fork-owned GitHub JSON transport, generic issue/timestamp parsing, and keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
 | `bountyscout/reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
 | `bountyscout/scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration, including trusted maintainer-history signals |
 | `bountyscout/sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
@@ -71,13 +71,13 @@ bountyscout.app
     |-- bountyscout.strategic.competition
     |-- bountyscout.strategic.readiness
 
-bountyscout.github --> scout_bounties.py
+bountyscout.github -X-> scout_bounties.py
 bountyscout.sources --> bountyscout.github
-bountyscout.sources --> scout_bounties.py
-bountyscout.scoring --> scout_bounties.py
+bountyscout.scoring --> bountyscout.github
+bountyscout.scoring --> scout_bounties.py  # payment-specific helper only
 bountyscout.scoring --> bountyscout.strategic.readiness
 bountyscout.strategic.competition --> bountyscout.github
-bountyscout.strategic.competition --> scout_bounties.py
+bountyscout.strategic.competition --> scout_bounties.py  # shared paid-compatible policy only
 bountyscout.strategic.competition --> bountyscout.strategic.claims
 bountyscout.strategic.readiness --> bountyscout.strategic.claims
 
@@ -90,7 +90,7 @@ New leaf modules should follow the same rule. The orchestration layer may compos
 
 ## Refactoring direction
 
-Phase 3A establishes `bountyscout/` as the canonical fork-owned implementation package and `tests/` as the test hierarchy. `scout_bounties.py` remains intentionally separate for upstream compatibility. Generic helper dependencies that still point from the package into `scout_bounties.py` are intentionally deferred to Phase 3B; do not mix that dependency-direction cleanup into structure-only changes.
+Phase 3B makes generic GitHub issue parsing and timestamp parsing fork-owned in `bountyscout.github`. `scout_bounties.py` intentionally retains behavior-equivalent copies so the paid scanner remains standalone and upstream-compatible. This small duplication is deliberate: package imports of `scout_bounties` now mark genuine paid-scanner behavior or deliberately shared compatibility policy rather than generic GitHub/data utilities.
 
 ## Invariants
 

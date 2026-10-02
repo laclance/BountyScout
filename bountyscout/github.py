@@ -7,13 +7,13 @@ fills. It deliberately does not own scanner policy, ranking, or long-lived state
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping, MutableMapping
+from datetime import datetime
 from threading import Lock
 from typing import Any, TypeVar
-
-import scout_bounties as bounty
 
 T = TypeVar("T")
 
@@ -75,6 +75,27 @@ def github_get(
         return None
 
 
+def issue_repo_and_number(
+    item: Mapping[str, Any],
+) -> tuple[str | None, int | None]:
+    """Extract owner/repo and issue number from a canonical GitHub issue URL."""
+    url = str(item.get("html_url", ""))
+    match = re.match(r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)", url)
+    if not match:
+        return None, None
+    return match.group(1), int(match.group(2))
+
+
+def parse_github_datetime(value: Any) -> datetime | None:
+    """Parse a GitHub ISO timestamp, returning None when unavailable."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
 def repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
     """Fetch lightweight repository metadata used for filtering and ranking."""
     data = github_get(f"https://api.github.com/repos/{repo}", token)
@@ -86,7 +107,7 @@ def issue_comments_checked(
     token: str | None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Fetch issue comments and distinguish source failure from a real empty thread."""
-    repo, number = bounty.issue_repo_and_number(item)
+    repo, number = issue_repo_and_number(item)
     if not repo or not number:
         return [], "could not identify repository/issue number"
     if not int(item.get("comments") or 0):
@@ -129,7 +150,7 @@ def contribution_guide(
 
 def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
     """Fetch a GitHub issue object from its canonical issue URL."""
-    match = bounty.issue_repo_and_number({"html_url": str(url)})
+    match = issue_repo_and_number({"html_url": str(url)})
     repo, number = match
     if not repo or not number:
         return None

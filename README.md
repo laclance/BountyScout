@@ -24,7 +24,7 @@ The paid scanner remains intentionally close to upstream, while fork-owned imple
 - `seen_bounties.json` — shared notification state.
 - `.github/workflows/bounty-scout.yml` — hourly runner.
 
-`scout_bounties.py` remains separate for upstream compatibility. The remaining generic helper dependencies from `bountyscout/` into that module are intentionally deferred to Phase 3B.
+`scout_bounties.py` remains separate for upstream compatibility. Generic GitHub issue/timestamp parsing is fork-owned in `bountyscout.github`; the root scanner keeps behavior-equivalent copies so it remains standalone.
 
 See `ARCHITECTURE.md` for data flow and module boundaries, `AGENTS.md` for AI/human implementation rules, and `CODEBASE_MAP.md` for the generated structural index.
 
