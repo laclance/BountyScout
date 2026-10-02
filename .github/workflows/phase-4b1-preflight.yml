@@ -1,0 +1,39 @@
+name: Phase 4B.1 Preflight
+
+on:
+  push:
+    branches:
+      - phase-4b1-versioned-seen-state
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install validation dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Normalize formatting and generated map
+        run: |
+          make format
+          make map
+          git diff --check
+          git diff
+
+      - name: Run full quality gate
+        run: make quality
+
+      - name: Require committed normalization
+        run: git diff --exit-code
