@@ -9,12 +9,20 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Collection, Mapping, cast
+from typing import Collection, cast
 
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic.readiness import TRUSTED_ASSOCIATIONS
-from bountyscout.types import Candidate, CandidateLane, CompetitionLevel, EffortBucket
+from bountyscout.types import (
+    Candidate,
+    CandidateLane,
+    CompetitionLevel,
+    EffortBucket,
+    GitHubComment,
+    GitHubIssue,
+    RepositoryMetadata,
+)
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
@@ -31,7 +39,7 @@ def maintainer_ready_signal(labels_text: str) -> bool:
     )
 
 
-def issue_text(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
+def issue_text(item: GitHubIssue) -> tuple[str, str, str, str]:
     title = str(item.get("title", ""))
     body = str(item.get("body", ""))
     labels = " ".join(
@@ -51,7 +59,7 @@ def code_reference_count(text: str) -> int:
     return len({match.group(0).lower() for match in CODE_FILE_RE.finditer(text)})
 
 
-def documentation_microfix(item: Mapping[str, Any]) -> bool:
+def documentation_microfix(item: GitHubIssue) -> bool:
     """Detect explicitly bounded docs edits, not incidental docs wording."""
     title, body, labels, text = issue_text(item)
     title_and_labels = f"{title}\n{labels}"
@@ -162,7 +170,7 @@ def _cross_component_feature(text: str, file_refs: int) -> bool:
 
 
 def _trusted_history_complexity(
-    activity_comments: Collection[Mapping[str, Any]] | None,
+    activity_comments: Collection[GitHubComment] | None,
 ) -> bool:
     """Recognize maintainer-confirmed complexity exposed by earlier implementation work."""
     trusted_history = "\n".join(
@@ -214,8 +222,8 @@ class EffortEstimate:
 
 
 def estimate_effort_details(
-    item: Mapping[str, Any],
-    activity_comments: Collection[Mapping[str, Any]] | None = None,
+    item: GitHubIssue,
+    activity_comments: Collection[GitHubComment] | None = None,
 ) -> EffortEstimate:
     """Estimate implementation effort from source text and already-fetched discussion."""
     title, body, labels, text = issue_text(item)
@@ -386,7 +394,7 @@ def estimate_effort_details(
     return EffortEstimate("3–6h", ("moderate implementation scope",))
 
 
-def estimate_effort(item: Mapping[str, Any]) -> EffortBucket:
+def estimate_effort(item: GitHubIssue) -> EffortBucket:
     """Return the public effort bucket for an issue."""
     return estimate_effort_details(item).bucket
 
@@ -410,7 +418,7 @@ LIFECYCLE_ADMIN_COMMAND_RE = re.compile(
 )
 
 
-def comment_contributes_to_competition(comment: Mapping[str, Any]) -> bool:
+def comment_contributes_to_competition(comment: GitHubComment) -> bool:
     """Return whether a comment is substantive enough to count as competition."""
     body = str(comment.get("body") or "").strip()
     if not body:
@@ -446,8 +454,8 @@ def comment_contributes_to_competition(comment: Mapping[str, Any]) -> bool:
 
 
 def competition(
-    item: Mapping[str, Any],
-    activity_comments: Collection[Mapping[str, Any]] | None = None,
+    item: GitHubIssue,
+    activity_comments: Collection[GitHubComment] | None = None,
 ) -> CompetitionLevel:
     comments = (
         sum(comment_contributes_to_competition(comment) for comment in activity_comments)
@@ -488,7 +496,7 @@ def reward_text(signal: str | None, amount_pattern: str) -> str | None:
     return match.group(0).strip() if match else None
 
 
-def repo_activity(repo_meta: Mapping[str, Any]) -> str:
+def repo_activity(repo_meta: RepositoryMetadata) -> str:
     pushed = github.parse_github_datetime(repo_meta.get("pushed_at"))
     if not pushed:
         return "unknown"
@@ -605,9 +613,9 @@ def _paid_cash_score(
 
 
 def _base_career_score(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     repo: str | None,
-    repo_meta: Mapping[str, Any],
+    repo_meta: RepositoryMetadata,
     guide: str | None,
     effort: EffortBucket,
     competition_level: CompetitionLevel,
@@ -767,8 +775,8 @@ def _base_career_score(
 
 
 def _strategic_activity_adjustment(
-    item: Mapping[str, Any],
-    activity_comments: list[dict[str, Any]] | None,
+    item: GitHubIssue,
+    activity_comments: list[GitHubComment] | None,
     maintainer_ready: bool,
 ) -> tuple[int, list[str]]:
     now = datetime.now(timezone.utc)
@@ -849,12 +857,12 @@ def _strategic_activity_adjustment(
 
 
 def build_candidate(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     lane: CandidateLane,
     signal: str | None,
-    repo_meta: Mapping[str, Any],
+    repo_meta: RepositoryMetadata,
     guide: str | None,
-    activity_comments: list[dict[str, Any]] | None = None,
+    activity_comments: list[GitHubComment] | None = None,
     *,
     target_repos: Collection[str],
     amount_pattern: str,
