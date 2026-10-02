@@ -39,16 +39,16 @@
 - **function** `strategic_preflight_rejection()` — line 536
 - **function** `strategic_rejection()` — line 568
 - **function** `verify()` — line 622
-- **function** `add_reject()` — line 742
-- **function** `discover_paid()` — line 750
-- **function** `possible_miss_signal()` — line 849
-- **function** `basic_rejection_audit_reason()` — line 882
-- **function** `add_audit()` — line 922
-- **function** `strategic_inspection_items()` — line 938
-- **function** `strategic_global_search_results()` — line 950
-- **function** `prefetch_discovery_searches()` — line 963
-- **function** `discover_strategic()` — line 984
-- **function** `main()` — line 1290
+- **function** `add_reject()` — line 744
+- **function** `discover_paid()` — line 752
+- **function** `possible_miss_signal()` — line 851
+- **function** `basic_rejection_audit_reason()` — line 884
+- **function** `add_audit()` — line 924
+- **function** `strategic_inspection_items()` — line 940
+- **function** `strategic_global_search_results()` — line 952
+- **function** `prefetch_discovery_searches()` — line 965
+- **function** `discover_strategic()` — line 986
+- **function** `main()` — line 1292
 
 ## `bountyscout/github.py`
 
