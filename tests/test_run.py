@@ -145,9 +145,7 @@ class CoverageTests(unittest.TestCase):
     def test_coverage_threshold_and_failure_reasons_are_preserved(self) -> None:
         self.assertIsNone(run.coverage_status({}, []).warning)
         self.assertIsNone(run.coverage_status({"unrelated": 99}, []).warning)
-        self.assertIsNone(
-            run.coverage_status({"could not refresh source issue": 4}, []).warning
-        )
+        self.assertIsNone(run.coverage_status({"could not refresh source issue": 4}, []).warning)
 
         exact = run.coverage_status({"could not refresh source issue": 5}, [])
         self.assertEqual(exact.verification_failures, 5)
