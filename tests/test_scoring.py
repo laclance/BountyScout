@@ -1102,6 +1102,22 @@ class ScoringRegressionTests(unittest.TestCase):
         )
         self.assertIn("stale inactive backlog penalty", result["career_reasons"])
 
+    def test_usd_like_amount_from_signal_preserves_behavior(self) -> None:
+        cases: list[tuple[str | None, float | None]] = [
+            ("reward $1", 1.0),
+            ("reward $25", 25.0),
+            ("reward $1,234.50", 1234.5),
+            ("reward 25 USD", 25.0),
+            ("reward 25 usd", 25.0),
+            ("reward 25 USDC", 25.0),
+            ("reward 25 USDT", 25.0),
+            ("reward €25", None),
+            (None, None),
+        ]
+        for signal, expected in cases:
+            with self.subTest(signal=signal):
+                self.assertEqual(scoring.usd_like_amount_from_signal(signal), expected)
+
     def test_payment_and_activity_helpers_preserve_public_behavior(self) -> None:
         self.assertEqual(scoring.payment_confidence(None), 0)
         self.assertEqual(

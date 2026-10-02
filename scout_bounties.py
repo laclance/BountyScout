@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from bountyscout import github as shared_github, state
+from bountyscout import github as shared_github, scoring, state
 
 # Configuration
 MAX_COMMENTS = 25  # Filter out overcrowded threads
@@ -307,23 +307,8 @@ def parse_github_datetime(value: Any) -> datetime | None:
 
 
 def usd_like_amount_from_signal(signal: str | None) -> float | None:
-    """Extract a USD-like amount from a payment signal when comparable."""
-    if not signal:
-        return None
-
-    dollar = re.search(r"\$\s*(\d[\d,]*(?:\.\d+)?)", signal)
-    if dollar:
-        return float(dollar.group(1).replace(",", ""))
-
-    currency = re.search(
-        r"(\d[\d,]*(?:\.\d+)?)\s*(?:usd|usdc|usdt)\b",
-        signal,
-        re.IGNORECASE,
-    )
-    if currency:
-        return float(currency.group(1).replace(",", ""))
-
-    return None
+    """Compatibility wrapper for canonical package reward parsing."""
+    return scoring.usd_like_amount_from_signal(signal)
 
 
 def fetch_repo_metadata(repo: str, token: str | None) -> dict[str, Any]:

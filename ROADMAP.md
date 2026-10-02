@@ -111,6 +111,15 @@ canonical package-owned paid scanner
 The command `python scout_bounties.py` must remain fully supported throughout. Do
 not make the paid-only entry point depend on combined application orchestration.
 
+### Phase 4E.1 — package-owned USD-like reward parsing — complete
+
+- canonical USD-like amount parsing moved to `bountyscout.scoring`
+- root `scout_bounties.py` retains a thin compatibility wrapper
+- `bountyscout.scoring` no longer imports the root scanner
+- scoring behavior and standalone paid-scanner behavior remain unchanged
+
+Broader Phase 4E remains open.
+
 ## Deferred result-object work
 
 After mapping-based domain contracts are stable, consider immutable result objects or
