@@ -70,49 +70,68 @@ def payment_signal(item: GitHubIssue) -> str | None:
 
 
 def is_clean_candidate(item: GitHubIssue) -> bool:
-    """Basic triage before the more expensive payment/competition checks."""
-    # Skip if already a Pull Request
-    if "pull_request" in item:
-        return False
+    """Return whether an issue passes the package-owned paid eligibility policy."""
+    return not any(reject(item) for reject in _ELIGIBILITY_REJECTION_RULES)
 
-    # Skip BountyScout-generated alert issues so scouts do not recursively
-    # discover other scouts (or themselves) as bounty opportunities.
-    url = str(item.get("html_url", "")).lower()
-    if "/bountyscout/issues/" in url:
-        return False
 
-    title = str(item.get("title", "")).lower()
-    body = str(item.get("body", "")).lower()
-    generated_alert_markers = [
-        "bounty alert:",
-        "active bounty scan results",
-        "new opportunities found",
-        "new opportunityies found",
-    ]
-    if any(marker in title or marker in body for marker in generated_alert_markers):
-        return False
+_GENERATED_ALERT_MARKERS: Final = (
+    "bounty alert:",
+    "active bounty scan results",
+    "new opportunities found",
+    "new opportunityies found",
+)
+_BLOCKED_CONTENT_TERMS: Final = (
+    "airdrop",
+    "referral",
+    "casino",
+    "gambling",
+    "trading bot",
+    "blog post",
+    "article writing",
+    "tutorial proposal",
+    "content creator",
+)
+_HISTORICAL_SCOUT_ISSUE_PATH: Final = "/bountyscout/issues/"
 
-    # Skip if already assigned.
-    if item.get("assignees"):
-        return False
 
-    # Skip if thread is overcrowded.
-    if int(item.get("comments", 0)) > MAX_COMMENTS:
-        return False
+def _issue_text(item: GitHubIssue) -> tuple[str, str]:
+    return str(item.get("title", "")).lower(), str(item.get("body", "")).lower()
 
-    # Skip cryptocurrency/article writing/spam keywords.
-    blocklist = [
-        "airdrop",
-        "referral",
-        "casino",
-        "gambling",
-        "trading bot",
-        "blog post",
-        "article writing",
-        "tutorial proposal",
-        "content creator",
-    ]
-    if any(term in title or term in body for term in blocklist):
-        return False
 
-    return True
+def _contains_issue_text_term(item: GitHubIssue, terms: tuple[str, ...]) -> bool:
+    title, body = _issue_text(item)
+    return any(term in title or term in body for term in terms)
+
+
+def _is_pull_request(item: GitHubIssue) -> bool:
+    return "pull_request" in item
+
+
+def _is_historical_scout_report(item: GitHubIssue) -> bool:
+    return _HISTORICAL_SCOUT_ISSUE_PATH in str(item.get("html_url", "")).lower()
+
+
+def _contains_generated_alert(item: GitHubIssue) -> bool:
+    return _contains_issue_text_term(item, _GENERATED_ALERT_MARKERS)
+
+
+def _is_assigned(item: GitHubIssue) -> bool:
+    return bool(item.get("assignees"))
+
+
+def _exceeds_comment_limit(item: GitHubIssue) -> bool:
+    return int(item.get("comments", 0)) > MAX_COMMENTS
+
+
+def _contains_blocked_content(item: GitHubIssue) -> bool:
+    return _contains_issue_text_term(item, _BLOCKED_CONTENT_TERMS)
+
+
+_ELIGIBILITY_REJECTION_RULES: Final = (
+    _is_pull_request,
+    _is_historical_scout_report,
+    _contains_generated_alert,
+    _is_assigned,
+    _exceeds_comment_limit,
+    _contains_blocked_content,
+)
