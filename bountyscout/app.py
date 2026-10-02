@@ -396,7 +396,7 @@ def build_candidate(
 def refresh_issue(
     item: Mapping[str, Any], token: str | None
 ) -> tuple[dict[str, Any] | None, str | None]:
-    repo, number = bounty.issue_repo_and_number(item)
+    repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return None, "could not identify repository/issue number"
     fresh = github.github_get(f"https://api.github.com/repos/{repo}/issues/{number}", token)
@@ -652,7 +652,7 @@ def verify(
         # The upstream verifier stops before competition checks when payment is
         # only present in comments/platform feeds, so finish those checks here.
         if reason == "no explicit payment signal":
-            repo, number = bounty.issue_repo_and_number(fresh)
+            repo, number = github.issue_repo_and_number(fresh)
             competition_reason = extended_competition_reason(fresh, token, comments)
             if competition_reason:
                 return None, competition_reason
@@ -668,7 +668,7 @@ def verify(
             return None, reason
         lane = "strategic"
 
-    repo, _ = bounty.issue_repo_and_number(fresh)
+    repo, _ = github.issue_repo_and_number(fresh)
     if repo is None:
         return None, "could not identify repository/issue number"
     repo_meta = github.cached_value(
@@ -821,7 +821,7 @@ def possible_miss_signal(item: Mapping[str, Any]) -> bool:
         return False
 
     _, _, labels, text = issue_text(item)
-    updated = bounty.parse_github_datetime(item.get("updated_at"))
+    updated = github.parse_github_datetime(item.get("updated_at"))
     recent = bool(updated and (datetime.now(timezone.utc) - updated).days <= 60)
     contributor_signal = any(
         marker in labels
@@ -1016,7 +1016,7 @@ def discover_strategic(
                 if audit_reason:
                     add_audit(audit, item, audit_reason)
                 continue
-            repo, _ = bounty.issue_repo_and_number(item)
+            repo, _ = github.issue_repo_and_number(item)
             if not repo:
                 continue
             repo_key = repo
