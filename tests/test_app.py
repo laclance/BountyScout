@@ -1859,7 +1859,7 @@ class VerificationTests(unittest.TestCase):
             patch.object(bounty, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(scout, "strategic_rejection", return_value=None) as rejection,
-            patch.object(bounty, "issue_repo_and_number", return_value=(None, None)),
+            patch.object(github, "issue_repo_and_number", return_value=(None, None)),
         ):
             self.assertEqual(
                 scout.verify(
