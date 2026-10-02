@@ -8,6 +8,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from email.message import Message
 from threading import Lock
 from typing import Any, cast
 from unittest.mock import patch
@@ -121,18 +122,19 @@ class GitHubHttpTests(unittest.TestCase):
         self.assertEqual(request.headers["Authorization"], "Bearer tok")
 
     def test_issue_lifecycle_distinguishes_not_found_from_other_http_failures(self) -> None:
+        headers = Message()
         not_found = urllib.error.HTTPError(
             "https://api.github.com/x",
             404,
             "not found",
-            None,
+            headers,
             None,
         )
         forbidden = urllib.error.HTTPError(
             "https://api.github.com/x",
             403,
             "forbidden",
-            None,
+            headers,
             None,
         )
         with patch.object(urllib.request, "urlopen", side_effect=[not_found, forbidden]):
