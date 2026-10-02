@@ -209,7 +209,7 @@ def audit_summary(audit: Sequence[RejectionRecord]) -> str:
 
 
 def github_report_body(
-    queue: Sequence[Mapping[str, Any]],
+    queue: Sequence[Candidate],
     now: str,
     *,
     verification_examples: Sequence[RejectionRecord] = (),
