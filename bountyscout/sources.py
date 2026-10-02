@@ -12,7 +12,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Mapping, Sequence, cast
 
-import github_access as github
+from bountyscout import github
 import scout_bounties as bounty
 
 IssueRow = tuple[int, int, int, dict[str, Any]]

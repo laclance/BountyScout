@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping
 
-from strategic_claims import normalized_claim_text
+from bountyscout.strategic.claims import normalized_claim_text
 
 TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
