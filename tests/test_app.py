@@ -3360,7 +3360,6 @@ class CoverageGapTests(unittest.TestCase):
         gh.assert_not_called()
         save.assert_not_called()
 
-
     def test_root_entry_point_invokes_package_main(self) -> None:
         with patch.object(scout, "main") as package_main:
             runpy.run_path("opportunity_scout.py", run_name="__main__")
