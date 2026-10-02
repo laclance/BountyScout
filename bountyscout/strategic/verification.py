@@ -111,6 +111,9 @@ def verify_strategic_selection(
                 row,
                 score_uplift_bound=score_uplift_bound,
             )[1]
+            candidate: Candidate | None
+            reason: str | None
+            network_checked: bool
             if preflight_reason:
                 candidate = None
                 reason = preflight_reason
