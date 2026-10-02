@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from bountyscout import github
 import scout_bounties as bounty
-from bountyscout import reporting
+from bountyscout import reporting as reporting
 from bountyscout import run
 from bountyscout import scoring
 from bountyscout import sources
