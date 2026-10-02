@@ -770,9 +770,13 @@ def discover_paid(
             )
         )
 
-    for (source_url, platform_signal), item in zip(platform_sources, platform_items, strict=True):
-        if item and bounty.is_clean_candidate(item):
-            pending.append((item, platform_signal, True))
+    for (source_url, platform_signal), platform_item in zip(
+        platform_sources,
+        platform_items,
+        strict=True,
+    ):
+        if platform_item and bounty.is_clean_candidate(platform_item):
+            pending.append((platform_item, platform_signal, True))
 
     def verify_paid(
         row: tuple[GitHubIssue, str | None, bool],
