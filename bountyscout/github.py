@@ -8,16 +8,28 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, MutableMapping
+from dataclasses import dataclass
 from datetime import datetime
 from threading import Lock
 from typing import Any, TypeVar, cast
 
-from bountyscout.types import GitHubComment, GitHubIssue, RepositoryMetadata
+from bountyscout.types import (
+    GitHubComment,
+    GitHubIssue,
+    IssueLifecycleStatus,
+    RepositoryMetadata,
+)
 
 T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class IssueLifecycleResult:
+    status: IssueLifecycleStatus
 
 
 class KeyedLockPool:
@@ -51,6 +63,17 @@ def cached_value(
         return cache[key]
 
 
+def _github_headers(token: str | None) -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "OSSOpportunityScout",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def github_get(
     url: str,
     token: str | None = None,
@@ -59,15 +82,7 @@ def github_get(
     log_errors: bool = True,
 ) -> Any:
     """Fetch JSON from GitHub with the scanner's standard API headers."""
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "OSSOpportunityScout",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-
-    request = urllib.request.Request(url, headers=headers)
+    request = urllib.request.Request(url, headers=_github_headers(token))
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -77,15 +92,18 @@ def github_get(
         return None
 
 
+def _issue_repo_and_number_from_url(url: str) -> tuple[str | None, int | None]:
+    match = re.fullmatch(r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)", url)
+    if not match:
+        return None, None
+    return match.group(1), int(match.group(2))
+
+
 def issue_repo_and_number(
     item: GitHubIssue,
 ) -> tuple[str | None, int | None]:
     """Extract owner/repo and issue number from a canonical GitHub issue URL."""
-    url = str(item.get("html_url", ""))
-    match = re.match(r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)", url)
-    if not match:
-        return None, None
-    return match.group(1), int(match.group(2))
+    return _issue_repo_and_number_from_url(str(item.get("html_url", "")))
 
 
 def parse_github_datetime(value: Any) -> datetime | None:
@@ -96,6 +114,38 @@ def parse_github_datetime(value: Any) -> datetime | None:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except (TypeError, ValueError):
         return None
+
+
+def issue_lifecycle(
+    url: str,
+    token: str | None,
+    timeout: int = 20,
+) -> IssueLifecycleResult:
+    """Fetch direct issue lifecycle evidence without equating failures with closure."""
+    repo, number = _issue_repo_and_number_from_url(url)
+    if not repo or number is None:
+        return IssueLifecycleResult("failed")
+
+    endpoint = f"https://api.github.com/repos/{repo}/issues/{number}"
+    request = urllib.request.Request(endpoint, headers=_github_headers(token))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload: object = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return IssueLifecycleResult("not_found")
+        return IssueLifecycleResult("failed")
+    except Exception:
+        return IssueLifecycleResult("failed")
+
+    if not isinstance(payload, dict) or "pull_request" in payload:
+        return IssueLifecycleResult("failed")
+    state = payload.get("state")
+    if state == "open":
+        return IssueLifecycleResult("open")
+    if state == "closed":
+        return IssueLifecycleResult("closed")
+    return IssueLifecycleResult("failed")
 
 
 def repo_metadata(repo: str, token: str | None) -> RepositoryMetadata:
@@ -152,8 +202,7 @@ def contribution_guide(
 
 def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     """Fetch a GitHub issue object from its canonical issue URL."""
-    match = issue_repo_and_number(GitHubIssue(html_url=str(url)))
-    repo, number = match
+    repo, number = _issue_repo_and_number_from_url(str(url))
     if not repo or not number:
         return None
     item = github_get(

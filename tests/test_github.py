@@ -3,10 +3,12 @@ from __future__ import annotations
 import io
 import time
 import unittest
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from email.message import Message
 from threading import Lock
 from typing import Any, cast
 from unittest.mock import patch
@@ -87,6 +89,108 @@ class GitHubHttpTests(unittest.TestCase):
                 )
             )
             self.assertEqual(output.getvalue(), "")
+
+    def test_issue_lifecycle_returns_open_and_closed_from_direct_issue_endpoint(self) -> None:
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            side_effect=[
+                FakeResponse(b'{"state": "open"}'),
+                FakeResponse(b'{"state": "closed"}'),
+            ],
+        ) as opened:
+            self.assertEqual(
+                github.issue_lifecycle(
+                    "https://github.com/example/project/issues/42",
+                    "tok",
+                ).status,
+                "open",
+            )
+            self.assertEqual(
+                github.issue_lifecycle(
+                    "https://github.com/example/project/issues/43",
+                    "tok",
+                ).status,
+                "closed",
+            )
+
+        request = opened.call_args_list[0].args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://api.github.com/repos/example/project/issues/42",
+        )
+        self.assertEqual(request.headers["Authorization"], "Bearer tok")
+
+    def test_issue_lifecycle_distinguishes_not_found_from_other_http_failures(self) -> None:
+        headers = Message()
+        not_found = urllib.error.HTTPError(
+            "https://api.github.com/x",
+            404,
+            "not found",
+            headers,
+            None,
+        )
+        forbidden = urllib.error.HTTPError(
+            "https://api.github.com/x",
+            403,
+            "forbidden",
+            headers,
+            None,
+        )
+        with patch.object(urllib.request, "urlopen", side_effect=[not_found, forbidden]):
+            self.assertEqual(
+                github.issue_lifecycle(
+                    "https://github.com/example/project/issues/42",
+                    None,
+                ).status,
+                "not_found",
+            )
+            self.assertEqual(
+                github.issue_lifecycle(
+                    "https://github.com/example/project/issues/43",
+                    None,
+                ).status,
+                "failed",
+            )
+
+    def test_issue_lifecycle_transport_and_malformed_payload_fail_closed(self) -> None:
+        with patch.object(urllib.request, "urlopen", side_effect=TimeoutError("timeout")):
+            self.assertEqual(
+                github.issue_lifecycle(
+                    "https://github.com/example/project/issues/42",
+                    None,
+                ).status,
+                "failed",
+            )
+
+        malformed_payloads = [
+            b"{",
+            b"[]",
+            b'{"state": "open", "pull_request": {}}',
+            b'{"state": "unknown"}',
+        ]
+        for payload in malformed_payloads:
+            with self.subTest(payload=payload):
+                with patch.object(
+                    urllib.request,
+                    "urlopen",
+                    return_value=FakeResponse(payload),
+                ):
+                    self.assertEqual(
+                        github.issue_lifecycle(
+                            "https://github.com/example/project/issues/42",
+                            None,
+                        ).status,
+                        "failed",
+                    )
+
+    def test_issue_lifecycle_rejects_noncanonical_urls_without_network(self) -> None:
+        with patch.object(urllib.request, "urlopen") as opened:
+            self.assertEqual(
+                github.issue_lifecycle("https://example.com/tasks/42", None).status,
+                "failed",
+            )
+        opened.assert_not_called()
 
 
 class CacheTests(unittest.TestCase):

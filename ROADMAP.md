@@ -42,12 +42,14 @@ Broad result-object conversion is intentionally deferred.
 - `scout-state` remains authoritative scheduled-workflow persistence
 - Python remains branch-agnostic and local execution still uses ordinary `seen_bounties.json`
 
-### Phase 4B.2 — bounded retention and compaction
+### Phase 4B.2 — bounded retention and compaction — complete
 
-- add bounded revalidation and compaction
-- avoid blind TTL expiration
-- prune only with safe lifecycle evidence
-- allow reopened opportunities to become eligible again where appropriate
+- bounded direct issue revalidation uses a 20-call maximum per successful run
+- entries are rechecked no more often than every 30 days, with unknown legacy timestamps treated as oldest
+- deterministic ordering walks never-checked entries first, then oldest checked entries, then URL
+- only confirmed closed GitHub issues are pruned; failures, 404s, and non-GitHub URLs remain seen
+- complete quiet runs can compact state, while failed delivery or incomplete combined coverage persists no maintenance changes
+- confirmed-closed entries may surface again if the issue is later reopened
 
 ### Phase 4B.3 — legacy generated-report cleanup
 

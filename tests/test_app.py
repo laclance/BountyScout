@@ -3203,6 +3203,138 @@ class FormattingAndMainTests(unittest.TestCase):
             scout.main()
             save.assert_not_called()
 
+    def test_main_quiet_complete_run_performs_bounded_maintenance(self) -> None:
+        old_url = "https://github.com/example/project/issues/99"
+        seen = state.SeenState.from_urls([old_url])
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(state, "load_seen_state", return_value=seen),
+            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
+            patch.object(
+                github,
+                "issue_lifecycle",
+                return_value=github.IssueLifecycleResult("open"),
+            ) as lifecycle,
+            patch.object(state, "save_seen_state") as save,
+        ):
+            scout.main()
+
+        lifecycle.assert_called_once_with(old_url, None)
+        save.assert_called_once()
+        saved = save.call_args.args[0]
+        record = saved.record(old_url)
+        self.assertIsNotNone(record)
+        assert record is not None
+        self.assertIsNotNone(record.last_checked_at)
+
+    def test_main_quiet_maintenance_save_failure_is_reported(self) -> None:
+        old_url = "https://github.com/example/project/issues/99"
+        buf = io.StringIO()
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([old_url]),
+            ),
+            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
+            patch.object(
+                github,
+                "issue_lifecycle",
+                return_value=github.IssueLifecycleResult("failed"),
+            ),
+            patch.object(
+                state,
+                "save_seen_state",
+                side_effect=state.SeenStateSaveError("maintenance save failed"),
+            ),
+            redirect_stdout(buf),
+        ):
+            scout.main()
+
+        self.assertIn("Error saving state file: maintenance save failed", buf.getvalue())
+
+    def test_main_successful_delivery_saves_maintenance_and_new_urls_atomically(self) -> None:
+        old_url = "https://github.com/example/project/issues/99"
+        new = candidate(url="https://github.com/example/project/issues/100", issue_number=100)
+        env = {"TELEGRAM_BOT_TOKEN": "tb", "TELEGRAM_CHAT_ID": "chat"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([old_url]),
+            ),
+            patch.object(scout, "discover_paid", return_value=([new], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
+            patch.object(bounty, "send_telegram_notification", return_value=True),
+            patch.object(
+                github,
+                "issue_lifecycle",
+                return_value=github.IssueLifecycleResult("closed"),
+            ),
+            patch.object(state, "save_seen_state") as save,
+        ):
+            scout.main()
+
+        saved = save.call_args.args[0]
+        self.assertFalse(saved.contains(old_url))
+        self.assertTrue(saved.contains(new["url"]))
+
+    def test_main_failed_delivery_and_incomplete_coverage_skip_maintenance(self) -> None:
+        old_url = "https://github.com/example/project/issues/99"
+        paid = candidate()
+        with (
+            patch.dict(
+                os.environ,
+                {"TELEGRAM_BOT_TOKEN": "tb", "TELEGRAM_CHAT_ID": "chat"},
+                clear=True,
+            ),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([old_url]),
+            ),
+            patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
+            patch.object(bounty, "send_telegram_notification", return_value=False),
+            patch.object(github, "issue_lifecycle") as lifecycle,
+            patch.object(state, "save_seen_state") as save,
+        ):
+            scout.main()
+        lifecycle.assert_not_called()
+        save.assert_not_called()
+
+        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/BountyScout"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([old_url]),
+            ),
+            patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
+            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(
+                scout,
+                "discover_strategic",
+                return_value=(
+                    [],
+                    {"could not refresh source issue": scout.STRATEGIC_COVERAGE_WARNING_THRESHOLD},
+                    [],
+                    [],
+                ),
+            ),
+            patch.object(bounty, "create_github_issue", return_value=True),
+            patch.object(github, "issue_lifecycle") as lifecycle,
+            patch.object(state, "save_seen_state") as save,
+        ):
+            scout.main()
+        lifecycle.assert_not_called()
+        save.assert_not_called()
+
 
 class CoverageGapTests(unittest.TestCase):
     def test_comment_payment_signal_can_reuse_supplied_comments(self) -> None:
