@@ -13,7 +13,9 @@ import urllib.request
 from collections.abc import Callable, Mapping, MutableMapping
 from datetime import datetime
 from threading import Lock
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
+
+from bountyscout.types import GitHubComment, GitHubIssue, RepositoryMetadata
 
 T = TypeVar("T")
 
@@ -96,16 +98,16 @@ def parse_github_datetime(value: Any) -> datetime | None:
         return None
 
 
-def repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
+def repo_metadata(repo: str, token: str | None) -> RepositoryMetadata:
     """Fetch lightweight repository metadata used for filtering and ranking."""
     data = github_get(f"https://api.github.com/repos/{repo}", token)
-    return data if isinstance(data, dict) else {}
+    return cast(RepositoryMetadata, data) if isinstance(data, dict) else {}
 
 
 def issue_comments_checked(
     item: Mapping[str, Any],
     token: str | None,
-) -> tuple[list[dict[str, Any]], str | None]:
+) -> tuple[list[GitHubComment], str | None]:
     """Fetch issue comments and distinguish source failure from a real empty thread."""
     repo, number = issue_repo_and_number(item)
     if not repo or not number:
@@ -119,13 +121,13 @@ def issue_comments_checked(
     )
     if not isinstance(comments, list):
         return [], "could not refresh issue comments"
-    return comments, None
+    return cast(list[GitHubComment], comments), None
 
 
 def issue_comments(
     item: Mapping[str, Any],
     token: str | None,
-) -> list[dict[str, Any]]:
+) -> list[GitHubComment]:
     """Compatibility helper returning an empty list when comment fetching fails."""
     comments, _ = issue_comments_checked(item, token)
     return comments
@@ -148,7 +150,7 @@ def contribution_guide(
     return None
 
 
-def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
+def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     """Fetch a GitHub issue object from its canonical issue URL."""
     match = issue_repo_and_number({"html_url": str(url)})
     repo, number = match
@@ -158,4 +160,4 @@ def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
         f"https://api.github.com/repos/{repo}/issues/{number}",
         token,
     )
-    return item if isinstance(item, dict) else None
+    return cast(GitHubIssue, item) if isinstance(item, dict) else None

@@ -1,20 +1,9 @@
 from __future__ import annotations
 
 import unittest
-from typing import Any
-
 from bountyscout.strategic import readiness
-
-
-def issue(**overrides: Any) -> dict[str, Any]:
-    item: dict[str, Any] = {
-        "title": "Network bug",
-        "body": "",
-        "labels": [],
-        "user": {"login": "reporter"},
-    }
-    item.update(overrides)
-    return item
+from bountyscout.types import GitHubComment
+from tests.helpers import comment, issue
 
 
 class ReadinessLabelTests(unittest.TestCase):
@@ -73,15 +62,15 @@ class MaintainerReadinessTests(unittest.TestCase):
     def test_authority_requires_maintainer_or_explicit_project_action(self) -> None:
         self.assertTrue(
             readiness.maintainer_comment_authority(
-                {"body": "Thanks.", "author_association": "MEMBER"}
+                comment(body="Thanks.", author_association="MEMBER")
             )
         )
         self.assertTrue(
             readiness.maintainer_comment_authority(
-                {
-                    "body": "I'm going to hand it off to the Engineering team.",
-                    "author_association": "CONTRIBUTOR",
-                }
+                comment(
+                    body="I'm going to hand it off to the Engineering team.",
+                    author_association="CONTRIBUTOR",
+                )
             )
         )
         self.assertFalse(
@@ -99,7 +88,7 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
     def test_node_log_request_is_a_diagnostic_hold(self) -> None:
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "body": (
                     "Could you share the node logs if you have collected them from the "
@@ -114,7 +103,7 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
     def test_requested_diagnostic_is_cleared_when_evidence_arrives(self) -> None:
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "body": "Could you provide a heap profile from the affected process?",
                 "author_association": "MEMBER",
@@ -130,14 +119,14 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
     def test_latest_explicit_stance_wins(self) -> None:
-        hold = {
-            "body": "Please wait before implementing; this needs clarification.",
-            "author_association": "MEMBER",
-        }
-        ready = {
-            "body": "Clarification is complete. This is ready for implementation.",
-            "author_association": "MEMBER",
-        }
+        hold = comment(
+            body="Please wait before implementing; this needs clarification.",
+            author_association="MEMBER",
+        )
+        ready = comment(
+            body="Clarification is complete. This is ready for implementation.",
+            author_association="MEMBER",
+        )
 
         self.assertEqual(
             readiness.maintainer_readiness_comment_state(issue(), [hold, ready]),
@@ -149,13 +138,13 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
     def test_redirect_detection_requires_actual_redirection(self) -> None:
-        context_only = [
+        context_only: list[GitHubComment] = [
             {
                 "body": "Related code lives in distribution/reference for context.",
                 "author_association": "MEMBER",
             }
         ]
-        redirect = [
+        redirect: list[GitHubComment] = [
             {
                 "body": (
                     "This requires a change in https://github.com/distribution/reference. "
@@ -176,7 +165,7 @@ class MaintainerReadinessTests(unittest.TestCase):
                 "maintainer redirected implementation/discussion to another project",
             ),
         )
-        core_redirect = [
+        core_redirect: list[GitHubComment] = [
             {
                 "body": (
                     "Closing it here would help it being backported to previous node. "
@@ -194,19 +183,19 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
     def test_duplicate_detection_avoids_related_and_not_duplicate_text(self) -> None:
-        duplicate = [
+        duplicate: list[GitHubComment] = [
             {
                 "body": "Looks like a possible duplicate of #123; discussion is tracked there.",
                 "author_association": "OWNER",
             }
         ]
-        distinct = [
+        distinct: list[GitHubComment] = [
             {
                 "body": "This is not a duplicate of #123; the symptoms are different.",
                 "author_association": "OWNER",
             }
         ]
-        untrusted = [
+        untrusted: list[GitHubComment] = [
             {
                 "body": "Looks like a duplicate of #123.",
                 "author_association": "NONE",
@@ -230,7 +219,7 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
     def test_wrong_solution_from_maintainer_blocks_requested_approach(self) -> None:
-        wrong_solution = [
+        wrong_solution: list[GitHubComment] = [
             {
                 "body": (
                     "A merge option would be the wrong solution for this. "
@@ -246,7 +235,7 @@ class MaintainerReadinessTests(unittest.TestCase):
                 "maintainer indicates the proposed implementation approach is not wanted",
             ),
         )
-        provider_direction = [
+        provider_direction: list[GitHubComment] = [
             {
                 "body": (
                     "The prevailing wisdom on the maintainer team is that there is no "
@@ -263,7 +252,7 @@ class MaintainerReadinessTests(unittest.TestCase):
             ),
         )
 
-        untrusted = [
+        untrusted: list[GitHubComment] = [
             {
                 "body": "This is the wrong solution; use something else.",
                 "author_association": "NONE",
@@ -286,7 +275,7 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
     def test_feedback_language_only_blocks_proposal_stage(self) -> None:
-        comment = [
+        comment: list[GitHubComment] = [
             {
                 "body": "We want to gather feedback before committing.",
                 "author_association": "OWNER",
@@ -375,7 +364,7 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
         )
 
     def test_reporter_latest_resolution_state_wins(self) -> None:
-        resolved = [
+        resolved: list[GitHubComment] = [
             {
                 "body": "It looks like the issue got fixed; I don't see it in the latest version.",
                 "user": {"login": "reporter"},
@@ -412,7 +401,7 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
         )
 
     def test_trusted_spec_level_discussion_is_a_hold(self) -> None:
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "body": (
                     "OpenMetrics 2.0 will not allow absent sum. I'd suggest rejecting such "
@@ -821,7 +810,7 @@ class LifecycleClassificationTests(unittest.TestCase):
         undici = issue(
             comments=2,
         )
-        undici_comments = [
+        undici_comments: list[GitHubComment] = [
             {
                 "body": (
                     "Looks like this was fixed on main by #5864. "

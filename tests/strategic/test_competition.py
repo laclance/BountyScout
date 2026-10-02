@@ -2,24 +2,13 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timedelta, timezone
-from typing import Any
 from unittest.mock import patch
 
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic import competition
-
-
-def issue(**overrides: Any) -> dict[str, Any]:
-    item: dict[str, Any] = {
-        "html_url": "https://github.com/example/project/issues/42",
-        "title": "Network regression",
-        "body": "",
-        "comments": 1,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    item.update(overrides)
-    return item
+from bountyscout.types import GitHubComment
+from tests.helpers import comment, issue
 
 
 class ClaimCompetitionTests(unittest.TestCase):
@@ -29,25 +18,27 @@ class ClaimCompetitionTests(unittest.TestCase):
 
         self.assertTrue(
             competition.claim_source_is_recent(
-                {"created_at": recent.isoformat()},
+                comment(created_at=recent.isoformat()),
                 issue_body=True,
             )
         )
         self.assertFalse(
             competition.claim_source_is_recent(
-                {"created_at": stale.isoformat()},
+                comment(created_at=stale.isoformat()),
                 issue_body=True,
             )
         )
         self.assertTrue(
             competition.claim_source_is_recent(
-                {
-                    "created_at": stale.isoformat(),
-                    "updated_at": recent.isoformat(),
-                }
+                comment(
+                    created_at=stale.isoformat(),
+                    updated_at=recent.isoformat(),
+                )
             )
         )
-        self.assertTrue(competition.claim_source_is_recent({}))
+        self.assertTrue(
+            competition.claim_source_is_recent(comment(created_at=None, updated_at=None))
+        )
 
     def test_strategic_claim_reason_ignores_stale_and_third_person_work(self) -> None:
         recent = datetime.now(timezone.utc).isoformat()
@@ -150,7 +141,7 @@ class ClaimCompetitionTests(unittest.TestCase):
 
     def test_chain_love_3969_direct_claim_is_active_ownership(self) -> None:
         recent = datetime.now(timezone.utc).isoformat()
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "body": (
                     "Claiming this DBIP. Plan: validator rule in json-tools parsing each "
@@ -333,7 +324,7 @@ class ClaimCompetitionTests(unittest.TestCase):
 
 class LinkedPullRequestTests(unittest.TestCase):
     def test_linked_pr_checks_open_state_and_deduplicates_candidates(self) -> None:
-        comments = [
+        comments: list[GitHubComment] = [
             {"body": ("submitted PR #10; implementation pull request #11; also submitted PR #10")}
         ]
         with patch.object(
@@ -351,7 +342,7 @@ class LinkedPullRequestTests(unittest.TestCase):
             self.assertEqual(getter.call_count, 2)
 
     def test_linked_pr_uses_same_repo_urls_and_ignores_non_pr_api_results(self) -> None:
-        comments = [
+        comments: list[GitHubComment] = [
             {
                 "body": (
                     "See https://github.com/other/project/pull/88 for background. "
@@ -362,7 +353,7 @@ class LinkedPullRequestTests(unittest.TestCase):
         with patch.object(github, "github_get", return_value=[]):
             self.assertIsNone(competition.linked_open_pr_reason(issue(), "t", comments))
 
-        same_repo = [
+        same_repo: list[GitHubComment] = [
             {
                 "body": "Implementation: https://github.com/example/project/pull/13",
             }
@@ -583,7 +574,7 @@ class CompetitionOrchestrationTests(unittest.TestCase):
             )
 
     def test_competition_rejects_unidentifiable_issue_without_network_calls(self) -> None:
-        bad = {"html_url": "bad", "comments": 1}
+        bad = issue(html_url="bad", comments=1)
         with patch.object(bounty, "has_existing_implementation_pr") as existing:
             self.assertEqual(
                 competition.strategic_competition_reason(bad, "t", []),
