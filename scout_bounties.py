@@ -524,7 +524,7 @@ def send_discord_notification(webhook_url: str, message: str) -> bool:
 
 
 def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
-    """Create an issue in the host repository to trigger a native GitHub alert."""
+    """Create a native GitHub scan report and immediately close it as not planned."""
     url = f"https://api.github.com/repos/{repo_fullname}/issues"
     payload = {
         "title": title,
@@ -544,11 +544,33 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=15):
-            print("GitHub Issue notification created successfully.")
-            return True
+        with urllib.request.urlopen(req, timeout=15) as response:
+            created = json.loads(response.read().decode("utf-8"))
     except Exception as e:
         print(f"Failed to create GitHub Issue notification: {e}")
+        return False
+
+    issue_url = created.get("url") if isinstance(created, dict) else None
+    if not isinstance(issue_url, str) or not issue_url:
+        print("Failed to auto-close GitHub Issue notification: created issue URL missing.")
+        return False
+
+    close_payload = {
+        "state": "closed",
+        "state_reason": "not_planned",
+    }
+    close_req = urllib.request.Request(
+        issue_url,
+        data=json.dumps(close_payload).encode("utf-8"),
+        headers=headers,
+        method="PATCH",
+    )
+    try:
+        with urllib.request.urlopen(close_req, timeout=15):
+            print("GitHub Issue notification created and auto-closed successfully.")
+            return True
+    except Exception as e:
+        print(f"Failed to auto-close GitHub Issue notification: {e}")
         return False
 
 
