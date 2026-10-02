@@ -587,6 +587,7 @@ def strategic_rejection(
 
     return strategic_competition_reason(item, token, comments)
 
+
 def verify(
     item: Mapping[str, Any],
     token: str | None,
