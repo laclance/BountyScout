@@ -12,6 +12,7 @@ from unittest.mock import patch
 import opportunity_scout as scout
 import github_access as github
 import scout_bounties as bounty
+import strategic_competition as competition_policy
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
@@ -2013,7 +2014,7 @@ class VerificationTests(unittest.TestCase):
 
     def test_timeline_wrapper_and_preflight_diagnostic_boundary(self) -> None:
         with patch.object(
-            scout.competition_policy,
+            competition_policy,
             "timeline_open_pr_reason",
             return_value="timeline reason",
         ):
