@@ -52,9 +52,9 @@
 
 ## `bountyscout/delivery.py`
 
-- **function** `send_telegram_notification()` — line 13
-- **function** `send_discord_notification()` — line 37
-- **function** `create_github_issue()` — line 55
+- **function** `send_telegram_notification()` — line 62
+- **function** `send_discord_notification()` — line 76
+- **function** `create_github_issue()` — line 81
 
 ## `bountyscout/github.py`
 

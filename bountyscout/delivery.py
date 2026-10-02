@@ -8,75 +8,93 @@ from __future__ import annotations
 
 import json
 import urllib.request
+from collections.abc import Mapping
+
+NOTIFICATION_TIMEOUT_SECONDS = 10
+GITHUB_TIMEOUT_SECONDS = 15
+GITHUB_USER_AGENT = "OSSOpportunityScout"
+GITHUB_API_HEADERS = {
+    "Accept": "application/vnd.github+json",
+    "User-Agent": GITHUB_USER_AGENT,
+    "X-GitHub-Api-Version": "2022-11-28",
+}
+
+
+def _request_json(
+    url: str,
+    payload: Mapping[str, object],
+    *,
+    method: str,
+    headers: Mapping[str, str],
+    timeout: int,
+) -> bytes:
+    """Serialize and perform one JSON HTTP request."""
+    request_headers = {"Content-Type": "application/json"}
+    request_headers.update(headers)
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers=request_headers,
+        method=method,
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return bytes(response.read())
+
+
+def _send_notification(provider: str, endpoint: str, payload: Mapping[str, object]) -> bool:
+    """Deliver one notification through the shared JSON transport."""
+    try:
+        _request_json(
+            endpoint,
+            payload,
+            method="POST",
+            headers={},
+            timeout=NOTIFICATION_TIMEOUT_SECONDS,
+        )
+    except Exception as exc:
+        print(f"Failed to send {provider} notification: {exc}")
+        return False
+
+    print(f"{provider} notification sent successfully.")
+    return True
 
 
 def send_telegram_notification(token: str, chat_id: str, message: str) -> bool:
     """Send a notification message via Telegram Bot API."""
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown",
-        "disable_web_page_preview": False,
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+    return _send_notification(
+        "Telegram",
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": False,
+        },
     )
-    try:
-        with urllib.request.urlopen(req, timeout=10):
-            print("Telegram notification sent successfully.")
-            return True
-    except Exception as e:
-        print(f"Failed to send Telegram notification: {e}")
-        return False
 
 
 def send_discord_notification(webhook_url: str, message: str) -> bool:
     """Send a notification message via Discord Webhook."""
-    payload = {"content": message}
-    req = urllib.request.Request(
-        webhook_url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10):
-            print("Discord notification sent successfully.")
-            return True
-    except Exception as e:
-        print(f"Failed to send Discord notification: {e}")
-        return False
+    return _send_notification("Discord", webhook_url, {"content": message})
 
 
 def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
     """Create a native GitHub scan report and immediately close it as not planned."""
-    url = f"https://api.github.com/repos/{repo_fullname}/issues"
-    payload = {
-        "title": title,
-        "body": body,
-        "labels": ["bounty-alert"],
-    }
     headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "MyPersonalBountyScout",
-        "X-GitHub-Api-Version": "2022-11-28",
+        **GITHUB_API_HEADERS,
         "Authorization": f"Bearer {token}",
     }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            created = json.loads(response.read().decode("utf-8"))
-    except Exception as e:
-        print(f"Failed to create GitHub Issue notification: {e}")
+        created_body = _request_json(
+            f"https://api.github.com/repos/{repo_fullname}/issues",
+            {"title": title, "body": body, "labels": ["bounty-alert"]},
+            method="POST",
+            headers=headers,
+            timeout=GITHUB_TIMEOUT_SECONDS,
+        )
+        created: object = json.loads(created_body.decode("utf-8"))
+    except Exception as exc:
+        print(f"Failed to create GitHub Issue notification: {exc}")
         return False
 
     issue_url = created.get("url") if isinstance(created, dict) else None
@@ -84,20 +102,17 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
         print("Failed to auto-close GitHub Issue notification: created issue URL missing.")
         return False
 
-    close_payload = {
-        "state": "closed",
-        "state_reason": "not_planned",
-    }
-    close_req = urllib.request.Request(
-        issue_url,
-        data=json.dumps(close_payload).encode("utf-8"),
-        headers=headers,
-        method="PATCH",
-    )
     try:
-        with urllib.request.urlopen(close_req, timeout=15):
-            print("GitHub Issue notification created and auto-closed successfully.")
-            return True
-    except Exception as e:
-        print(f"Failed to auto-close GitHub Issue notification: {e}")
+        _request_json(
+            issue_url,
+            {"state": "closed", "state_reason": "not_planned"},
+            method="PATCH",
+            headers=headers,
+            timeout=GITHUB_TIMEOUT_SECONDS,
+        )
+    except Exception as exc:
+        print(f"Failed to auto-close GitHub Issue notification: {exc}")
         return False
+
+    print("GitHub Issue notification created and auto-closed successfully.")
+    return True
