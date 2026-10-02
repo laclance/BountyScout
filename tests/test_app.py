@@ -2249,7 +2249,6 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(examples, [])
         self.assertEqual(audit, [])
 
-
     def test_discover_strategic_audits_early_misses_and_top_pool_overflow(self) -> None:
         now = datetime.now(timezone.utc)
         dirty_weak = issue(
