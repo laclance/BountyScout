@@ -1,39 +1,9 @@
 from __future__ import annotations
 
 import unittest
-from typing import Any
-
 from bountyscout import reporting
+from tests.helpers import candidate
 
-
-def candidate(**overrides: Any) -> dict[str, Any]:
-    base: dict[str, Any] = {
-        "repo": "example/project",
-        "issue_number": 42,
-        "title": "Fix deterministic network regression",
-        "url": "https://github.com/example/project/issues/42",
-        "paid": False,
-        "reward": None,
-        "payment_confidence": 0,
-        "cash_score": 0,
-        "career_score": 80,
-        "priority_score": 93,
-        "effort": "1–3h",
-        "effort_reasons": ["bounded deterministic bug signal"],
-        "priority_reasons": ["1–3h execution bonus", "no visible competition bonus"],
-        "expected_hourly": None,
-        "competition": "none",
-        "stars": 1500,
-        "recent_activity": "active in last 7d",
-        "language": "Go",
-        "labels": ["help wanted"],
-        "cash_reasons": [],
-        "career_reasons": ["target repo bonus", "Go codebase"],
-        "contribution_guide": "https://github.com/example/project/CONTRIBUTING.md",
-        "comments": 0,
-    }
-    base.update(overrides)
-    return base
 
 
 class MarkdownFormattingTests(unittest.TestCase):
