@@ -10,7 +10,7 @@ import re
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Mapping, Sequence, cast
+from typing import Any, Callable, Sequence, cast
 
 from bountyscout import github
 from bountyscout.types import Candidate, GitHubIssue
