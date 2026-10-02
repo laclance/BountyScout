@@ -44,7 +44,7 @@
 - **function** `reward_text()` — line 482
 - **function** `repo_activity()` — line 489
 - **function** `strategic_priority_score()` — line 505
-- **function** `build_candidate()` — line 550
+- **function** `build_candidate()` — line 849
 
 ## `opportunity_scout.py`
 

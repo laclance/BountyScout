@@ -547,76 +547,78 @@ def strategic_priority_score(
     return priority, reasons
 
 
-def build_candidate(
-    item: Mapping[str, Any],
-    lane: str,
+def _paid_cash_score(
     signal: str | None,
+    effort: str,
+    competition_level: str,
+    stars: int,
+    active_30d: bool,
+) -> tuple[int, float | None, list[str]]:
+    cash = 0
+    cash_reasons: list[str] = []
+    amount = bounty.usd_like_amount_from_signal(signal)
+    hourly: float | None = None
+
+    confidence = payment_confidence(signal)
+    cash += round(confidence * 0.30)
+    cash_reasons.append(f"payment confidence {confidence}/100")
+    if amount is not None:
+        cash += (
+            20
+            if amount >= 500
+            else 16
+            if amount >= 100
+            else 12
+            if amount >= 25
+            else 8
+            if amount >= 5
+            else 4
+        )
+        hourly = amount / effort_hours(effort)
+        cash += (
+            25
+            if hourly >= 100
+            else 21
+            if hourly >= 50
+            else 16
+            if hourly >= 20
+            else 10
+            if hourly >= 10
+            else 4
+        )
+        cash_reasons.append("~$" + f"{hourly:.0f}/h expected value")
+    else:
+        cash_reasons.append("reward not USD-comparable")
+
+    cash += {"none": 15, "low": 11, "medium": 6, "high": 0}[competition_level]
+    if stars >= 1000:
+        cash += 7
+        cash_reasons.append("established repo")
+    elif stars >= 100:
+        cash += 4
+    if active_30d:
+        cash += 3
+
+    return max(0, min(100, cash)), hourly, cash_reasons
+
+
+def _base_career_score(
+    item: Mapping[str, Any],
+    repo: str | None,
     repo_meta: Mapping[str, Any],
     guide: str | None,
-    activity_comments: list[dict[str, Any]] | None = None,
+    effort: str,
+    competition_level: str,
+    stars: int,
+    active_30d: bool,
+    labels_text: str,
+    text: str,
     *,
     target_repos: Collection[str],
-    amount_pattern: str,
-) -> dict[str, Any]:
-    repo, number = bounty.issue_repo_and_number(item)
-    effort_estimate = estimate_effort_details(
-        item,
-        activity_comments if lane == "strategic" else None,
-    )
-    effort = effort_estimate.bucket
-    comp = competition(item, activity_comments if lane == "strategic" else None)
-    stars = int(repo_meta.get("stargazers_count") or 0)
-    pushed = bounty.parse_github_datetime(repo_meta.get("pushed_at"))
-    active_30d = bool(pushed and (datetime.now(timezone.utc) - pushed).days <= 30)
-    _, _, labels_text, text = issue_text(item)
-
-    cash = 0
-    cash_reasons = []
-    amount = bounty.usd_like_amount_from_signal(signal)
-    hourly = None
-    if lane == "paid":
-        confidence = payment_confidence(signal)
-        cash += round(confidence * 0.30)
-        cash_reasons.append(f"payment confidence {confidence}/100")
-        if amount is not None:
-            cash += (
-                20
-                if amount >= 500
-                else 16
-                if amount >= 100
-                else 12
-                if amount >= 25
-                else 8
-                if amount >= 5
-                else 4
-            )
-            hourly = amount / effort_hours(effort)
-            cash += (
-                25
-                if hourly >= 100
-                else 21
-                if hourly >= 50
-                else 16
-                if hourly >= 20
-                else 10
-                if hourly >= 10
-                else 4
-            )
-            cash_reasons.append(f"~${hourly:.0f}/h expected value")
-        else:
-            cash_reasons.append("reward not USD-comparable")
-        cash += {"none": 15, "low": 11, "medium": 6, "high": 0}[comp]
-        if stars >= 1000:
-            cash += 7
-            cash_reasons.append("established repo")
-        elif stars >= 100:
-            cash += 4
-        if active_30d:
-            cash += 3
-        cash = max(0, min(100, cash))
-
+) -> tuple[int, list[str], bool, str]:
     career = 0
-    career_reasons = []
+    career_reasons: list[str] = []
+
     if stars >= 10000:
         career += 18
         career_reasons.append("10k+ star repo")
@@ -649,6 +651,7 @@ def build_candidate(
     )
     if skill:
         career_reasons.append(f"{language} codebase")
+
     infra_terms = (
         "kubernetes",
         "aws",
@@ -750,7 +753,7 @@ def build_candidate(
     issue_points += min(10, clarity)
 
     career += min(30, issue_points)
-    career -= {"none": 0, "low": 2, "medium": 6, "high": 12}[comp]
+    career -= {"none": 0, "low": 2, "medium": 6, "high": 12}[competition_level]
     if effort == "6–12h":
         career -= 3
         career_reasons.append("broader implementation scope")
@@ -758,80 +761,149 @@ def build_candidate(
         career -= 10
         career_reasons.append("large-scope penalty")
 
-    if lane == "strategic":
-        now = datetime.now(timezone.utc)
-        created = bounty.parse_github_datetime(item.get("created_at"))
-        updated = bounty.parse_github_datetime(item.get("updated_at"))
-        created_days = max(0, (now - created).days) if created else None
+    return career, career_reasons, maintainer_ready, language
 
-        recent_comment_days: int | None = None
-        recent_maintainer_days: int | None = None
-        latest_bot_comment: datetime | None = None
-        latest_human_comment: datetime | None = None
-        for comment in activity_comments or []:
-            stamp = bounty.parse_github_datetime(
-                comment.get("updated_at") or comment.get("created_at")
-            )
-            if not stamp:
-                continue
 
-            login = str((comment.get("user") or {}).get("login", "")).lower()
-            if login.endswith("[bot]"):
-                if latest_bot_comment is None or stamp > latest_bot_comment:
-                    latest_bot_comment = stamp
-                continue
+def _strategic_activity_adjustment(
+    item: Mapping[str, Any],
+    activity_comments: list[dict[str, Any]] | None,
+    maintainer_ready: bool,
+) -> tuple[int, list[str]]:
+    now = datetime.now(timezone.utc)
+    created = bounty.parse_github_datetime(item.get("created_at"))
+    updated = bounty.parse_github_datetime(item.get("updated_at"))
+    created_days = max(0, (now - created).days) if created else None
 
-            if latest_human_comment is None or stamp > latest_human_comment:
-                latest_human_comment = stamp
-            days = max(0, (now - stamp).days)
-            if recent_comment_days is None or days < recent_comment_days:
-                recent_comment_days = days
-            association = str(comment.get("author_association", "")).upper()
-            if association in TRUSTED_ASSOCIATIONS and (
-                recent_maintainer_days is None or days < recent_maintainer_days
-            ):
-                recent_maintainer_days = days
+    recent_comment_days: int | None = None
+    recent_maintainer_days: int | None = None
+    latest_bot_comment: datetime | None = None
+    latest_human_comment: datetime | None = None
+    for comment in activity_comments or []:
+        stamp = bounty.parse_github_datetime(comment.get("updated_at") or comment.get("created_at"))
+        if not stamp:
+            continue
 
-        effective_updated = updated
-        if (
-            updated is not None
-            and latest_bot_comment is not None
-            and abs((updated - latest_bot_comment).total_seconds()) <= 300
-            and (latest_human_comment is None or latest_human_comment < latest_bot_comment)
+        login = str((comment.get("user") or {}).get("login", "")).lower()
+        if login.endswith("[bot]"):
+            if latest_bot_comment is None or stamp > latest_bot_comment:
+                latest_bot_comment = stamp
+            continue
+
+        if latest_human_comment is None or stamp > latest_human_comment:
+            latest_human_comment = stamp
+        days = max(0, (now - stamp).days)
+        if recent_comment_days is None or days < recent_comment_days:
+            recent_comment_days = days
+        association = str(comment.get("author_association", "")).upper()
+        if association in TRUSTED_ASSOCIATIONS and (
+            recent_maintainer_days is None or days < recent_maintainer_days
         ):
-            effective_updated = latest_human_comment or created
-        updated_days = max(0, (now - effective_updated).days) if effective_updated else None
+            recent_maintainer_days = days
 
-        if updated_days is not None:
-            if updated_days <= 14:
-                career += 8
-                career_reasons.append("issue active in last 14d")
-            elif updated_days <= 60:
-                career += 5
-                career_reasons.append("issue active in last 60d")
-            elif updated_days <= 180:
-                career += 2
-                career_reasons.append("issue active in last 180d")
+    effective_updated = updated
+    if (
+        updated is not None
+        and latest_bot_comment is not None
+        and abs((updated - latest_bot_comment).total_seconds()) <= 300
+        and (latest_human_comment is None or latest_human_comment < latest_bot_comment)
+    ):
+        effective_updated = latest_human_comment or created
+    updated_days = max(0, (now - effective_updated).days) if effective_updated else None
 
-        if recent_maintainer_days is not None and recent_maintainer_days <= 90:
-            career += 8
-            career_reasons.append("recent maintainer activity")
-        elif recent_comment_days is not None and recent_comment_days <= 30:
-            career += 4
-            career_reasons.append("recent active discussion")
+    adjustment = 0
+    reasons: list[str] = []
+    if updated_days is not None:
+        if updated_days <= 14:
+            adjustment += 8
+            reasons.append("issue active in last 14d")
+        elif updated_days <= 60:
+            adjustment += 5
+            reasons.append("issue active in last 60d")
+        elif updated_days <= 180:
+            adjustment += 2
+            reasons.append("issue active in last 180d")
 
-        recently_active = bool(
-            (updated_days is not None and updated_days <= 180)
-            or (recent_comment_days is not None and recent_comment_days <= 90)
-            or (recent_maintainer_days is not None and recent_maintainer_days <= 180)
+    if recent_maintainer_days is not None and recent_maintainer_days <= 90:
+        adjustment += 8
+        reasons.append("recent maintainer activity")
+    elif recent_comment_days is not None and recent_comment_days <= 30:
+        adjustment += 4
+        reasons.append("recent active discussion")
+
+    recently_active = bool(
+        (updated_days is not None and updated_days <= 180)
+        or (recent_comment_days is not None and recent_comment_days <= 90)
+        or (recent_maintainer_days is not None and recent_maintainer_days <= 180)
+    )
+    if created_days is not None and not maintainer_ready and not recently_active:
+        if created_days > 730:
+            adjustment -= 15
+            reasons.append("stale inactive backlog penalty")
+        elif created_days > 365:
+            adjustment -= 8
+            reasons.append("older inactive backlog penalty")
+
+    return adjustment, reasons
+
+
+def build_candidate(
+    item: Mapping[str, Any],
+    lane: str,
+    signal: str | None,
+    repo_meta: Mapping[str, Any],
+    guide: str | None,
+    activity_comments: list[dict[str, Any]] | None = None,
+    *,
+    target_repos: Collection[str],
+    amount_pattern: str,
+) -> dict[str, Any]:
+    repo, number = bounty.issue_repo_and_number(item)
+    effort_estimate = estimate_effort_details(
+        item,
+        activity_comments if lane == "strategic" else None,
+    )
+    effort = effort_estimate.bucket
+    competition_level = competition(item, activity_comments if lane == "strategic" else None)
+    stars = int(repo_meta.get("stargazers_count") or 0)
+    pushed = bounty.parse_github_datetime(repo_meta.get("pushed_at"))
+    active_30d = bool(pushed and (datetime.now(timezone.utc) - pushed).days <= 30)
+    _, _, labels_text, text = issue_text(item)
+
+    if lane == "paid":
+        cash, hourly, cash_reasons = _paid_cash_score(
+            signal,
+            effort,
+            competition_level,
+            stars,
+            active_30d,
         )
-        if created_days is not None and not maintainer_ready and not recently_active:
-            if created_days > 730:
-                career -= 15
-                career_reasons.append("stale inactive backlog penalty")
-            elif created_days > 365:
-                career -= 8
-                career_reasons.append("older inactive backlog penalty")
+    else:
+        cash = 0
+        hourly = None
+        cash_reasons = []
+
+    career, career_reasons, maintainer_ready, language = _base_career_score(
+        item,
+        repo,
+        repo_meta,
+        guide,
+        effort,
+        competition_level,
+        stars,
+        active_30d,
+        labels_text,
+        text,
+        target_repos=target_repos,
+    )
+
+    if lane == "strategic":
+        activity_adjustment, activity_reasons = _strategic_activity_adjustment(
+            item,
+            activity_comments,
+            maintainer_ready,
+        )
+        career += activity_adjustment
+        career_reasons.extend(activity_reasons)
 
     if lane == "strategic" and documentation_microfix(item):
         career = min(career, 45)
@@ -840,10 +912,15 @@ def build_candidate(
     career = max(0, min(100, career))
 
     if lane == "strategic":
-        priority, priority_reasons = strategic_priority_score(career, effort, comp)
+        priority, priority_reasons = strategic_priority_score(
+            career,
+            effort,
+            competition_level,
+        )
     else:
         priority = min(100, max(cash, career) + (5 if cash >= 70 and career >= 70 else 0))
         priority_reasons = []
+
     labels = [
         str(x.get("name", "")) if isinstance(x, dict) else str(x)
         for x in (item.get("labels") or [])
@@ -863,7 +940,7 @@ def build_candidate(
         "effort": effort,
         "effort_reasons": list(effort_estimate.reasons),
         "expected_hourly": hourly,
-        "competition": comp,
+        "competition": competition_level,
         "stars": stars,
         "recent_activity": repo_activity(repo_meta),
         "language": language,
