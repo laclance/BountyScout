@@ -192,7 +192,14 @@ class ReportAssemblyTests(unittest.TestCase):
         self.assertTrue(
             body.startswith("<!-- bountyscout-report: automated; actionable: false -->")
         )
-        self.assertIn("Automated BountyScout scan report — not a development task.", body)
+        self.assertIn(
+            "Automated OSS Opportunity Scout scan report — not a development task.",
+            body,
+        )
+        self.assertIn(
+            "Paid candidates reuse OSS Opportunity Scout's existing payment/competition filters unchanged.",
+            body,
+        )
         self.assertIn("Do not claim this report or open a pull request to resolve it.", body)
         self.assertIn("career score measures long-term value", body)
         self.assertIn("### Verification summary", body)

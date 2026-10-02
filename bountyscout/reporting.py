@@ -221,11 +221,11 @@ def github_report_body(
     body = (
         "<!-- bountyscout-report: automated; actionable: false -->\n"
         "> [!IMPORTANT]\n"
-        "> **Automated BountyScout scan report — not a development task.**\n"
+        "> **Automated OSS Opportunity Scout scan report — not a development task.**\n"
         "> Do not claim this report or open a pull request to resolve it. "
         "The linked source issues are the actual contributor opportunities.\n\n"
         f"### Ranked OSS Opportunity Queue\n\n**Scan Time:** {now}\n\n"
-        "Paid candidates reuse BountyScout's existing payment/competition filters unchanged. "
+        "Paid candidates reuse OSS Opportunity Scout's existing payment/competition filters unchanged. "
         "Strategic candidates are pre-ranked, then source-refreshed and checked for assignees, "
         "claim comments, open implementation PRs, repository legitimacy, and contribution guidance. "
         "For strategic work, career score measures long-term value while priority score applies "
