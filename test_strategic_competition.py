@@ -466,7 +466,6 @@ class TimelinePullRequestTests(unittest.TestCase):
             "could not identify repository/issue number",
         )
 
-
     def test_timeline_handles_invalid_failure_and_no_match_paths(self) -> None:
         self.assertEqual(
             competition.timeline_open_pr_reason({"html_url": "bad"}, "t"),
