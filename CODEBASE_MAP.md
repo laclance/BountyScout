@@ -205,6 +205,7 @@
 - **function** `send_discord_notification()` — line 485
 - **function** `create_github_issue()` — line 503
 - **function** `main()` — line 554
+
 ## `scripts/close_legacy_scan_reports.py`
 
 - **class** `ReportIssue` — line 27
