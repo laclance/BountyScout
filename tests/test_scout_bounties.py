@@ -444,7 +444,9 @@ class MainTests(unittest.TestCase):
             tg.assert_called_once()
             dc.assert_called_once()
             gh.assert_called_once()
-            save.assert_called_once()\n            saved_state = save.call_args.args[0]\n            self.assertTrue(saved_state.contains(item["html_url"]))
+            save.assert_called_once()
+            saved_state = save.call_args.args[0]
+            self.assertTrue(saved_state.contains(item["html_url"]))
 
     def test_main_rejected_seen_and_failed_delivery_do_not_save(self) -> None:
         seen_item = issue(html_url="https://github.com/acme/widget/issues/1")
@@ -460,7 +462,11 @@ class MainTests(unittest.TestCase):
 
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(\n                state,\n                "load_seen_state",\n                return_value=state.SeenState.from_urls([seen_item["html_url"]]),\n            ),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([seen_item["html_url"]]),
+            ),
             patch.object(scout, "search_github", return_value=results),
             patch.object(scout, "candidate_rejection_reason", side_effect=rejection),
             patch.object(scout, "fetch_repo_metadata", return_value={}),
@@ -545,7 +551,11 @@ class CoverageGapTests(unittest.TestCase):
             ),
             patch.object(scout, "fetch_repo_metadata", return_value={}) as meta,
             patch.object(scout, "send_discord_notification", return_value=True),
-            patch.object(\n                state,\n                "save_seen_state",\n                side_effect=state.SeenStateSaveError("save failed"),\n            ) as save,
+            patch.object(
+                state,
+                "save_seen_state",
+                side_effect=state.SeenStateSaveError("save failed"),
+            ) as save,
         ):
             scout.main()
         meta.assert_called_once_with("acme/widget", None)
