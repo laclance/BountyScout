@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import runpy
 import unittest
 import urllib.request
 from contextlib import redirect_stdout
@@ -9,11 +10,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import patch
 
-import opportunity_scout as scout
-import github_access as github
+import bountyscout.app as scout
+from bountyscout import github
 import scout_bounties as bounty
-import strategic_competition as competition_policy
-from test_helpers import FakeResponse
+from bountyscout.strategic import competition as competition_policy
+from tests.helpers import FakeResponse
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
@@ -3358,6 +3359,12 @@ class CoverageGapTests(unittest.TestCase):
         tg.assert_not_called()
         gh.assert_not_called()
         save.assert_not_called()
+
+
+    def test_root_entry_point_invokes_package_main(self) -> None:
+        with patch.object(scout, "main") as package_main:
+            runpy.run_path("opportunity_scout.py", run_name="__main__")
+        package_main.assert_called_once_with()
 
 
 if __name__ == "__main__":

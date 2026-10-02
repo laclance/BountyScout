@@ -4,9 +4,9 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import opportunity_reporting as reporting
-import opportunity_scoring as scoring
-import opportunity_scout as scout
+from bountyscout import reporting
+from bountyscout import scoring
+import bountyscout.app as scout
 
 
 AMOUNT_RE = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"

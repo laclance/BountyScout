@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from typing import Any
 
-import opportunity_reporting as reporting
+from bountyscout import reporting
 
 
 def candidate(**overrides: Any) -> dict[str, Any]:

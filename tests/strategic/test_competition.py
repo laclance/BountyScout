@@ -5,9 +5,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import patch
 
-import github_access as github
+from bountyscout import github
 import scout_bounties as bounty
-import strategic_competition as competition
+from bountyscout.strategic import competition
 
 
 def issue(**overrides: Any) -> dict[str, Any]:

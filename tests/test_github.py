@@ -10,8 +10,8 @@ from threading import Lock
 from typing import Any
 from unittest.mock import patch
 
-import github_access as github
-from test_helpers import FakeResponse
+from bountyscout import github
+from tests.helpers import FakeResponse
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
