@@ -251,6 +251,130 @@ class EffortCalibrationTests(unittest.TestCase):
         ]
         self.assertEqual(scoring.estimate_effort_details(item, comments).bucket, "1d+")
 
+    def test_effort_precedence_broad_feature_over_compatibility(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="FR: replace persisted member identifier",
+                body=(
+                    "The persisted state format must remain backwards compatible with "
+                    "existing deployments."
+                ),
+            )
+        )
+        self.assertEqual(estimate.bucket, "1d+")
+        self.assertEqual(
+            estimate.reasons,
+            ("explicit broad feature/design scope",),
+        )
+
+    def test_effort_precedence_compatibility_over_environment(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Recover persisted state on hardware-specific installs",
+                body=(
+                    "Existing deployments must stay backwards compatible. "
+                    "Reproduction requires a physical device."
+                ),
+            )
+        )
+        self.assertEqual(estimate.bucket, "1d+")
+        self.assertEqual(
+            estimate.reasons,
+            ("backward-compatibility or persisted-state risk",),
+        )
+
+    def test_effort_precedence_environment_over_cross_component_feature(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Add configurable storage layout",
+                labels=[{"name": "type/feature"}],
+                body=(
+                    "The schema, storage configuration, and compactor behavior need updates. "
+                    "Reproducing the failure requires a physical device."
+                ),
+            )
+        )
+        self.assertEqual(estimate.bucket, "1d+")
+        self.assertEqual(
+            estimate.reasons,
+            ("environment/reproduction-heavy investigation",),
+        )
+
+    def test_effort_precedence_broader_scope_over_trusted_history(self) -> None:
+        comments: list[GitHubComment] = [
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "The previous implementation mishandles cancellation and needs a "
+                    "regression test plus an API-level benchmark."
+                ),
+            }
+        ]
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Add response metadata option",
+                body="Expose one additional response metadata option.",
+                labels=[{"name": "type/feature"}],
+            ),
+            comments,
+        )
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertEqual(estimate.reasons, ("feature/enhancement scope",))
+
+    def test_effort_precedence_trusted_history_over_concurrency(self) -> None:
+        comments: list[GitHubComment] = [
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "The previous implementation mishandles cancellation and needs a "
+                    "regression test plus an API-level benchmark."
+                ),
+            }
+        ]
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Manager data race after shutdown",
+                body="The manager can hit a data race after shutdown.",
+            ),
+            comments,
+        )
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertEqual(
+            estimate.reasons,
+            ("maintainer-confirmed implementation-history complexity",),
+        )
+
+    def test_effort_precedence_concurrency_over_upstream_dependency(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Data race while refreshing dependency state",
+                body=(
+                    "The data race may be related to an upstream dependency during refresh."
+                ),
+            )
+        )
+        self.assertEqual(estimate.bucket, "3–6h")
+        self.assertEqual(
+            estimate.reasons,
+            ("concurrency/lifecycle debugging risk",),
+        )
+
+    def test_effort_precedence_localized_todo_over_bounded_signal(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Fix deterministic cache header bug",
+                body=(
+                    "pkg/cache.go contains a TODO in the request handler. "
+                    "The failure is deterministic and produces an incorrect header."
+                ),
+            )
+        )
+        self.assertEqual(estimate.bucket, "1–3h")
+        self.assertEqual(
+            estimate.reasons,
+            ("localized TODO/code-path change",),
+        )
+
     def test_prometheus_977_uses_verified_maintainer_history(self) -> None:
         item = issue(
             html_url="https://github.com/prometheus/client_golang/issues/977",
