@@ -13,8 +13,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Mapping, Sequence, cast
 
 from bountyscout import github
-import scout_bounties as bounty
-
 IssueRow = tuple[int, int, int, dict[str, Any]]
 FetchText = Callable[[str], str]
 IssuePredicate = Callable[[Mapping[str, Any]], bool]
@@ -276,7 +274,7 @@ def strategic_inspection_items(
     """
     by_repo: dict[str, list[IssueRow]] = {}
     for row in provisional:
-        repo, _ = bounty.issue_repo_and_number(row[3])
+        repo, _ = github.issue_repo_and_number(row[3])
         if repo:
             by_repo.setdefault(repo, []).append(row)
 
