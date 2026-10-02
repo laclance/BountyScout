@@ -97,6 +97,8 @@ New leaf modules should follow the same rule. The orchestration layer may compos
 
 Phase 3B makes generic GitHub issue parsing and timestamp parsing fork-owned in `bountyscout.github`. `scout_bounties.py` intentionally retains behavior-equivalent copies so the paid scanner remains standalone and upstream-compatible. This small duplication is deliberate: package imports of `scout_bounties` now mark genuine paid-scanner behavior or deliberately shared compatibility policy rather than generic GitHub/data utilities.
 
+Historical generated queue reports from before the current auto-close lifecycle were cleaned once with `scripts/close_legacy_scan_reports.py` after explicit report-identity verification. Current generated reports are auto-closed during normal delivery, and there is no recurring cleanup service.
+
 ## Invariants
 
 - Paid candidates require explicit payment evidence and must represent open work rather than payout-history/leaderboard summaries.
