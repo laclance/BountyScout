@@ -1,8 +1,8 @@
 """Strategic competition and implementation-PR detection.
 
 This module interprets claim and pull-request evidence for OSS opportunities. It
-depends on the upstream GitHub helpers but never imports the application
-orchestrator, so it can be tested directly with mocked GitHub responses.
+uses fork-owned GitHub utilities plus deliberately shared paid-scanner policy, never
+the application orchestrator, and is directly testable with mocked GitHub responses.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def claim_source_is_recent(source: Mapping[str, Any], *, issue_body: bool = Fals
         if issue_body
         else (source.get("updated_at") or source.get("created_at"))
     )
-    stamp = bounty.parse_github_datetime(timestamp)
+    stamp = github.parse_github_datetime(timestamp)
     if stamp is None:
         return True
     age_days = max(0, (datetime.now(timezone.utc) - stamp).days)
@@ -59,7 +59,7 @@ def strategic_claim_reason(
     if body and claim_source_is_recent(item, issue_body=True) and strategic_claim_text(body):
         return "issue author already has an implementation/fix in progress"
 
-    _, number = bounty.issue_repo_and_number(item)
+    _, number = github.issue_repo_and_number(item)
     for comment in comments:
         if not claim_source_is_recent(comment):
             continue
@@ -86,7 +86,7 @@ def linked_open_pr_reason(
     comments: list[dict[str, Any]],
 ) -> str | None:
     """Detect explicit implementation PR links in the issue body or comments."""
-    repo, number = bounty.issue_repo_and_number(item)
+    repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return None
 
@@ -151,7 +151,7 @@ def linked_open_pr_reason(
 
 def timeline_open_pr_reason(item: Mapping[str, Any], token: str | None) -> str | None:
     """Detect open timeline-linked PRs and fail closed when timeline evidence is unavailable."""
-    repo, number = bounty.issue_repo_and_number(item)
+    repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return "could not identify repository/issue number"
 
@@ -204,7 +204,7 @@ def extended_competition_reason(
     supplemental_claim_checker: SupplementalClaimChecker = supplemental_claim_reason,
 ) -> str | None:
     """Apply paid-compatible competition checks using supplied issue comments."""
-    repo, number = bounty.issue_repo_and_number(item)
+    repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return "could not identify repository/issue number"
 
@@ -236,7 +236,7 @@ def strategic_competition_reason(
     strategic_claim_checker: ClaimChecker = strategic_claim_reason,
 ) -> str | None:
     """Apply strategic-only competition checks without changing paid-bounty behavior."""
-    repo, number = bounty.issue_repo_and_number(item)
+    repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return "could not identify repository/issue number"
 
