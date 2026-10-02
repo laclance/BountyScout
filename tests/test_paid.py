@@ -77,18 +77,14 @@ class PaymentSignalTests(unittest.TestCase):
 
 
 class EligibilityTests(unittest.TestCase):
-    def test_clean_candidate_acceptance_and_comment_boundary(self) -> None:
-        self.assertTrue(paid.is_clean_candidate(issue()))
-        self.assertTrue(paid.is_clean_candidate(issue(comments=paid.MAX_COMMENTS)))
-
-    def test_clean_candidate_rejections(self) -> None:
-        generated_markers = [
+    def test_clean_candidate_policy_matrix(self) -> None:
+        generated_markers = (
             "bounty alert:",
             "active bounty scan results",
             "new opportunities found",
             "new opportunityies found",
-        ]
-        blocklist = [
+        )
+        blocked_content_terms = (
             "airdrop",
             "referral",
             "casino",
@@ -98,20 +94,37 @@ class EligibilityTests(unittest.TestCase):
             "article writing",
             "tutorial proposal",
             "content creator",
-        ]
+        )
         cases = [
-            issue(pull_request={}),
-            issue(html_url="https://github.com/laclance/BountyScout/issues/1"),
-            issue(assignees=[{"login": "dev"}]),
-            issue(comments=paid.MAX_COMMENTS + 1),
-            issue(body="Active bounty scan results"),
-            issue(body="article writing proposal"),
+            ("normal issue", issue(), True),
+            ("comment boundary", issue(comments=paid.MAX_COMMENTS), True),
+            ("pull request", issue(pull_request={}), False),
+            (
+                "historical scout report",
+                issue(html_url="https://github.com/laclance/BOUNTYSCOUT/issues/1"),
+                False,
+            ),
+            ("assigned", issue(assignees=[{"login": "dev"}]), False),
+            ("over comment limit", issue(comments=paid.MAX_COMMENTS + 1), False),
         ]
-        cases.extend(issue(title=marker) for marker in generated_markers)
-        cases.extend(issue(title=term) for term in blocklist)
-        for item in cases:
-            with self.subTest(item=item):
-                self.assertFalse(paid.is_clean_candidate(item))
+        for marker in generated_markers:
+            cases.extend(
+                (
+                    (f"generated marker in title: {marker}", issue(title=marker.upper()), False),
+                    (f"generated marker in body: {marker}", issue(body=marker.upper()), False),
+                )
+            )
+        for term in blocked_content_terms:
+            cases.extend(
+                (
+                    (f"blocked term in title: {term}", issue(title=term.upper()), False),
+                    (f"blocked term in body: {term}", issue(body=term.upper()), False),
+                )
+            )
+
+        for name, item, expected in cases:
+            with self.subTest(name=name):
+                self.assertEqual(paid.is_clean_candidate(item), expected)
 
 
 if __name__ == "__main__":
