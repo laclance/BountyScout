@@ -21,6 +21,9 @@ This file is the canonical working agreement for coding agents and human contrib
 - Treat existing seen-state corruption conservatively: malformed, unreadable, or unsupported state must fail the run rather than silently becoming empty.
 - Advance seen-state only after successful complete delivery; incomplete combined verification and failed GitHub report auto-close must leave state unchanged.
 - Keep `bountyscout.state` branch-agnostic. Git/worktree/`scout-state` transport belongs to the workflow, not Python state code.
+- Never equate a lifecycle check failure, malformed response, auth/rate-limit error, or GitHub 404 with a confirmed closed issue. Only confirmed `closed` lifecycle evidence may prune a GitHub seen-state entry.
+- Keep seen-state maintenance bounded and deterministic. Do not add blind TTL expiry or unbounded first-run revalidation; non-GitHub entries stay seen until they have an explicit platform lifecycle policy.
+- Treat `last_checked_at` as the time a maintenance attempt was made, not proof that lifecycle confirmation succeeded.
 
 ## Design rules
 
