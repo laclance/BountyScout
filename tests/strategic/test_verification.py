@@ -63,9 +63,9 @@ class StrategicVerificationTests(unittest.TestCase):
                     }
                 ),
                 deep_verify,
-                lambda item_: "issue is marked claimed by the project"
-                if item_ is preflight
-                else None,
+                lambda item_: (
+                    "issue is marked claimed by the project" if item_ is preflight else None
+                ),
             )
 
         self.assertEqual(calls, [viable["html_url"]])
