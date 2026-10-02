@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 from bountyscout import reporting
 from bountyscout import scoring
-from bountyscout.types import Candidate
+from bountyscout.types import Candidate, GitHubComment, GitHubIssue, RepositoryMetadata
 import bountyscout.app as scout
 
 
@@ -61,7 +61,7 @@ They'll need to dig through issues and forum posts to discover the `/etc/resolve
 [Three ways to run Tailscale on macOS](https://tailscale.com/docs/concepts/macos-variants)"""
 
 
-def issue(**overrides: Any) -> dict[str, Any]:
+def issue(**overrides: Any) -> GitHubIssue:
     item: dict[str, Any] = {
         "html_url": "https://github.com/example/project/issues/42",
         "title": "Network regression",
@@ -72,17 +72,17 @@ def issue(**overrides: Any) -> dict[str, Any]:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     item.update(overrides)
-    return item
+    return cast(GitHubIssue, item)
 
 
-def repo_meta(**overrides: Any) -> dict[str, Any]:
+def repo_meta(**overrides: Any) -> RepositoryMetadata:
     data: dict[str, Any] = {
         "stargazers_count": 5000,
         "language": "Go",
         "pushed_at": datetime.now(timezone.utc).isoformat(),
     }
     data.update(overrides)
-    return data
+    return cast(RepositoryMetadata, data)
 
 
 class EffortCalibrationTests(unittest.TestCase):
@@ -629,8 +629,8 @@ class EffortCalibrationTests(unittest.TestCase):
 
 class CompetitionVolumeTests(unittest.TestCase):
     @staticmethod
-    def controller_runtime_3238_comments() -> list[dict[str, Any]]:
-        comments: list[dict[str, Any]] = [
+    def controller_runtime_3238_comments() -> list[GitHubComment]:
+        comments: list[GitHubComment] = [
             {
                 "body": "Not sure readiness should depend on metrics; the webhook server has a checker.",
                 "user": {"login": "sbueringer"},
@@ -1136,7 +1136,7 @@ class ScoringRegressionTests(unittest.TestCase):
     def test_owner_module_covers_strategic_freshness_activity_branches(self) -> None:
         now = datetime.now(timezone.utc)
 
-        def build(updated_days: int, comments: list[dict[str, Any]] | None = None) -> Candidate:
+        def build(updated_days: int, comments: list[GitHubComment] | None = None) -> Candidate:
             return scoring.build_candidate(
                 issue(
                     title="Network bug",
