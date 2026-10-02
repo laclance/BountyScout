@@ -5,7 +5,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from time import monotonic, sleep
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 
 from bountyscout import github
 import scout_bounties as bounty
@@ -33,7 +33,14 @@ from bountyscout.strategic.readiness import (
     release_tracking_reason as release_tracking_reason,
     triage_pending_signal as triage_pending_signal,
 )
-from bountyscout.types import Candidate, CandidateLane, RejectionRecord
+from bountyscout.types import (
+    Candidate,
+    CandidateLane,
+    GitHubComment,
+    GitHubIssue,
+    RejectionRecord,
+    RepositoryMetadata,
+)
 
 TARGET_REPOS = [
     "aws/amazon-vpc-cni-k8s",
@@ -103,7 +110,7 @@ ISSUEHUNT_PAGES = 2
 def target_repo_issue_pool(
     repo: str,
     token: str | None,
-) -> tuple[list[dict[str, Any]], str | None]:
+) -> tuple[list[GitHubIssue], str | None]:
     """Fetch the configured bounded source pool for a curated repository."""
     return sources.target_repo_issue_pool(
         repo,
@@ -151,7 +158,7 @@ def fetch_text(url: str, timeout: int = 12) -> str:
     return sources.fetch_text(url, timeout)
 
 
-def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str, Any]]:
+def issue_comments(item: GitHubIssue, token: str | None) -> list[GitHubComment]:
     """Compatibility wrapper for issue-comment GitHub fetching."""
     return github.issue_comments(item, token)
 
@@ -162,32 +169,32 @@ STRATEGIC_CLAIM_MAX_AGE_DAYS = competition_policy.STRATEGIC_CLAIM_MAX_AGE_DAYS
 
 
 def strategic_claim_reason(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]],
+    item: GitHubIssue,
+    comments: list[GitHubComment],
 ) -> str | None:
     """Compatibility wrapper for strategic active-claim detection."""
     return competition_policy.strategic_claim_reason(item, comments)
 
 
 def linked_open_pr_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Compatibility wrapper for explicitly linked implementation PR detection."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
     return competition_policy.linked_open_pr_reason(item, token, loaded_comments)
 
 
-def timeline_open_pr_reason(item: Mapping[str, Any], token: str | None) -> str | None:
+def timeline_open_pr_reason(item: GitHubIssue, token: str | None) -> str | None:
     """Compatibility wrapper for timeline-linked implementation PR detection."""
     return competition_policy.timeline_open_pr_reason(item, token)
 
 
 def supplemental_claim_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Compatibility wrapper for supplemental active-claim detection."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
@@ -195,9 +202,9 @@ def supplemental_claim_reason(
 
 
 def extended_competition_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Apply paid-compatible competition checks through the extracted policy module."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
@@ -215,9 +222,9 @@ def extended_competition_reason(
 
 
 def strategic_competition_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Apply strategic-only competition checks through the extracted policy module."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
@@ -260,9 +267,9 @@ def supplemental_payment_signal(item: Mapping[str, Any]) -> str | None:
 
 
 def comment_payment_signal(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Recognize payment signals while reusing comments already loaded by verification."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
@@ -322,7 +329,7 @@ def comment_payment_signal(
     return None
 
 
-def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
+def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     """Compatibility wrapper for platform-discovered GitHub issue fetching."""
     return github.issue_from_github_url(url, token)
 
@@ -368,7 +375,7 @@ def contribution_guide(repo: str, token: str | None) -> str | None:
     return github.contribution_guide(repo, token, github_get_optional)
 
 
-def fetch_repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
+def fetch_repo_metadata(repo: str, token: str | None) -> RepositoryMetadata:
     """Compatibility wrapper for repository metadata GitHub fetching."""
     return github.repo_metadata(repo, token)
 
@@ -395,8 +402,8 @@ def build_candidate(
 
 
 def refresh_issue(
-    item: Mapping[str, Any], token: str | None
-) -> tuple[dict[str, Any] | None, str | None]:
+    item: GitHubIssue, token: str | None
+) -> tuple[GitHubIssue | None, str | None]:
     repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return None, "could not identify repository/issue number"
@@ -407,10 +414,10 @@ def refresh_issue(
         return None, "issue is no longer open"
     if "pull_request" in fresh:
         return None, "source is a pull request, not an issue"
-    return fresh, None
+    return cast(GitHubIssue, fresh), None
 
 
-def upstream_wrapper_issue_url(item: Mapping[str, Any]) -> str | None:
+def upstream_wrapper_issue_url(item: GitHubIssue) -> str | None:
     """Return the real GitHub source issue for explicit aggregator/handoff wrappers."""
     title = str(item.get("title", ""))
     body = str(item.get("body", ""))
@@ -428,7 +435,7 @@ def upstream_wrapper_issue_url(item: Mapping[str, Any]) -> str | None:
     return match.group(1) if match else None
 
 
-def non_actionable_diagnostic_reason(item: Mapping[str, Any]) -> str | None:
+def non_actionable_diagnostic_reason(item: GitHubIssue) -> str | None:
     """Reject machine/OS crash diagnostics that lack an actionable contributor path."""
     _, body, labels, text = issue_text(item)
     maintainer_ready = maintainer_ready_signal(labels)
@@ -457,7 +464,7 @@ def non_actionable_diagnostic_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _strategic_common_source_rejection(item: Mapping[str, Any]) -> str | None:
+def _strategic_common_source_rejection(item: GitHubIssue) -> str | None:
     """Return source-only strategic rejections shared by preflight and full verification."""
     if not strategic_basic_candidate(item):
         return "failed basic eligibility filter"
@@ -486,8 +493,8 @@ def _strategic_common_source_rejection(item: Mapping[str, Any]) -> str | None:
 
 
 def _strategic_classification_rejection(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]],
+    item: GitHubIssue,
+    comments: list[GitHubComment],
 ) -> str | None:
     """Return ordered policy rejections that are pure over supplied issue evidence."""
     for reason in (
@@ -504,7 +511,7 @@ def _strategic_classification_rejection(
     return None
 
 
-def strategic_preflight_rejection(item: Mapping[str, Any]) -> str | None:
+def strategic_preflight_rejection(item: GitHubIssue) -> str | None:
     """Reject source-visible states that cannot be rescued by comment/timeline checks."""
     common_reason = _strategic_common_source_rejection(item)
     if common_reason:
@@ -536,9 +543,9 @@ def strategic_preflight_rejection(item: Mapping[str, Any]) -> str | None:
 
 
 def strategic_rejection(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    comments: list[dict[str, Any]] | None = None,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     common_reason = _strategic_common_source_rejection(item)
     if common_reason:
@@ -585,13 +592,13 @@ def strategic_rejection(
 
 
 def verify(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
-    repo_cache: dict[str, dict[str, Any]],
+    repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
     require_paid: bool = False,
     payment_signal_override: str | None = None,
-    activity_comments: list[dict[str, Any]] | None = None,
+    activity_comments: list[GitHubComment] | None = None,
 ) -> tuple[Candidate | None, str | None]:
     fresh, reason = refresh_issue(item, token)
     if reason:
@@ -715,7 +722,7 @@ def add_reject(
 def discover_paid(
     token: str | None,
     seen: set[str],
-    repo_cache: dict[str, dict[str, Any]],
+    repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
     search_results: list[tuple[str, dict[str, Any]]] | None = None,
 ) -> tuple[list[Candidate], dict[str, int], list[RejectionRecord]]:
@@ -949,7 +956,7 @@ def discover_strategic(
     token: str | None,
     seen: set[str],
     paid_urls: set[str],
-    repo_cache: dict[str, dict[str, Any]],
+    repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
     global_search_results: list[tuple[str, dict[str, Any]]] | None = None,
 ) -> tuple[
@@ -964,7 +971,7 @@ def discover_strategic(
     examples: list[RejectionRecord] = []
     audit: list[RejectionRecord] = []
 
-    source_batches: list[list[dict[str, Any]]] = []
+    source_batches: list[list[GitHubIssue]] = []
     with ThreadPoolExecutor(
         max_workers=min(NETWORK_WORKERS, max(1, len(TARGET_REPOS)))
     ) as executor:
@@ -1255,7 +1262,7 @@ def main() -> None:
     token = os.environ.get("GITHUB_TOKEN")
     repo_fullname = os.environ.get("GITHUB_REPOSITORY")
     seen = bounty.load_seen_bounties()
-    repo_cache: dict[str, dict[str, Any]] = {}
+    repo_cache: dict[str, RepositoryMetadata] = {}
     guide_cache: dict[str, str | None] = {}
 
     started = monotonic()
