@@ -301,9 +301,7 @@ class SeenStateRetentionTests(unittest.TestCase):
         )
 
     def test_eligibility_handles_unknown_stale_and_recent_entries(self) -> None:
-        self.assertTrue(
-            state_module.eligible_for_revalidation(state_module.SeenEntry(), self.now)
-        )
+        self.assertTrue(state_module.eligible_for_revalidation(state_module.SeenEntry(), self.now))
         self.assertTrue(
             state_module.eligible_for_revalidation(
                 state_module.SeenEntry(last_checked_at=self.stale),
@@ -371,7 +369,9 @@ class SeenStateRetentionTests(unittest.TestCase):
         assert original_record is not None
         self.assertIsNone(original_record.last_checked_at)
 
-    def test_maintenance_prunes_closed_retains_failures_and_catches_checker_exceptions(self) -> None:
+    def test_maintenance_prunes_closed_retains_failures_and_catches_checker_exceptions(
+        self,
+    ) -> None:
         seen = SeenState.from_urls([URL_A, URL_B, URL_C, URL_D])
         statuses: dict[str, state_module.IssueLifecycleStatus] = {
             URL_A: "open",
@@ -415,8 +415,7 @@ class SeenStateRetentionTests(unittest.TestCase):
 
     def test_large_state_never_exceeds_configured_check_limit(self) -> None:
         urls = [
-            f"https://github.com/example/project/issues/{number}"
-            for number in range(1, 10_051)
+            f"https://github.com/example/project/issues/{number}" for number in range(1, 10_051)
         ]
         seen = SeenState.from_urls(urls)
         calls: list[str] = []
@@ -458,7 +457,6 @@ class SeenStateRetentionTests(unittest.TestCase):
             document["seen"][URL_A]["last_checked_at"],
             "2026-10-02T10:00:00Z",
         )
-
 
 
 if __name__ == "__main__":
