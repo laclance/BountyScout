@@ -93,11 +93,6 @@ New leaf modules should follow the same rule. The orchestration layer may compos
 
 Do not perform a big-bang package rewrite. Extract one stable responsibility at a time, keep behavior green, then update this document and the generated map.
 
-Likely future boundaries, when the code pressure justifies them:
-
-
-These are direction markers, not a requirement to create empty abstractions early.
-
 ## Invariants
 
 - Paid candidates require explicit payment evidence and must represent open work rather than payout-history/leaderboard summaries.

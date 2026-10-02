@@ -115,14 +115,6 @@ class GenericSourceTests(unittest.TestCase):
         with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
             self.assertEqual(sources.fetch_text("https://example.test"), "")
 
-    def test_issue_comments_short_circuit_and_response_shape(self) -> None:
-        self.assertEqual(sources.issue_comments({"html_url": "bad", "comments": 2}, "t"), [])
-        self.assertEqual(sources.issue_comments(issue(1, comments=0), "t"), [])
-        with patch.object(github, "github_get", return_value={"bad": "shape"}):
-            self.assertEqual(sources.issue_comments(issue(1), "t"), [])
-        with patch.object(github, "github_get", return_value=[{"body": "x"}]):
-            self.assertEqual(sources.issue_comments(issue(1), "t"), [{"body": "x"}])
-
     def test_issue_from_github_url_validates_and_fetches(self) -> None:
         self.assertIsNone(sources.issue_from_github_url("bad", "t"))
         with patch.object(github, "github_get", return_value=[]):

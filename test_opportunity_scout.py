@@ -304,11 +304,7 @@ class BasicHeuristicTests(unittest.TestCase):
             scout.estimate_effort(issue(title="Feature", body="normal", comments=4)), "3–6h"
         )
 
-    def test_shared_access_compatibility_wrappers(self) -> None:
-        first = scout.cache_lock_for("repo:compat")
-        second = scout.cache_lock_for("repo:compat")
-        self.assertIs(first, second)
-
+    def test_fetch_repo_metadata_compatibility_wrapper(self) -> None:
         with patch.object(github, "repo_metadata", return_value={"stargazers_count": 7}) as fetch:
             self.assertEqual(
                 scout.fetch_repo_metadata("example/project", "t"),
@@ -639,94 +635,6 @@ class CalibrationTests(unittest.TestCase):
                     [{"body": "There is also a related draft fix in #21804 waiting for review."}],
                 ),
                 "existing open implementation PR: https://github.com/example/project/pull/21804",
-            )
-
-    def test_search_open_implementation_pr_reason_paths(self) -> None:
-        self.assertIsNone(scout.search_open_implementation_pr_reason({"html_url": "bad"}, "t", []))
-
-        with patch.object(github, "github_get") as getter:
-            self.assertIsNone(
-                scout.search_open_implementation_pr_reason(
-                    issue(body="No competing work is known.", comments=0),
-                    "t",
-                    [],
-                )
-            )
-            getter.assert_not_called()
-
-        with patch.object(github, "github_get", return_value=[]):
-            self.assertEqual(
-                scout.search_open_implementation_pr_reason(
-                    issue(body="There may already be a PR for this.", comments=0),
-                    "t",
-                    [],
-                ),
-                "could not verify open implementation PR search",
-            )
-
-        edge_results = {
-            "items": [
-                "invalid",
-                {
-                    "title": "not a pull request result",
-                    "body": "Closes #42",
-                    "html_url": "https://github.com/example/project/issues/100",
-                },
-                {
-                    "pull_request": {"url": "x"},
-                    "title": "implementation without a URL",
-                    "body": "Fixes #42",
-                    "html_url": "",
-                },
-            ]
-        }
-        with patch.object(github, "github_get", return_value=edge_results):
-            self.assertIsNone(
-                scout.search_open_implementation_pr_reason(
-                    issue(body="A pull request may exist.", comments=0),
-                    "t",
-                    [],
-                )
-            )
-
-        search_result = {
-            "items": [
-                {
-                    "pull_request": {"url": "x"},
-                    "title": "membership: support FIPS mode",
-                    "body": "Closes #42",
-                    "html_url": "https://github.com/example/project/pull/99",
-                }
-            ]
-        }
-        with patch.object(github, "github_get", return_value=search_result) as getter:
-            self.assertEqual(
-                scout.search_open_implementation_pr_reason(
-                    issue(body="There may already be a PR for this.", comments=0),
-                    "t",
-                    [],
-                ),
-                "existing open implementation PR: https://github.com/example/project/pull/99",
-            )
-            self.assertIn("search/issues?", getter.call_args.args[0])
-
-        unrelated = {
-            "items": [
-                {
-                    "pull_request": {"url": "x"},
-                    "title": "docs cleanup",
-                    "body": "Related to #42 but does not implement it.",
-                    "html_url": "https://github.com/example/project/pull/100",
-                }
-            ]
-        }
-        with patch.object(github, "github_get", return_value=unrelated):
-            self.assertIsNone(
-                scout.search_open_implementation_pr_reason(
-                    issue(body="A pull request may exist.", comments=0),
-                    "t",
-                    [],
-                )
             )
 
     def test_supplemental_claim_reason_paths(self) -> None:
