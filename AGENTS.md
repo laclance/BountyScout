@@ -15,7 +15,7 @@ This file is the canonical working agreement for coding agents and human contrib
 - Python 3.11+.
 - Prefer the standard library unless a dependency has a clear maintenance payoff.
 - Ruff is the formatter/linter, mypy runs in strict mode, and coverage requires 100% statement and branch coverage.
-- Fork-owned implementation lives under `bountyscout/`; strategic policy lives under `bountyscout/strategic/`. Root `opportunity_scout.py` is only the stable executable shim.
+- Production implementation lives under `bountyscout/`; strategic policy lives under `bountyscout/strategic/`. Root `opportunity_scout.py` is only the stable executable shim.
 - Never weaken paid-bounty verification while changing strategic discovery.
 - Treat existing seen-state corruption conservatively: malformed, unreadable, or unsupported state must fail the run rather than silently becoming empty.
 - Advance seen-state only after successful complete delivery; incomplete combined verification and failed GitHub report auto-close must leave state unchanged.

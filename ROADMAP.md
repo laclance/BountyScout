@@ -16,9 +16,10 @@ The supported runtime entry point is:
 python opportunity_scout.py
 ```
 
-Paid and strategic scanning are package-owned. The repository may eventually stop
-being maintained as a fork of upstream BountyScout, so OSS independence cleanup
-removes obsolete compatibility surfaces before the project becomes standalone.
+Paid and strategic scanning are package-owned. The project originated from
+`dev-kp-eloper/BountyScout` and subsequently underwent an OSS-independence cleanup
+before standalone release preparation. The historical fork remains development
+provenance rather than the definition of the current architecture.
 
 ## Phase 4A — strong domain typing
 
@@ -63,13 +64,13 @@ improves readability and testability.
 ### Phase 4C.1 — strategic discovery orchestration — complete
 
 - `bountyscout.strategic.discovery` owns strategic source-pool collection, near-miss auditing, adaptive inspection selection, and deterministic pre-verification ranking
-- `bountyscout.app` passes narrow paid-compatible callbacks between package-owned components
+- `bountyscout.app` passes narrow paid-lane callbacks between package-owned components
 - discovery queries, request budgets, ordering, and cache lifetime remain unchanged
 
 ### Phase 4C.2 — strategic verification orchestration — complete
 
 - `bountyscout.strategic.verification` owns ranked deep-verification orchestration, bounded per-repository settlement, source-failure handling, and final strategic selection
-- `bountyscout.app.verify()` remains the transitional mixed paid/strategic compatibility edge and is supplied as a narrow callback
+- `bountyscout.app.verify()` remains the mixed paid/strategic verification adapter and is supplied as a narrow callback
 - verification request budgets, source-failure semantics, upper-bound pruning, repo-slot settlement, and final per-repo ordering remain unchanged
 
 ### Phase 4C.3 — combined run lifecycle — complete
@@ -120,7 +121,7 @@ scanning no longer depends on a root compatibility module.
 
 ### Phase 4E.4 — package-owned paid rejection/competition verification — complete
 
-- paid rejection precedence and paid-compatible competition checks moved to `bountyscout.paid_verification`
+- paid rejection precedence and paid-lane competition checks moved to `bountyscout.paid_verification`
 - strategic competition consumes package verification directly
 - network/request behavior remained unchanged
 
@@ -143,10 +144,37 @@ package-owned.
 
 ### Cleanup 1 — remove legacy root scanner — complete
 
-- remove the obsolete root compatibility scanner now that Phase 4E package ownership is complete
-- remove compatibility-only tests for that historical façade
-- keep `python opportunity_scout.py` as the supported root runtime entry point
-- preserve package behavior, coverage, and quality gates
+- removed the obsolete root compatibility scanner after Phase 4E package ownership completed
+- removed tests that existed only for the historical façade
+- kept `python opportunity_scout.py` as the supported root runtime entry point
+- preserved package behavior, coverage, and quality gates
+
+### Cleanup 2 — rewrite delivery transport — complete
+
+- independently re-authored Telegram, Discord, and generated GitHub report delivery
+- preserved payloads, timeouts, report lifecycle, and delivery/state semantics
+
+### Cleanup 3 — restructure paid eligibility — complete
+
+- restructured paid eligibility and payment-signal policy under package ownership
+- preserved paid discovery and rejection behavior
+
+### Cleanup 4 — unify GitHub transport identity — complete
+
+- unified normal GitHub JSON traffic under the `OSSOpportunityScout` request identity
+- retained deterministic injectable transport seams for tests
+
+### Cleanup 5 — re-author scheduled workflow — complete
+
+- replaced the inherited scheduled workflow with an independently authored OSS Opportunity Scout workflow
+- preserved the hourly schedule, manual dispatch, secrets, permissions, state persistence, and runtime command
+
+### Cleanup 6 — update standalone branding and provenance — complete
+
+- removed stale fork/compatibility terminology from current-project documentation
+- documented historical origin and the clean-snapshot standalone-release boundary in `PROVENANCE.md`
+- made local repository configuration examples portable
+- changed no Python, workflow behavior, licensing, repository identity, or Git history
 
 ## Deferred result-object work
 

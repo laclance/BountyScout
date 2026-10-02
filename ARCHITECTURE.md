@@ -4,7 +4,7 @@
 
 OSS Opportunity Scout has two lanes with different risk profiles:
 
-- **Paid bounty lane:** conservative payment and competition verification, kept close to upstream BountyScout behavior.
+- **Paid bounty lane:** conservative payment and competition verification protected by regression tests.
 - **Strategic OSS lane:** broader discovery plus project-specific readiness, competition, scoring, and ranking.
 
 The architecture should make those lanes easy to reason about without forcing contributors or AI tools to load the full scanner into context.
@@ -45,7 +45,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
 | `bountyscout/app.py` | Package-only executable/application assembly, environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
 | `bountyscout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `bountyscout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks |
-| `bountyscout/github.py` | Fork-owned GitHub JSON and Issues Search transport with one canonical request identity, plus generic issue/timestamp parsing and keyed per-scan cache-fill primitives | No scanner policy; all normal GitHub API traffic uses `github_get()` with `OSSOpportunityScout`; injectable fetchers remain deterministic test seams |
+| `bountyscout/github.py` | Canonical GitHub JSON and Issues Search transport with one request identity, plus generic issue/timestamp parsing and keyed per-scan cache-fill primitives | No scanner policy; all normal GitHub API traffic uses `github_get()` with `OSSOpportunityScout`; injectable fetchers remain deterministic test seams |
 | `bountyscout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
 | `bountyscout/paid_verification.py` | Paid proposal/meta rejection, active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
 | `bountyscout/types.py` | Canonical static domain literals and mapping records shared across package-owned scanner code | Dependency-light typing vocabulary only; raw external JSON remains dynamic until validated |
@@ -113,11 +113,11 @@ New leaf modules should follow the same rule. The orchestration layer may compos
 
 ## Refactoring direction
 
-Phases 3B through 4E moved reusable parsing, paid policy, verification, delivery, state, and transport into canonical package ownership. OSS Cleanup 1 removes the now-unused legacy root compatibility scanner; `opportunity_scout.py` remains the supported root runtime shim.
+Phases 3B through 4E moved reusable parsing, paid policy, verification, delivery, state, and transport into canonical package ownership. OSS Cleanup 1 removed the now-unused legacy root compatibility scanner; `opportunity_scout.py` remains the supported root runtime shim.
 
 Historical generated queue reports from before the current auto-close lifecycle were cleaned once with `scripts/close_legacy_scan_reports.py` after explicit report-identity verification. Current generated reports are auto-closed during normal delivery, and there is no recurring cleanup service.
 
-Phase 4C established package-owned strategic discovery, verification, and combined-run orchestration. Phase 4E completed package ownership of paid parsing, policy, verification, delivery, GitHub Search, and GitHub GET transport. OSS Cleanup 4 unifies all GitHub JSON traffic under the canonical `OSSOpportunityScout` request identity while retaining injectable transport seams for deterministic tests. Production runtime now follows `opportunity_scout.py → bountyscout.app / bountyscout.run → package modules`.
+Phase 4C established package-owned strategic discovery, verification, and combined-run orchestration. Phase 4E completed package ownership of paid parsing, policy, verification, delivery, GitHub Search, and GitHub GET transport. OSS Cleanup 4 unified all GitHub JSON traffic under the canonical `OSSOpportunityScout` request identity while retaining injectable transport seams for deterministic tests. Production runtime now follows `opportunity_scout.py → bountyscout.app / bountyscout.run → package modules`.
 
 ## Invariants
 
