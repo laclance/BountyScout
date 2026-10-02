@@ -42,11 +42,12 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 
 | Module | Responsibility | Boundary |
 | --- | --- | --- |
-| `scout_bounties.py` | Upstream-compatible paid discovery, payment signals, basic competition checks, notifications | Keep changes conservative to reduce upstream merge conflicts |
+| `scout_bounties.py` | Upstream-compatible paid discovery, broader paid rejection/competition checks, notifications, and standalone entry point | Delegates pure paid eligibility/payment-signal policy to `bountyscout.paid`; keep remaining changes conservative to reduce upstream merge conflicts |
 | `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
 | `bountyscout/app.py` | Executable/application assembly, environment wiring, mixed paid/strategic `verify()` compatibility edge, and root paid-scanner adapters | Keeps the transitional root `scout_bounties.py` dependency localized and supplies narrow callbacks to package orchestration |
 | `bountyscout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `scout_bounties.py`, `bountyscout.app`, or `opportunity_scout.py`; root transports enter only through typed callbacks |
 | `bountyscout/github.py` | Fork-owned GitHub JSON transport, generic issue/timestamp parsing, and keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
+| `bountyscout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
 | `bountyscout/types.py` | Canonical static domain literals and mapping records shared across package-owned scanner code | Dependency-light typing vocabulary only; raw external JSON remains dynamic until validated |
 | `bountyscout/state.py` | Canonical typed, versioned seen-state parsing, legacy migration, logical membership/mutation, and deterministic atomic persistence | Local-file state only; branch-agnostic and fail-closed for malformed or unsupported existing state |
 | `bountyscout/reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
@@ -68,6 +69,7 @@ opportunity_scout.py --> bountyscout.app
 
 bountyscout.app
     |-- bountyscout.github
+    |-- bountyscout.paid
     |-- bountyscout.run
     |-- scout_bounties.py
     |-- bountyscout.reporting
@@ -86,9 +88,9 @@ bountyscout.run -X-> bountyscout.app
 bountyscout.run -X-> opportunity_scout.py
 bountyscout.types -X-> package policy / orchestration modules
 bountyscout.github -X-> scout_bounties.py
+bountyscout.paid -X-> scout_bounties.py
 bountyscout.sources --> bountyscout.github
 bountyscout.scoring --> bountyscout.github
-bountyscout.scoring --> scout_bounties.py  # payment-specific helper only
 bountyscout.scoring --> bountyscout.strategic.readiness
 bountyscout.strategic.competition --> bountyscout.github
 bountyscout.strategic.competition --> scout_bounties.py  # shared paid-compatible policy only
@@ -106,6 +108,7 @@ bountyscout.strategic.readiness --> bountyscout.strategic.claims
 
 package/domain modules -X-> opportunity_scout.py
 package/domain modules -X-> bountyscout.app
+scout_bounties.py --> bountyscout.paid
 scout_bounties.py --> bountyscout.state
 scout_bounties.py       -X-> opportunity_scout.py
 ```
@@ -119,6 +122,8 @@ Phase 3B makes generic GitHub issue parsing and timestamp parsing fork-owned in 
 Historical generated queue reports from before the current auto-close lifecycle were cleaned once with `scripts/close_legacy_scan_reports.py` after explicit report-identity verification. Current generated reports are auto-closed during normal delivery, and there is no recurring cleanup service.
 
 Phase 4C.1 moves strategic source collection, near-miss auditing, adaptive inspection, and pre-verification ranking into `bountyscout.strategic.discovery`. Phase 4C.2 moves ranked deep-verification orchestration, per-repository bounded settlement, source-failure handling, and final strategic selection into `bountyscout.strategic.verification`. Phase 4C.3 moves the combined discovery lifecycle, final queue assembly, coverage accounting, delivery aggregation, and seen-state transaction into `bountyscout.run`. `bountyscout.app` now stays at the executable/compatibility edge: it reads environment configuration and supplies narrow paid-scanner transport/policy callbacks without spreading the root `scout_bounties.py` dependency.
+
+Phase 4E.1 moved USD-like reward parsing into `bountyscout.scoring`. Phase 4E.2 moves basic paid eligibility and issue-level payment-signal recognition into the network-free `bountyscout.paid` policy module. Root paid symbols remain compatibility aliases/wrappers, while `bountyscout.app` consumes the package policy directly; search transport and broader paid rejection/competition orchestration remain at the root boundary.
 
 ## Invariants
 

@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import bountyscout.app as scout
 from bountyscout import github
+from bountyscout import paid as paid_policy
 from bountyscout import state
 import scout_bounties as bounty
 from bountyscout.strategic import competition as competition_policy
@@ -191,9 +192,9 @@ class BasicHeuristicTests(unittest.TestCase):
 
     def test_strategic_basic_candidate_allows_comment_volume_only(self) -> None:
         clean = issue(comments=1)
-        crowded = issue(comments=bounty.MAX_COMMENTS + 5)
+        crowded = issue(comments=paid_policy.MAX_COMMENTS + 5)
         crowded_assigned = issue(
-            comments=bounty.MAX_COMMENTS + 5,
+            comments=paid_policy.MAX_COMMENTS + 5,
             assignees=[{"login": "dev"}],
         )
         assigned = issue(assignees=[{"login": "dev"}])
@@ -715,7 +716,7 @@ class CalibrationTests(unittest.TestCase):
                 side_effect=[(wrapper, None), (upstream, None)],
             ),
             patch.object(scout, "issue_from_github_url", return_value=upstream),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
                 scout,
@@ -784,7 +785,7 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(fresh["state"], "open")
 
     def test_strategic_rejection_paths(self) -> None:
-        with patch.object(bounty, "is_clean_candidate", return_value=False):
+        with patch.object(paid_policy, "is_clean_candidate", return_value=False):
             self.assertEqual(
                 scout.strategic_rejection(issue(), "t"), "failed basic eligibility filter"
             )
@@ -1648,7 +1649,7 @@ class VerificationTests(unittest.TestCase):
             )
         with (
             patch.object(scout, "refresh_issue", return_value=(issue(), None)),
-            patch.object(bounty, "is_clean_candidate", return_value=False),
+            patch.object(paid_policy, "is_clean_candidate", return_value=False),
         ):
             self.assertEqual(
                 scout.verify(issue(), "t", {}, {})[1],
@@ -1658,8 +1659,8 @@ class VerificationTests(unittest.TestCase):
         bad_repo = issue(html_url="not-github", comments=0)
         with (
             patch.object(scout, "refresh_issue", return_value=(bad_repo, None)),
-            patch.object(bounty, "is_clean_candidate", return_value=True),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "is_clean_candidate", return_value=True),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(scout, "strategic_rejection", return_value=None),
         ):
@@ -1721,7 +1722,7 @@ class VerificationTests(unittest.TestCase):
                 side_effect=[(wrapper, None), (upstream, None)],
             ),
             patch.object(scout, "issue_from_github_url", return_value=upstream),
-            patch.object(bounty, "is_clean_candidate", return_value=False),
+            patch.object(paid_policy, "is_clean_candidate", return_value=False),
         ):
             self.assertEqual(
                 scout.verify(wrapper, "t", {}, {})[1],
@@ -1806,7 +1807,7 @@ class VerificationTests(unittest.TestCase):
         fresh = issue(body="", title="Task", comments=1)
         base = [
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
                 bounty,
@@ -1843,7 +1844,7 @@ class VerificationTests(unittest.TestCase):
         fresh = issue(body="", title="Feature", comments=2)
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
                 github,
@@ -1864,7 +1865,7 @@ class VerificationTests(unittest.TestCase):
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(scout, "strategic_basic_candidate", return_value=True),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(scout, "strategic_rejection", return_value=None) as rejection,
             patch.object(github, "issue_repo_and_number", return_value=(None, None)),
@@ -1892,7 +1893,7 @@ class VerificationTests(unittest.TestCase):
         meta = repo_meta()
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
                 github,
@@ -1938,7 +1939,7 @@ class VerificationTests(unittest.TestCase):
         meta = repo_meta()
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
                 github,
@@ -1988,7 +1989,7 @@ class VerificationTests(unittest.TestCase):
         strategic = issue(body="", title="Feature", comments=0)
         with (
             patch.object(scout, "refresh_issue", return_value=(strategic, None)),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(scout, "strategic_rejection", return_value=None),
             patch.object(scout, "fetch_repo_metadata", return_value=repo_meta()),
@@ -2105,7 +2106,7 @@ class DiscoveryTests(unittest.TestCase):
             scout.basic_rejection_audit_reason(issue(body="article writing proposal"))
         )
 
-        crowded = scout.basic_rejection_audit_reason(issue(comments=bounty.MAX_COMMENTS + 1))
+        crowded = scout.basic_rejection_audit_reason(issue(comments=paid_policy.MAX_COMMENTS + 1))
         self.assertEqual(
             crowded,
             "strong-looking result rejected by an unrecognized basic eligibility filter rule",
@@ -2214,7 +2215,7 @@ class DiscoveryTests(unittest.TestCase):
             html_url="https://github.com/g/g/issues/9",
             title="API compatibility regression",
             labels=[{"name": "good first issue"}, {"name": "bug"}],
-            comments=bounty.MAX_COMMENTS + 2,
+            comments=paid_policy.MAX_COMMENTS + 2,
         )
         with (
             patch.object(scout, "TARGET_REPOS", ["g/g"]),
@@ -2303,7 +2304,7 @@ class DiscoveryTests(unittest.TestCase):
                 return_value=([dirty_weak, archived_weak, best, overflow], None),
             ),
             patch.object(
-                bounty,
+                paid_policy,
                 "is_clean_candidate",
                 side_effect=lambda item_: item_ is not dirty_weak,
             ),
@@ -2326,7 +2327,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
 
     def test_strategic_preflight_rejects_only_source_visible_states(self) -> None:
-        with patch.object(bounty, "is_clean_candidate", return_value=False):
+        with patch.object(paid_policy, "is_clean_candidate", return_value=False):
             self.assertEqual(
                 scout.strategic_preflight_rejection(issue(comments=0)),
                 "failed basic eligibility filter",
@@ -2472,7 +2473,7 @@ class DiscoveryTests(unittest.TestCase):
         with (
             patch.object(bounty, "search_github", return_value={"items": [a, duplicate, dirty]}),
             patch.object(
-                bounty,
+                paid_policy,
                 "is_clean_candidate",
                 side_effect=lambda x: (
                     x["html_url"] != dirty["html_url"]
@@ -2520,7 +2521,7 @@ class DiscoveryTests(unittest.TestCase):
 
         with (
             patch.object(bounty, "search_github", return_value={"items": [direct]}),
-            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(
                 scout,
                 "verify",
@@ -2549,7 +2550,7 @@ class DiscoveryTests(unittest.TestCase):
         bad = issue(html_url="https://github.com/a/a/issues/2")
         with (
             patch.object(bounty, "search_github", return_value={"items": [seen, bad]}),
-            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(scout, "verify", return_value=(None, "claimed")),
             patch.object(scout, "platform_paid_refs", return_value={}),
         ):
@@ -2574,7 +2575,7 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(scout, "TARGET_REPOS", ["example/project"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", []),
             patch.object(scout, "target_repo_issue_pool", return_value=(items, None)),
-            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(scout, "fetch_repo_metadata", side_effect=meta),
             patch.object(
                 scout,
@@ -3131,7 +3132,7 @@ class CoverageGapTests(unittest.TestCase):
         guide_cache: dict[str, str | None] = {"example/project": "cached-guide"}
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
                 scout, "comment_payment_signal", return_value="explicit /reward comment: $50"
@@ -3158,7 +3159,7 @@ class CoverageGapTests(unittest.TestCase):
         fresh = issue(body="", title="Feature", comments=0)
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
-            patch.object(bounty, "payment_signal", return_value=None),
+            patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(scout, "strategic_rejection", return_value="support"),
         ):
@@ -3176,7 +3177,7 @@ class CoverageGapTests(unittest.TestCase):
                 return_value={source_seen: "sig", source_reject: "sig"},
             ),
             patch.object(scout, "issue_from_github_url", return_value=item_reject),
-            patch.object(bounty, "is_clean_candidate", return_value=True),
+            patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(scout, "verify", return_value=(None, "claimed")),
         ):
             found, rejected, examples = scout.discover_paid("t", {source_seen}, {}, {})
@@ -3198,7 +3199,7 @@ class CoverageGapTests(unittest.TestCase):
                 return_value=([seen_item, dirty, cached], None),
             ),
             patch.object(
-                bounty,
+                paid_policy,
                 "is_clean_candidate",
                 side_effect=lambda x: x["html_url"] != dirty["html_url"],
             ),

@@ -65,6 +65,11 @@
 - **function** `contribution_guide()` — line 186
 - **function** `issue_from_github_url()` — line 203
 
+## `bountyscout/paid.py`
+
+- **function** `payment_signal()` — line 22
+- **function** `is_clean_candidate()` — line 72
+
 ## `bountyscout/reporting.py`
 
 - **function** `github_report_ref()` — line 16
@@ -218,22 +223,22 @@
 
 ## `scout_bounties.py`
 
-- **function** `github_get()` — line 65
-- **function** `search_github()` — line 84
-- **function** `payment_signal()` — line 91
-- **function** `issue_repo_and_number()` — line 141
-- **function** `has_existing_implementation_pr()` — line 150
-- **function** `active_claim_reason()` — line 177
-- **function** `is_clean_candidate()` — line 206
-- **function** `candidate_rejection_reason()` — line 255
-- **function** `parse_github_datetime()` — line 299
-- **function** `usd_like_amount_from_signal()` — line 309
-- **function** `fetch_repo_metadata()` — line 314
-- **function** `score_candidate()` — line 320
-- **function** `send_telegram_notification()` — line 446
-- **function** `send_discord_notification()` — line 470
-- **function** `create_github_issue()` — line 488
-- **function** `main()` — line 539
+- **function** `github_get()` — line 63
+- **function** `search_github()` — line 82
+- **function** `payment_signal()` — line 89
+- **function** `issue_repo_and_number()` — line 94
+- **function** `has_existing_implementation_pr()` — line 103
+- **function** `active_claim_reason()` — line 130
+- **function** `is_clean_candidate()` — line 159
+- **function** `candidate_rejection_reason()` — line 164
+- **function** `parse_github_datetime()` — line 208
+- **function** `usd_like_amount_from_signal()` — line 218
+- **function** `fetch_repo_metadata()` — line 223
+- **function** `score_candidate()` — line 229
+- **function** `send_telegram_notification()` — line 355
+- **function** `send_discord_notification()` — line 379
+- **function** `create_github_issue()` — line 397
+- **function** `main()` — line 448
 
 ## `scripts/__init__.py`
 

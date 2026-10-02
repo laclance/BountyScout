@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from time import sleep
 from typing import Any, cast
 
-from bountyscout import github
+from bountyscout import github, paid
 import scout_bounties as bounty
 from bountyscout import reporting as reporting
 from bountyscout import run
@@ -116,14 +116,14 @@ def code_reference_count(text: str) -> int:
 
 def strategic_basic_candidate(item: GitHubIssue) -> bool:
     """Apply strategic eligibility without making comment volume disqualifying."""
-    if bounty.is_clean_candidate(item):
+    if paid.is_clean_candidate(item):
         return True
-    if int(item.get("comments") or 0) <= bounty.MAX_COMMENTS:
+    if int(item.get("comments") or 0) <= paid.MAX_COMMENTS:
         return False
 
-    relaxed = dict(item)
-    relaxed["comments"] = bounty.MAX_COMMENTS
-    return bounty.is_clean_candidate(relaxed)
+    relaxed = cast(GitHubIssue, dict(item))
+    relaxed["comments"] = paid.MAX_COMMENTS
+    return paid.is_clean_candidate(relaxed)
 
 
 def github_get_optional(url: str, token: str | None) -> Any:
@@ -593,7 +593,7 @@ def verify(
         if fresh is None:
             return None, "could not refresh upstream issue from aggregator wrapper"
 
-    clean = bounty.is_clean_candidate(fresh) if require_paid else strategic_basic_candidate(fresh)
+    clean = paid.is_clean_candidate(fresh) if require_paid else strategic_basic_candidate(fresh)
     if not clean:
         return None, "failed basic eligibility filter after source refresh"
 
@@ -602,7 +602,7 @@ def verify(
         return None, reward_history
 
     comments = activity_comments
-    issue_signal = bounty.payment_signal(fresh) or supplemental_payment_signal(fresh)
+    issue_signal = paid.payment_signal(fresh) or supplemental_payment_signal(fresh)
     comment_signal = None
     if not issue_signal and int(fresh.get("comments") or 0):
         if require_paid:
@@ -723,7 +723,7 @@ def discover_paid(
             if not url or url in seen or url in touched:
                 continue
             touched.add(url)
-            if bounty.is_clean_candidate(item):
+            if paid.is_clean_candidate(item):
                 pending.append((item, None, False))
 
     # Official platform feeds can expose funded issues that contain no bounty
@@ -751,7 +751,7 @@ def discover_paid(
         platform_items,
         strict=True,
     ):
-        if platform_item and bounty.is_clean_candidate(platform_item):
+        if platform_item and paid.is_clean_candidate(platform_item):
             pending.append((platform_item, platform_signal, True))
 
     def verify_paid(
@@ -901,7 +901,7 @@ def discover_strategic(
         target_repo_pool=target_repo_issue_pool,
         basic_candidate=strategic_basic_candidate,
         fetch_repo_metadata=fetch_repo_metadata,
-        payment_signal=bounty.payment_signal,
+        payment_signal=paid.payment_signal,
         build_candidate=build_candidate,
         cache_locks=CACHE_LOCKS,
         inspect_per_repo=STRATEGIC_INSPECT_PER_REPO,
