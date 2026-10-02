@@ -76,8 +76,6 @@
 - **function** `refresh_issue()` — line 401
 - **function** `upstream_wrapper_issue_url()` — line 417
 - **function** `non_actionable_diagnostic_reason()` — line 435
-- **function** `_strategic_common_source_rejection()` — line 464
-- **function** `_strategic_classification_rejection()` — line 492
 - **function** `strategic_preflight_rejection()` — line 511
 - **function** `strategic_rejection()` — line 542
 - **function** `verify()` — line 591
