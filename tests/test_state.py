@@ -16,6 +16,7 @@ from bountyscout.state import (
     parse_seen_state,
     save_seen_state,
 )
+from bountyscout.types import IssueLifecycleStatus
 
 
 FIXED_REPORTED_AT = "2026-10-02T08:30:00Z"
@@ -373,13 +374,13 @@ class SeenStateRetentionTests(unittest.TestCase):
         self,
     ) -> None:
         seen = SeenState.from_urls([URL_A, URL_B, URL_C, URL_D])
-        statuses: dict[str, state_module.IssueLifecycleStatus] = {
+        statuses: dict[str, IssueLifecycleStatus] = {
             URL_A: "open",
             URL_B: "closed",
             URL_C: "not_found",
         }
 
-        def checker(url: str) -> state_module.IssueLifecycleStatus:
+        def checker(url: str) -> IssueLifecycleStatus:
             if url == URL_D:
                 raise RuntimeError("transport exploded")
             return statuses[url]
@@ -420,7 +421,7 @@ class SeenStateRetentionTests(unittest.TestCase):
         seen = SeenState.from_urls(urls)
         calls: list[str] = []
 
-        def checker(url: str) -> state_module.IssueLifecycleStatus:
+        def checker(url: str) -> IssueLifecycleStatus:
             calls.append(url)
             return "open"
 
