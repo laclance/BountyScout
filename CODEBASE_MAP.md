@@ -79,21 +79,21 @@
 
 ## `bountyscout/scoring.py`
 
-- **function** `maintainer_ready_signal()` — line 19
-- **function** `issue_text()` — line 33
-- **function** `code_reference_count()` — line 49
-- **function** `documentation_microfix()` — line 53
-- **class** `EffortEstimate` — line 208
-- **function** `estimate_effort_details()` — line 215
-- **function** `estimate_effort()` — line 388
-- **function** `effort_hours()` — line 393
-- **function** `comment_contributes_to_competition()` — line 412
-- **function** `competition()` — line 447
-- **function** `payment_confidence()` — line 465
-- **function** `reward_text()` — line 483
-- **function** `repo_activity()` — line 490
-- **function** `strategic_priority_score()` — line 506
-- **function** `build_candidate()` — line 850
+- **function** `maintainer_ready_signal()` — line 20
+- **function** `issue_text()` — line 34
+- **function** `code_reference_count()` — line 50
+- **function** `documentation_microfix()` — line 54
+- **class** `EffortEstimate` — line 209
+- **function** `estimate_effort_details()` — line 216
+- **function** `estimate_effort()` — line 389
+- **function** `effort_hours()` — line 394
+- **function** `comment_contributes_to_competition()` — line 413
+- **function** `competition()` — line 448
+- **function** `payment_confidence()` — line 466
+- **function** `reward_text()` — line 484
+- **function** `repo_activity()` — line 491
+- **function** `strategic_priority_score()` — line 507
+- **function** `build_candidate()` — line 851
 
 ## `bountyscout/sources.py`
 
@@ -152,6 +152,16 @@
 - **function** `manual_tracking_issue_reason()` — line 555
 - **function** `automated_tracking_issue_reason()` — line 607
 - **function** `release_tracking_reason()` — line 673
+
+## `bountyscout/types.py`
+
+- **class** `GitHubLabel` — line 18
+- **class** `GitHubUser` — line 24
+- **class** `GitHubComment` — line 30
+- **class** `GitHubIssue` — line 40
+- **class** `RepositoryMetadata` — line 58
+- **class** `Candidate` — line 67
+- **class** `RejectionRecord` — line 97
 
 ## `opportunity_scout.py`
 
