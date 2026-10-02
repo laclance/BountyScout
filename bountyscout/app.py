@@ -1103,12 +1103,12 @@ def discover_strategic(
         for item in items
         if item.get("html_url")
     }
-    for _, _, _, item in provisional:
-        url = str(item.get("html_url") or "")
-        if url and url not in inspected_urls and possible_miss_signal(item):
+    for _, _, _, preview_item in provisional:
+        url = str(preview_item.get("html_url") or "")
+        if url and url not in inspected_urls and possible_miss_signal(preview_item):
             add_audit(
                 audit,
-                item,
+                preview_item,
                 "strong-looking result fell outside the adaptive repo inspection pool",
             )
 
