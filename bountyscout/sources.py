@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Sequence, cast
 
 from bountyscout import github
-from bountyscout.types import Candidate, GitHubIssue, IssueRow
+from bountyscout.types import Candidate, GitHubIssue, IssueRow as IssueRow
 
 FetchText = Callable[[str], str]
 IssuePredicate = Callable[[GitHubIssue], bool]
