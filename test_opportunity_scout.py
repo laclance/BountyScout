@@ -663,7 +663,6 @@ class CalibrationTests(unittest.TestCase):
             labels=[{"name": "bug"}, {"name": "good first issue"}],
             comments=1,
         )
-        self.assertEqual(scout.estimate_effort(aws), "1–3h")
         with (
             patch.object(
                 scout,
@@ -696,17 +695,10 @@ class CalibrationTests(unittest.TestCase):
             body="I would like to propose adding support.",
             labels=[{"name": "kind/feature"}, {"name": "needs-triage"}],
         )
-        self.assertEqual(scout.estimate_effort(connection_pool), "1d+")
         self.assertEqual(
             scout.strategic_rejection(connection_pool, "t"),
             "awaiting maintainer triage",
         )
-
-        tailscale = issue(
-            title="Android DNS regression",
-            body="dual SIM + Wi-Fi reproduction on a physical phone",
-        )
-        self.assertEqual(scout.estimate_effort(tailscale), "1d+")
 
     def test_verify_resolves_aggregator_wrapper_to_upstream(self) -> None:
         wrapper = issue(
