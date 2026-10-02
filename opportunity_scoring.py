@@ -738,7 +738,7 @@ def _base_career_score(
 
     _, body, _, _ = issue_text(item)
     clarity = 0
-    if re.search(r"\b(?:root cause|code path|cause \(from\))\b", text):
+    if re.search(r"\b(?:root cause|code path|cause \(from)\b", text):
         clarity += 3
     if "steps to reproduce" in text and "_no response_" not in text:
         clarity += 2
