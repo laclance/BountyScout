@@ -2429,12 +2429,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual([query for query, _ in strategic], ["s1", "s2"])
         self.assertEqual([call.args[0] for call in search.call_args_list], ["p1", "p2", "s1", "s2"])
         self.assertEqual(search.call_args_list[0].kwargs["per_page"], 15)
-        self.assertTrue(
-            all(
-                call.kwargs["fetch_json"] is github.paid_github_get
-                for call in search.call_args_list
-            )
-        )
+        self.assertTrue(all(call.args[1] == "t" for call in search.call_args_list))
         self.assertEqual(sleeper.call_count, 3)
         sleeper.assert_called_with(scout.DISCOVERY_SEARCH_INTERVAL_SECONDS)
         self.assertEqual(
