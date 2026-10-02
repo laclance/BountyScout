@@ -632,6 +632,7 @@ def verify(
             comment_signal = comment_payment_signal(fresh, token, comments)
     signal = issue_signal or comment_signal or payment_signal_override
 
+    lane: CandidateLane
     if require_paid or signal:
         issue_author_claim = strategic_claim_reason(fresh, [])
         if issue_author_claim:
@@ -658,7 +659,7 @@ def verify(
             if competition_reason:
                 return None, competition_reason
 
-        lane: CandidateLane = "paid"
+        lane = "paid"
     else:
         if comments is None:
             comments, comments_reason = github.issue_comments_checked(fresh, token)
@@ -1069,7 +1070,7 @@ def discover_strategic(
         ranked: list[sources.IssueRow] = []
         for item in items:
             signal = bounty.payment_signal(item)
-            lane: CandidateLane = "paid" if signal else "strategic"
+            lane = "paid" if signal else "strategic"
             preview = build_candidate(
                 item,
                 lane,
