@@ -67,10 +67,10 @@ class RepositoryMetadata(TypedDict, total=False):
 class Candidate(TypedDict):
     """Canonical ranked candidate shape shared by ranking and presentation."""
 
-    repo: str | None
-    issue_number: int | None
+    repo: str
+    issue_number: int
     title: str | None
-    url: str | None
+    url: str
     paid: bool
     reward: str | None
     payment_confidence: int
