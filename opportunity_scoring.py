@@ -547,7 +547,6 @@ def strategic_priority_score(
     return priority, reasons
 
 
-
 def _paid_cash_score(
     signal: str | None,
     effort: str,
