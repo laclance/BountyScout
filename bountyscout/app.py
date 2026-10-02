@@ -15,6 +15,7 @@ from bountyscout import scoring
 from bountyscout import sources
 from bountyscout.strategic import competition as competition_policy
 from bountyscout.strategic import discovery as strategic_discovery
+from bountyscout.strategic import verification as strategic_verification
 from bountyscout.strategic.claims import strategic_claim_text as strategic_claim_text
 from bountyscout.strategic.readiness import (
     TRUSTED_ASSOCIATIONS as TRUSTED_ASSOCIATIONS,
@@ -54,16 +55,16 @@ TARGET_REPO_FETCH_PER_PAGE = strategic_discovery.TARGET_REPO_FETCH_PER_PAGE
 TARGET_REPO_FETCH_PAGES = strategic_discovery.TARGET_REPO_FETCH_PAGES
 STRATEGIC_INSPECT_PER_REPO = strategic_discovery.STRATEGIC_INSPECT_PER_REPO
 STRATEGIC_ADAPTIVE_INSPECT_BUDGET = strategic_discovery.STRATEGIC_ADAPTIVE_INSPECT_BUDGET
-STRATEGIC_KEEP_PER_REPO = 3
-STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND = 11
-STRATEGIC_REFRESH_FAILURE_LIMIT = 2
+STRATEGIC_KEEP_PER_REPO = strategic_verification.STRATEGIC_KEEP_PER_REPO
+STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND = strategic_verification.STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND
+STRATEGIC_REFRESH_FAILURE_LIMIT = strategic_verification.STRATEGIC_REFRESH_FAILURE_LIMIT
 STRATEGIC_COVERAGE_WARNING_THRESHOLD = 5
-STRATEGIC_MIN_CAREER_SCORE = 55
+STRATEGIC_MIN_CAREER_SCORE = strategic_verification.STRATEGIC_MIN_CAREER_SCORE
 STRATEGIC_AUDIT_LIMIT = strategic_discovery.STRATEGIC_AUDIT_LIMIT
 PAID_MIN_CASH_SCORE = 55
 REPORT_LIMIT = 8
 NETWORK_WORKERS = 6
-STRATEGIC_VERIFY_WORKERS = 8
+STRATEGIC_VERIFY_WORKERS = strategic_verification.STRATEGIC_VERIFY_WORKERS
 DISCOVERY_SEARCH_INTERVAL_SECONDS = 2.1
 CACHE_LOCKS = github.KeyedLockPool()
 
@@ -886,9 +887,6 @@ def discover_strategic(
     list[RejectionRecord],
     list[RejectionRecord],
 ]:
-    rejected: dict[str, int] = {}
-    examples: list[RejectionRecord] = []
-
     if global_search_results is None:
         global_search_results = strategic_global_search_results(token)
 
@@ -910,173 +908,22 @@ def discover_strategic(
         adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
         audit_limit=STRATEGIC_AUDIT_LIMIT,
     )
-    ranked_by_repo = selection.ranked_by_repo
-    audit = selection.audit
 
-    source_failure_reasons = {
-        "could not refresh source issue",
-        "could not refresh issue comments",
-        "could not verify open implementation PR timeline",
-    }
+    def deep_verify(item: GitHubIssue) -> tuple[Candidate | None, str | None]:
+        return verify(item, token, repo_cache, guide_cache)
 
-    def verify_repo(
-        entry: tuple[str, list[sources.IssueRow]],
-    ) -> tuple[
-        str,
-        list[
-            tuple[
-                sources.IssueRow,
-                Candidate | None,
-                str | None,
-                bool,
-            ]
-        ],
-        bool,
-    ]:
-        repo, ranked = entry
-        outcomes: list[
-            tuple[
-                sources.IssueRow,
-                Candidate | None,
-                str | None,
-                bool,
-            ]
-        ] = []
-        accepted: list[Candidate] = []
-        consecutive_source_failures = 0
-
-        for index, row in enumerate(ranked):
-            item = row[3]
-            candidate: Candidate | None
-            reason: str | None
-            network_checked: bool
-            preflight_reason = strategic_preflight_rejection(item)
-            career_upper_bound = sources.strategic_verification_upper_bound(
-                row,
-                score_uplift_bound=STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND,
-            )[1]
-            if preflight_reason:
-                candidate = None
-                reason = preflight_reason
-                network_checked = False
-            elif career_upper_bound < STRATEGIC_MIN_CAREER_SCORE:
-                candidate = None
-                reason = (
-                    f"career score {row[1]}/100 below strategic threshold "
-                    f"{STRATEGIC_MIN_CAREER_SCORE}/100"
-                )
-                network_checked = False
-            else:
-                candidate, reason = verify(
-                    item,
-                    token,
-                    repo_cache,
-                    guide_cache,
-                )
-                network_checked = True
-            outcomes.append((row, candidate, reason, network_checked))
-
-            if reason in source_failure_reasons:
-                consecutive_source_failures += 1
-            else:
-                consecutive_source_failures = 0
-
-            if (
-                candidate is not None
-                and reason is None
-                and candidate["career_score"] >= STRATEGIC_MIN_CAREER_SCORE
-            ):
-                accepted.append(candidate)
-
-            if consecutive_source_failures >= STRATEGIC_REFRESH_FAILURE_LIMIT:
-                return repo, outcomes, True
-
-            remaining = ranked[index + 1 :]
-            if sources.strategic_repo_slots_settled(
-                accepted,
-                remaining,
-                keep_per_repo=STRATEGIC_KEEP_PER_REPO,
-                score_uplift_bound=STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND,
-            ):
-                return repo, outcomes, False
-
-        return repo, outcomes, False
-
-    verification_inputs = list(ranked_by_repo.items())
-    with ThreadPoolExecutor(
-        max_workers=min(STRATEGIC_VERIFY_WORKERS, max(1, len(verification_inputs)))
-    ) as executor:
-        repo_verification_results = list(executor.map(verify_repo, verification_inputs))
-
-    verified_by_repo: dict[str, list[Candidate]] = {repo: [] for repo in ranked_by_repo}
-    verified_rows = 0
-    selected_rows = sum(len(rows) for rows in ranked_by_repo.values())
-    for repo, outcomes, coverage_incomplete in repo_verification_results:
-        verified_rows += sum(1 for _, _, _, network_checked in outcomes if network_checked)
-        for row, candidate, reason, _ in outcomes:
-            verified_item = row[3]
-            if reason:
-                add_reject(rejected, examples, verified_item, reason)
-                if reason.startswith("career score ") and possible_miss_signal(verified_item):
-                    add_audit(
-                        audit,
-                        verified_item,
-                        f"strong-looking near miss: {reason}",
-                    )
-                print(f"Skipping strategic candidate {verified_item.get('html_url')}: {reason}")
-                continue
-
-            assert candidate is not None
-            if candidate["career_score"] < STRATEGIC_MIN_CAREER_SCORE:
-                reason = (
-                    f"career score {candidate['career_score']}/100 below strategic threshold "
-                    f"{STRATEGIC_MIN_CAREER_SCORE}/100"
-                )
-                add_reject(rejected, examples, verified_item, reason)
-                if possible_miss_signal(verified_item):
-                    add_audit(
-                        audit,
-                        verified_item,
-                        f"strong-looking near miss: {reason}",
-                    )
-                print(f"Skipping strategic candidate {verified_item.get('html_url')}: {reason}")
-                continue
-
-            verified_by_repo[repo].append(candidate)
-
-        if coverage_incomplete:
-            remaining = ranked_by_repo[repo][len(outcomes) :]
-            if remaining:
-                add_audit(
-                    audit,
-                    remaining[0][3],
-                    f"verification coverage incomplete for {repo} after repeated source failures",
-                )
-            print(
-                "Strategic verification coverage incomplete for "
-                f"{repo}; stopped after {len(outcomes)} deep checks"
-            )
-
-    print(
-        "Strategic deep verification: "
-        f"{verified_rows}/{selected_rows} inspected rows required network checks"
+    result = strategic_verification.verify_strategic_selection(
+        selection,
+        deep_verify,
+        strategic_preflight_rejection,
+        keep_per_repo=STRATEGIC_KEEP_PER_REPO,
+        score_uplift_bound=STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND,
+        refresh_failure_limit=STRATEGIC_REFRESH_FAILURE_LIMIT,
+        min_career_score=STRATEGIC_MIN_CAREER_SCORE,
+        verify_workers=STRATEGIC_VERIFY_WORKERS,
+        audit_limit=STRATEGIC_AUDIT_LIMIT,
     )
-
-    found: list[Candidate] = []
-    for repo in ranked_by_repo:
-        verified_repo = verified_by_repo[repo]
-        verified_repo.sort(
-            key=lambda item: (
-                item["priority_score"],
-                item["career_score"],
-                item["cash_score"],
-                -item["comments"],
-            ),
-            reverse=True,
-        )
-        found.extend(verified_repo[:STRATEGIC_KEEP_PER_REPO])
-
-    return found, rejected, examples, audit
+    return result.candidates, result.rejected, result.examples, result.audit
 
 
 def main() -> None:
