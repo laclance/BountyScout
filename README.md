@@ -17,7 +17,7 @@ Production scanner implementation lives under the `bountyscout/` package, with f
 - `bountyscout/paid.py` — paid-opportunity eligibility and payment-signal policy.
 - `bountyscout/paid_verification.py` — paid rejection and competition verification.
 - `bountyscout/delivery.py` — Telegram, Discord, and generated GitHub report delivery.
-- `bountyscout/github.py` — shared fork-owned GitHub JSON access and keyed per-scan cache fills.
+- `bountyscout/github.py` — shared GitHub JSON access and keyed per-scan cache fills.
 - `bountyscout/types.py` — canonical internal domain literals and mapping contracts.
 - `bountyscout/reporting.py` — GitHub queue reports, reject/audit summaries, and length-safe notification formatting.
 - `bountyscout/scoring.py` — effort estimation and cash/career ranking over verified evidence.
@@ -32,10 +32,10 @@ See `ARCHITECTURE.md` for data flow and module boundaries, `ROADMAP.md` for plan
 
 ## Paid lane
 
-Paid candidates reuse the existing BountyScout rules, including rejection of:
+Paid candidates use conservative eligibility and verification rules, including rejection of:
 
 - pull requests, assigned issues, and overcrowded threads
-- recursive BountyScout alerts and obvious spam
+- recursive scanner-generated alerts and obvious spam
 - unfunded bounty proposals
 - payout histories / Hall-of-Fame leaderboards that summarize past rewards rather than open work
 - meta/bug-bounty monitoring alerts
@@ -117,7 +117,7 @@ Locally:
 ```bash
 python -m pip install -r requirements-dev.txt
 make quality
-GITHUB_TOKEN=... GITHUB_REPOSITORY=laclance/BountyScout python opportunity_scout.py
+GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repository python opportunity_scout.py
 ```
 
 Run `make format` after Python edits and `make map` when production modules or top-level symbols change. Ruff is the canonical Python formatter; strict mypy, the generated code map, and 100% statement + branch coverage are enforced in CI.
@@ -127,3 +127,7 @@ Optional notification secrets remain supported:
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 - `DISCORD_WEBHOOK_URL`
+
+## Project history
+
+OSS Opportunity Scout originated as a fork of `dev-kp-eloper/BountyScout` and has since undergone substantial implementation and architecture changes. See `PROVENANCE.md` for the development history and standalone-release boundary.
