@@ -17,6 +17,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
+      - name: Restore Seen Bounties State
+        run: |
+          git fetch origin scout-state
+          git show origin/scout-state:seen_bounties.json > seen_bounties.json
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -32,7 +37,14 @@ jobs:
 
       - name: Commit & Push Updated Seen Bounties State
         run: |
+          cp seen_bounties.json /tmp/seen_bounties.json
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add seen_bounties.json || true
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update seen bounties state [skip ci]" && git push)
+          git worktree add --detach /tmp/scout-state origin/scout-state
+          cp /tmp/seen_bounties.json /tmp/scout-state/seen_bounties.json
+          cd /tmp/scout-state
+          git add seen_bounties.json
+          git diff --staged --quiet || (
+            git commit -m "chore: update seen bounties state [skip ci]" &&
+            git push origin HEAD:scout-state
+          )

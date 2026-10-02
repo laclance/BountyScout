@@ -2,16 +2,6 @@ name: Python Quality
 
 on:
   pull_request:
-    paths:
-      - "**/*.py"
-      - ".coveragerc"
-      - "mypy.ini"
-      - "ruff.toml"
-      - "requirements-dev.txt"
-      - "Makefile"
-      - "CODEBASE_MAP.md"
-      - ".github/workflows/python-quality.yml"
-      - ".github/workflows/bounty-scout.yml"
   push:
     branches:
       - main
