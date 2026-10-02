@@ -50,6 +50,12 @@
 - **function** `discover_strategic()` — line 893
 - **function** `main()` — line 945
 
+## `bountyscout/delivery.py`
+
+- **function** `send_telegram_notification()` — line 13
+- **function** `send_discord_notification()` — line 37
+- **function** `create_github_issue()` — line 55
+
 ## `bountyscout/github.py`
 
 - **class** `IssueLifecycleResult` — line 32
@@ -230,22 +236,22 @@
 
 ## `scout_bounties.py`
 
-- **function** `github_get()` — line 34
-- **function** `search_github()` — line 53
-- **function** `payment_signal()` — line 61
-- **function** `issue_repo_and_number()` — line 66
-- **function** `has_existing_implementation_pr()` — line 75
-- **function** `active_claim_reason()` — line 85
-- **function** `is_clean_candidate()` — line 98
-- **function** `candidate_rejection_reason()` — line 103
-- **function** `parse_github_datetime()` — line 115
-- **function** `usd_like_amount_from_signal()` — line 125
-- **function** `fetch_repo_metadata()` — line 130
-- **function** `score_candidate()` — line 136
-- **function** `send_telegram_notification()` — line 262
-- **function** `send_discord_notification()` — line 286
-- **function** `create_github_issue()` — line 304
-- **function** `main()` — line 355
+- **function** `github_get()` — line 41
+- **function** `search_github()` — line 60
+- **function** `payment_signal()` — line 68
+- **function** `issue_repo_and_number()` — line 73
+- **function** `has_existing_implementation_pr()` — line 82
+- **function** `active_claim_reason()` — line 92
+- **function** `is_clean_candidate()` — line 105
+- **function** `candidate_rejection_reason()` — line 110
+- **function** `parse_github_datetime()` — line 122
+- **function** `usd_like_amount_from_signal()` — line 132
+- **function** `fetch_repo_metadata()` — line 137
+- **function** `score_candidate()` — line 143
+- **function** `send_telegram_notification()` — line 269
+- **function** `send_discord_notification()` — line 274
+- **function** `create_github_issue()` — line 279
+- **function** `main()` — line 284
 
 ## `scripts/__init__.py`
 

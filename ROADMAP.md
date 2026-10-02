@@ -140,6 +140,13 @@ not make the paid-only entry point depend on combined application orchestration.
 - combined verification consumes package behavior directly
 - network/request behavior remains unchanged
 
+### Phase 4E.5 — package-owned delivery transports — complete
+
+- Telegram, Discord, and GitHub report delivery moved to `bountyscout.delivery`
+- root functions remain compatibility wrappers
+- combined app consumes package delivery directly
+- HTTP payloads, timeouts, request identity, auto-close behavior, and state semantics remain unchanged
+
 Broader Phase 4E remains open.
 
 ## Deferred result-object work

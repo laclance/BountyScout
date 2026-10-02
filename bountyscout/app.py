@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from time import sleep
 from typing import Any, cast
 
-from bountyscout import github, paid, paid_verification
+from bountyscout import delivery, github, paid, paid_verification
 import scout_bounties as bounty
 from bountyscout import reporting as reporting
 from bountyscout import run
@@ -957,9 +957,9 @@ def main() -> None:
         discover_strategic=discover_strategic,
         prefetch_discovery_searches=prefetch_discovery_searches,
         append_audit=add_audit,
-        send_telegram=bounty.send_telegram_notification,
-        send_discord=bounty.send_discord_notification,
-        send_github_report=bounty.create_github_issue,
+        send_telegram=delivery.send_telegram_notification,
+        send_discord=delivery.send_discord_notification,
+        send_github_report=delivery.create_github_issue,
         issue_lifecycle=lambda url: github.issue_lifecycle(url, token).status,
     )
     run.run_combined_scan(

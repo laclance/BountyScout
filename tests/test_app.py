@@ -11,7 +11,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 import bountyscout.app as scout
-from bountyscout import github
+from bountyscout import delivery, github
 from bountyscout import paid as paid_policy
 from bountyscout import paid_verification
 from bountyscout import state
@@ -2724,9 +2724,9 @@ class FormattingAndMainTests(unittest.TestCase):
                     ],
                 ),
             ),
-            patch.object(bounty, "send_telegram_notification", return_value=True) as tg,
-            patch.object(bounty, "send_discord_notification", return_value=False) as dc,
-            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(delivery, "send_telegram_notification", return_value=True) as tg,
+            patch.object(delivery, "send_discord_notification", return_value=False) as dc,
+            patch.object(delivery, "create_github_issue", return_value=True) as gh,
             patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
@@ -2783,7 +2783,7 @@ class FormattingAndMainTests(unittest.TestCase):
                     [],
                 ),
             ),
-            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(delivery, "create_github_issue", return_value=True) as gh,
             patch.object(state, "save_seen_state") as save,
             redirect_stdout(buf),
         ):
@@ -2814,7 +2814,7 @@ class FormattingAndMainTests(unittest.TestCase):
                 "discover_strategic",
                 return_value=([strategic], {}, [], []),
             ),
-            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(delivery, "create_github_issue", return_value=True) as gh,
             patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
@@ -2853,7 +2853,7 @@ class FormattingAndMainTests(unittest.TestCase):
                 "discover_strategic",
                 return_value=([strategic], {}, [], audit),
             ),
-            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(delivery, "create_github_issue", return_value=True) as gh,
             patch.object(state, "save_seen_state") as save,
             redirect_stdout(buf),
         ):
@@ -2876,7 +2876,7 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
-            patch.object(bounty, "create_github_issue", return_value=False),
+            patch.object(delivery, "create_github_issue", return_value=False),
             patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
@@ -2892,7 +2892,7 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
-            patch.object(bounty, "send_telegram_notification", return_value=True),
+            patch.object(delivery, "send_telegram_notification", return_value=True),
             patch.object(
                 state,
                 "save_seen_state",
@@ -2912,7 +2912,7 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
-            patch.object(bounty, "send_telegram_notification", return_value=False),
+            patch.object(delivery, "send_telegram_notification", return_value=False),
             patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
@@ -2984,7 +2984,7 @@ class FormattingAndMainTests(unittest.TestCase):
             ),
             patch.object(scout, "discover_paid", return_value=([new], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
-            patch.object(bounty, "send_telegram_notification", return_value=True),
+            patch.object(delivery, "send_telegram_notification", return_value=True),
             patch.object(
                 github,
                 "issue_lifecycle",
@@ -3014,7 +3014,7 @@ class FormattingAndMainTests(unittest.TestCase):
             ),
             patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
-            patch.object(bounty, "send_telegram_notification", return_value=False),
+            patch.object(delivery, "send_telegram_notification", return_value=False),
             patch.object(github, "issue_lifecycle") as lifecycle,
             patch.object(state, "save_seen_state") as save,
         ):
@@ -3042,7 +3042,7 @@ class FormattingAndMainTests(unittest.TestCase):
                     [],
                 ),
             ),
-            patch.object(bounty, "create_github_issue", return_value=True),
+            patch.object(delivery, "create_github_issue", return_value=True),
             patch.object(github, "issue_lifecycle") as lifecycle,
             patch.object(state, "save_seen_state") as save,
         ):
@@ -3243,7 +3243,7 @@ class CoverageGapTests(unittest.TestCase):
             patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([high, low], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
-            patch.object(bounty, "create_github_issue", return_value=True) as gh,
+            patch.object(delivery, "create_github_issue", return_value=True) as gh,
             patch.object(state, "save_seen_state"),
         ):
             scout.main()
@@ -3258,8 +3258,8 @@ class CoverageGapTests(unittest.TestCase):
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "discover_paid", return_value=([item_], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
-            patch.object(bounty, "send_telegram_notification") as tg,
-            patch.object(bounty, "create_github_issue") as gh,
+            patch.object(delivery, "send_telegram_notification") as tg,
+            patch.object(delivery, "create_github_issue") as gh,
             patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
