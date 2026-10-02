@@ -119,14 +119,14 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
     def test_latest_explicit_stance_wins(self) -> None:
-        hold = {
-            "body": "Please wait before implementing; this needs clarification.",
-            "author_association": "MEMBER",
-        }
-        ready = {
-            "body": "Clarification is complete. This is ready for implementation.",
-            "author_association": "MEMBER",
-        }
+        hold = comment(
+            body="Please wait before implementing; this needs clarification.",
+            author_association="MEMBER",
+        )
+        ready = comment(
+            body="Clarification is complete. This is ready for implementation.",
+            author_association="MEMBER",
+        )
 
         self.assertEqual(
             readiness.maintainer_readiness_comment_state(issue(), [hold, ready]),
