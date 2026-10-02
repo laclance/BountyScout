@@ -10,7 +10,7 @@ import json
 import re
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Mapping, MutableMapping
+from collections.abc import Callable, MutableMapping
 from datetime import datetime
 from threading import Lock
 from typing import Any, TypeVar, cast
@@ -78,7 +78,7 @@ def github_get(
 
 
 def issue_repo_and_number(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
 ) -> tuple[str | None, int | None]:
     """Extract owner/repo and issue number from a canonical GitHub issue URL."""
     url = str(item.get("html_url", ""))
@@ -105,7 +105,7 @@ def repo_metadata(repo: str, token: str | None) -> RepositoryMetadata:
 
 
 def issue_comments_checked(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
 ) -> tuple[list[GitHubComment], str | None]:
     """Fetch issue comments and distinguish source failure from a real empty thread."""
@@ -125,7 +125,7 @@ def issue_comments_checked(
 
 
 def issue_comments(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     token: str | None,
 ) -> list[GitHubComment]:
     """Compatibility helper returning an empty list when comment fetching fails."""
@@ -152,7 +152,7 @@ def contribution_guide(
 
 def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     """Fetch a GitHub issue object from its canonical issue URL."""
-    match = issue_repo_and_number({"html_url": str(url)})
+    match = issue_repo_and_number(GitHubIssue(html_url=str(url)))
     repo, number = match
     if not repo or not number:
         return None
