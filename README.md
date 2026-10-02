@@ -26,7 +26,7 @@ Production scanner implementation lives under the `bountyscout/` package, with f
 - `bountyscout/strategic/competition.py` — active-claim and implementation-PR competition checks.
 - `bountyscout/strategic/readiness.py` — pure maintainer-readiness and lifecycle policy.
 - `seen_bounties.json` — shared notification state.
-- `.github/workflows/bounty-scout.yml` — hourly runner.
+- `.github/workflows/oss-opportunity-scout.yml` — hourly runner.
 
 See `ARCHITECTURE.md` for data flow and module boundaries, `ROADMAP.md` for planned improvements, `AGENTS.md` for AI/human implementation rules, and `CODEBASE_MAP.md` for the generated structural index.
 

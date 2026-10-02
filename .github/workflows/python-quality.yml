@@ -14,7 +14,7 @@ on:
       - "Makefile"
       - "CODEBASE_MAP.md"
       - ".github/workflows/python-quality.yml"
-      - ".github/workflows/bounty-scout.yml"
+      - ".github/workflows/oss-opportunity-scout.yml"
 
 permissions:
   contents: read
