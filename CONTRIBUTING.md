@@ -33,10 +33,8 @@ make quality     # local quality gate
 
 ## Where changes belong
 
-- Keep upstream-compatible paid-bounty behavior in `scout_bounties.py` unless the change is intentionally fork-specific.
 - Put focused strategic policy in `bountyscout/strategic/`.
-- Keep root `opportunity_scout.py` as the thin stable executable entry point. `bountyscout.app` owns application/environment assembly and compatibility adapters; `bountyscout.run` owns the combined scan lifecycle.
-- Keep generic helper extraction from `scout_bounties.py` out of structure-only changes; that dependency cleanup is Phase 3B.
+- Keep root `opportunity_scout.py` as the thin stable executable entry point. `bountyscout.app` owns application/environment assembly and package adapters; `bountyscout.run` owns the combined scan lifecycle.
 - Keep pure policy separate from network I/O where practical.
 
 ## Tests

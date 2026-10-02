@@ -15,7 +15,6 @@ This file is the canonical working agreement for coding agents and human contrib
 - Python 3.11+.
 - Prefer the standard library unless a dependency has a clear maintenance payoff.
 - Ruff is the formatter/linter, mypy runs in strict mode, and coverage requires 100% statement and branch coverage.
-- `scout_bounties.py` stays close to the upstream paid-bounty scanner so upstream merges remain low-conflict.
 - Fork-owned implementation lives under `bountyscout/`; strategic policy lives under `bountyscout/strategic/`. Root `opportunity_scout.py` is only the stable executable shim.
 - Never weaken paid-bounty verification while changing strategic discovery.
 - Treat existing seen-state corruption conservatively: malformed, unreadable, or unsupported state must fail the run rather than silently becoming empty.
@@ -31,7 +30,7 @@ This file is the canonical working agreement for coding agents and human contrib
 - Give each function one clear responsibility. Prefer functions that fit comfortably on one screen; split a function when it mixes policy, I/O, parsing, scoring, or formatting.
 - Keep network and filesystem side effects at the edges. Put matching, scoring, normalization, and policy decisions in pure functions when practical.
 - New domain logic belongs in the smallest cohesive module that owns that concept. Leaf/domain modules must not import root `opportunity_scout.py` or reach back into `bountyscout.app`.
-- New package orchestration modules must not import root `scout_bounties.py`; keep transitional paid-scanner compatibility at an explicitly documented application edge or pass a narrow typed callable/value.
+- Package modules must not depend on root executable shims. Keep `opportunity_scout.py` thin and pass narrow typed callables/values across package boundaries when orchestration needs injection.
 - Use explicit type hints on function signatures and meaningful domain names. Prefer `Mapping` for read-only mapping inputs.
 - Put broadly shared stable mapping records and literals in `bountyscout/types.py`. Keep raw external JSON dynamic until validated, then prefer canonical domain types over repeated `dict[str, Any]` / `Mapping[str, Any]` interfaces.
 - Avoid new mutable global state. Static configuration constants are fine; shared runtime state needs an explicit reason and synchronization where applicable.

@@ -9,11 +9,14 @@ The scout runs hourly, ranks new opportunities, creates a GitHub issue report, a
 
 ## Architecture
 
-The paid scanner remains intentionally close to upstream, while fork-owned implementation lives under the `bountyscout/` package and focused strategic policy lives under `bountyscout/strategic/`:
+Production scanner implementation lives under the `bountyscout/` package, with focused strategic policy under `bountyscout/strategic/`:
 
-- `scout_bounties.py` — upstream-compatible paid bounty discovery and strict payment/competition filters.
 - `opportunity_scout.py` — stable root executable shim; `python opportunity_scout.py` remains the runtime command.
-- `bountyscout/app.py` — combined application orchestration and strategic scanner composition.
+- `bountyscout/app.py` — executable/application assembly and scanner composition.
+- `bountyscout/run.py` — combined scan lifecycle, delivery aggregation, and seen-state commit.
+- `bountyscout/paid.py` — paid-opportunity eligibility and payment-signal policy.
+- `bountyscout/paid_verification.py` — paid rejection and competition verification.
+- `bountyscout/delivery.py` — Telegram, Discord, and generated GitHub report delivery.
 - `bountyscout/github.py` — shared fork-owned GitHub JSON access and keyed per-scan cache fills.
 - `bountyscout/types.py` — canonical internal domain literals and mapping contracts.
 - `bountyscout/reporting.py` — GitHub queue reports, reject/audit summaries, and length-safe notification formatting.
@@ -24,8 +27,6 @@ The paid scanner remains intentionally close to upstream, while fork-owned imple
 - `bountyscout/strategic/readiness.py` — pure maintainer-readiness and lifecycle policy.
 - `seen_bounties.json` — shared notification state.
 - `.github/workflows/bounty-scout.yml` — hourly runner.
-
-`scout_bounties.py` remains separate for upstream compatibility. Generic GitHub issue/timestamp parsing is fork-owned in `bountyscout.github`; the root scanner keeps behavior-equivalent copies so it remains standalone.
 
 See `ARCHITECTURE.md` for data flow and module boundaries, `ROADMAP.md` for planned improvements, `AGENTS.md` for AI/human implementation rules, and `CODEBASE_MAP.md` for the generated structural index.
 

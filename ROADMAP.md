@@ -10,17 +10,15 @@ current runtime architecture.
 
 ## Product direction
 
-Both scanner entry points remain supported product capabilities:
+The supported runtime entry point is:
 
 ```bash
 python opportunity_scout.py
-python scout_bounties.py
 ```
 
-The repository may eventually stop being maintained as a fork of upstream
-BountyScout. Future work should therefore move reusable behavior toward canonical
-package ownership without making standalone paid-only execution depend on the
-combined opportunity-scout orchestrator.
+Paid and strategic scanning are package-owned. The repository may eventually stop
+being maintained as a fork of upstream BountyScout, so OSS independence cleanup
+removes obsolete compatibility surfaces before the project becomes standalone.
 
 ## Phase 4A — strong domain typing
 
@@ -65,7 +63,7 @@ improves readability and testability.
 ### Phase 4C.1 — strategic discovery orchestration — complete
 
 - `bountyscout.strategic.discovery` owns strategic source-pool collection, near-miss auditing, adaptive inspection selection, and deterministic pre-verification ranking
-- `bountyscout.app` retains compatibility wrappers and passes narrow paid-compatible callbacks rather than spreading the root `scout_bounties.py` dependency
+- `bountyscout.app` passes narrow paid-compatible callbacks between package-owned components
 - discovery queries, request budgets, ordering, and cache lifetime remain unchanged
 
 ### Phase 4C.2 — strategic verification orchestration — complete
@@ -77,11 +75,11 @@ improves readability and testability.
 ### Phase 4C.3 — combined run lifecycle — complete
 
 - `bountyscout.run` owns combined discovery coordination, final queue assembly, coverage accounting, delivery aggregation, and the transactional seen-state commit
-- `bountyscout.app.main()` is now a thin environment/callback assembly layer while remaining the transitional root paid-scanner compatibility edge
-- delivery/state semantics, Search budgets, cache lifetime, report lifecycle, and standalone paid-scanner behavior remain unchanged
-- root paid-scanner operations enter the run layer only through narrow typed callbacks
+- `bountyscout.app.main()` is now a thin environment/callback assembly layer
+- delivery/state semantics, Search budgets, cache lifetime, report lifecycle, and paid-lane behavior remain unchanged
+- paid operations enter the run layer only through narrow typed callbacks
 
-**Phase 4C is complete.** The remaining `bountyscout.app` responsibilities are intentional compatibility/application seams rather than another decomposition target.
+**Phase 4C is complete.** The remaining `bountyscout.app` responsibilities are intentional application seams rather than another decomposition target.
 
 ## Phase 4D — effort estimator decomposition — complete
 
@@ -97,67 +95,58 @@ regression-backed change.
 
 **Phase 4D is complete.**
 
-## Phase 4E — paid-scanner independence
+## Phase 4E — paid-scanner independence — complete
 
-Gradually reduce root `scout_bounties.py` ownership of reusable package behavior.
-The long-term direction may become:
-
-```text
-scout_bounties.py
-    ↓
-canonical package-owned paid scanner
-```
-
-The command `python scout_bounties.py` must remain fully supported throughout. Do
-not make the paid-only entry point depend on combined application orchestration.
+Move reusable paid-scanner behavior into canonical package ownership so production
+scanning no longer depends on a root compatibility module.
 
 ### Phase 4E.1 — package-owned USD-like reward parsing — complete
 
 - canonical USD-like amount parsing moved to `bountyscout.scoring`
-- root `scout_bounties.py` retains a thin compatibility wrapper
-- `bountyscout.scoring` no longer imports the root scanner
-- scoring behavior and standalone paid-scanner behavior remain unchanged
+- `bountyscout.scoring` owns the parsing behavior directly
+- scoring behavior remained unchanged
 
 ### Phase 4E.2 — package-owned paid eligibility policy — complete
 
-- `bountyscout.paid` now owns basic paid eligibility and issue-level payment-signal recognition
-- root symbols remain compatibility aliases/wrappers
+- `bountyscout.paid` owns basic paid eligibility and issue-level payment-signal recognition
 - combined scanning consumes the package policy directly
-- request behavior and standalone paid-scanner behavior are unchanged
+- request and paid-lane behavior remained unchanged
 
 ### Phase 4E.3 — package-owned GitHub Search transport — complete
 
-- canonical GitHub Issues Search request construction and normalization now live in `bountyscout.github`
+- canonical GitHub Issues Search request construction and normalization live in `bountyscout.github`
 - combined paid and strategic discovery consume package Search directly
-- root `search_github()` remains a compatibility wrapper over the package helper
-- queries, ordering, pacing, request budgets, and standalone paid behavior are unchanged
+- queries, ordering, pacing, and request budgets remained unchanged
 
 ### Phase 4E.4 — package-owned paid rejection/competition verification — complete
 
-- paid rejection precedence and root-compatible competition checks moved to `bountyscout.paid_verification`
-- root symbols remain compatibility aliases/wrappers
-- strategic competition no longer imports root
-- combined verification consumes package behavior directly
-- network/request behavior remains unchanged
+- paid rejection precedence and paid-compatible competition checks moved to `bountyscout.paid_verification`
+- strategic competition consumes package verification directly
+- network/request behavior remained unchanged
 
 ### Phase 4E.5 — package-owned delivery transports — complete
 
 - Telegram, Discord, and GitHub report delivery moved to `bountyscout.delivery`
-- root functions remain compatibility wrappers
-- combined app consumes package delivery directly
-- HTTP payloads, timeouts, request identity, auto-close behavior, and state semantics remain unchanged
+- the combined app consumes package delivery directly
+- HTTP payloads, timeouts, request identity, auto-close behavior, and state semantics remained unchanged
 
-### Phase 4E.6 — remove final package dependency on root scanner — complete
+### Phase 4E.6 — remove final package dependency on legacy root scanner — complete
 
-- the historical paid GitHub GET identity is now package-owned by `bountyscout.github.paid_github_get()`
-- root `github_get()` remains a thin compatibility wrapper and the root monkeypatch seam remains intact
-- the combined app no longer imports `scout_bounties`
-- production package code has zero root-scanner dependencies
-- standalone `python scout_bounties.py` remains supported with unchanged ranking/orchestration behavior
+- the historical paid GitHub GET request identity is package-owned by `bountyscout.github.paid_github_get()`
+- the combined app consumes package transport directly
+- production package code has zero legacy root-scanner dependencies
 
-**Phase 4E is complete.** All reusable behavior needed by package scanning is package-owned,
-`bountyscout/*` does not depend on `scout_bounties.py`, and the standalone paid command
-remains supported. Root-only legacy ranking/orchestration may remain standalone-owned.
+**Phase 4E is complete.** All reusable behavior needed by production scanning is
+package-owned.
+
+## OSS independence cleanup
+
+### Cleanup 1 — remove legacy root scanner — complete
+
+- remove the obsolete root compatibility scanner now that Phase 4E package ownership is complete
+- remove compatibility-only tests for that historical façade
+- keep `python opportunity_scout.py` as the supported root runtime entry point
+- preserve package behavior, coverage, and quality gates
 
 ## Deferred result-object work
 
