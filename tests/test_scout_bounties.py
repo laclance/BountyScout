@@ -511,7 +511,6 @@ class MainTests(unittest.TestCase):
 
         save.assert_not_called()
 
-
     def test_main_quiet_successful_scan_performs_canonical_maintenance(self) -> None:
         old_url = "https://github.com/acme/widget/issues/99"
         with (
