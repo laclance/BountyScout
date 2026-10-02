@@ -219,6 +219,9 @@ class ReportAssemblyTests(unittest.TestCase):
             ],
             reject_counts={"active claim by @dev": 3, "not ready": 1},
         )
+        self.assertTrue(body.startswith("<!-- bountyscout-report: automated; actionable: false -->"))
+        self.assertIn("Automated BountyScout scan report — not a development task.", body)
+        self.assertIn("Do not claim this report or open a pull request to resolve it.", body)
         self.assertIn("career score measures long-term value", body)
         self.assertIn("### Verification summary", body)
         self.assertIn("**Filtered candidates:** 4", body)
@@ -248,11 +251,11 @@ class ReportAssemblyTests(unittest.TestCase):
     def test_report_title_pluralizes(self) -> None:
         self.assertEqual(
             reporting.github_report_title(1),
-            "🎯 OSS Opportunity Queue: 1 new verified candidate",
+            "📊 SCAN REPORT — OSS Opportunity Queue: 1 new verified candidate",
         )
         self.assertEqual(
             reporting.github_report_title(2),
-            "🎯 OSS Opportunity Queue: 2 new verified candidates",
+            "📊 SCAN REPORT — OSS Opportunity Queue: 2 new verified candidates",
         )
 
 
