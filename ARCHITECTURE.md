@@ -46,6 +46,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
 | `bountyscout/app.py` | Combined application orchestration plus strategic discovery, verification, and delivery | Canonical fork-owned application implementation |
 | `bountyscout/github.py` | Fork-owned GitHub JSON transport, generic issue/timestamp parsing, and keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
+| `bountyscout/types.py` | Canonical static domain literals and mapping records shared across package-owned scanner code | Dependency-light typing vocabulary only; raw external JSON remains dynamic until validated |
 | `bountyscout/reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
 | `bountyscout/scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration, including trusted maintainer-history signals |
 | `bountyscout/sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
@@ -71,6 +72,7 @@ bountyscout.app
     |-- bountyscout.strategic.competition
     |-- bountyscout.strategic.readiness
 
+bountyscout.types -X-> package policy / orchestration modules
 bountyscout.github -X-> scout_bounties.py
 bountyscout.sources --> bountyscout.github
 bountyscout.scoring --> bountyscout.github
@@ -86,7 +88,7 @@ package/domain modules -X-> bountyscout.app
 scout_bounties.py       -X-> opportunity_scout.py
 ```
 
-New leaf modules should follow the same rule. The orchestration layer may compose domain modules; domain modules should not reach back into the orchestrator.
+New leaf modules should follow the same rule. The orchestration layer may compose domain modules; domain modules should not reach back into the orchestrator. `bountyscout.types` is deliberately dependency-light so policy, scoring, reporting, and orchestration can share domain contracts without creating circular imports.
 
 ## Refactoring direction
 
