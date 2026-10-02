@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from bountyscout import state
+from bountyscout import github as shared_github, state
 
 # Configuration
 MAX_COMMENTS = 25  # Filter out overcrowded threads
@@ -618,6 +618,17 @@ def main() -> None:
 
     if not new_bounties:
         print("No new clean paid bounty opportunities found.")
+        scan_time = datetime.now(timezone.utc)
+        maintenance = state.maintain_seen_state(
+            seen_state,
+            scan_time,
+            lambda url: shared_github.issue_lifecycle(url, github_token).status,
+        )
+        if maintenance.checked_urls:
+            try:
+                state.save_seen_state(maintenance.state)
+            except state.SeenStateSaveError as exc:
+                print(f"Error saving state file: {exc}")
         return
 
     print(f"Discovered {len(new_bounties)} NEW clean paid bounty opportunities!")
@@ -700,12 +711,18 @@ def main() -> None:
         )
 
     if notification_attempted and notification_succeeded:
-        seen_state.mark_reported_many(
+        maintenance = state.maintain_seen_state(
+            seen_state,
+            scan_time,
+            lambda url: shared_github.issue_lifecycle(url, github_token).status,
+        )
+        next_state = maintenance.state
+        next_state.mark_reported_many(
             new_bounty_urls,
             reported_at=scan_time.isoformat().replace("+00:00", "Z"),
         )
         try:
-            state.save_seen_state(seen_state)
+            state.save_seen_state(next_state)
         except state.SeenStateSaveError as exc:
             print(f"Error saving state file: {exc}")
         else:
