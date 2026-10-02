@@ -52,8 +52,8 @@ class SeenState:
     def contains(self, url: str) -> bool:
         return url in self._entries
 
-    def __contains__(self, url: str) -> bool:
-        return self.contains(url)
+    def __contains__(self, url: object) -> bool:
+        return url in self._entries
 
     def urls(self) -> set[str]:
         return set(self._entries)
