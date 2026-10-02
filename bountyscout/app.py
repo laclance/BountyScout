@@ -403,9 +403,7 @@ def build_candidate(
     )
 
 
-def refresh_issue(
-    item: GitHubIssue, token: str | None
-) -> tuple[GitHubIssue | None, str | None]:
+def refresh_issue(item: GitHubIssue, token: str | None) -> tuple[GitHubIssue | None, str | None]:
     repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return None, "could not identify repository/issue number"
