@@ -374,15 +374,72 @@ class NotificationTests(unittest.TestCase):
         req = self._assert_post(scout.send_discord_notification, "https://hook", "hello")
         self.assertIn(b'"content": "hello"', req.data)
 
-        req = self._assert_post(
-            scout.create_github_issue,
-            "me/repo",
-            "tok",
-            "title",
-            "body",
+    def test_github_issue_report_is_closed_not_planned(self) -> None:
+        created = FakeResponse(
+            b'{"url": "https://api.github.com/repos/me/repo/issues/42"}'
         )
-        self.assertIn(b'"bounty-alert"', req.data)
-        self.assertEqual(req.headers["Authorization"], "Bearer tok")
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            side_effect=[created, FakeResponse()],
+        ) as opened:
+            self.assertTrue(
+                scout.create_github_issue(
+                    "me/repo",
+                    "tok",
+                    "title",
+                    "body",
+                )
+            )
+
+        self.assertEqual(opened.call_count, 2)
+        create_req = opened.call_args_list[0].args[0]
+        close_req = opened.call_args_list[1].args[0]
+        self.assertEqual(create_req.method, "POST")
+        self.assertIn(b'"bounty-alert"', create_req.data)
+        self.assertEqual(create_req.headers["Authorization"], "Bearer tok")
+        self.assertEqual(close_req.method, "PATCH")
+        self.assertEqual(
+            close_req.full_url,
+            "https://api.github.com/repos/me/repo/issues/42",
+        )
+        self.assertIn(b'"state": "closed"', close_req.data)
+        self.assertIn(b'"state_reason": "not_planned"', close_req.data)
+
+    def test_github_issue_report_requires_created_issue_url(self) -> None:
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            return_value=FakeResponse(b"{}"),
+        ) as opened:
+            self.assertFalse(
+                scout.create_github_issue("me/repo", "tok", "title", "body")
+            )
+        opened.assert_called_once()
+
+    def test_github_issue_report_rejects_non_object_create_response(self) -> None:
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            return_value=FakeResponse(b"[]"),
+        ) as opened:
+            self.assertFalse(
+                scout.create_github_issue("me/repo", "tok", "title", "body")
+            )
+        opened.assert_called_once()
+
+    def test_github_issue_report_fails_when_auto_close_fails(self) -> None:
+        created = FakeResponse(
+            b'{"url": "https://api.github.com/repos/me/repo/issues/42"}'
+        )
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            side_effect=[created, OSError("close failed")],
+        ):
+            self.assertFalse(
+                scout.create_github_issue("me/repo", "tok", "title", "body")
+            )
 
     def test_notification_failures(self) -> None:
         with patch.object(urllib.request, "urlopen", side_effect=OSError("x")):
