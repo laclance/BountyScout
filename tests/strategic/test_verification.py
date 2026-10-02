@@ -234,9 +234,7 @@ class StrategicVerificationTests(unittest.TestCase):
         )
 
     def test_rejection_examples_remain_bounded_to_twelve(self) -> None:
-        items = [
-            issue(html_url=f"https://github.com/g/g/issues/{index}") for index in range(1, 14)
-        ]
+        items = [issue(html_url=f"https://github.com/g/g/issues/{index}") for index in range(1, 14)]
         result = verification.verify_strategic_selection(
             selection({"g/g": [row(item_) for item_ in items]}),
             lambda _: self.fail("preflight-rejected rows must not invoke deep verification"),
