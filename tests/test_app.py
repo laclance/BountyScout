@@ -14,6 +14,7 @@ import bountyscout.app as scout
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic import competition as competition_policy
+from bountyscout.types import RejectionRecord
 from tests.helpers import FakeResponse
 
 
@@ -1994,7 +1995,7 @@ class VerificationTests(unittest.TestCase):
 
     def test_add_reject_caps_examples(self) -> None:
         counts: dict[str, int] = {}
-        examples: list[dict[str, Any]] = []
+        examples: list[RejectionRecord] = []
         for i in range(15):
             scout.add_reject(counts, examples, {"html_url": str(i), "title": str(i)}, "why")
         self.assertEqual(counts["why"], 15)
@@ -2151,7 +2152,7 @@ class DiscoveryTests(unittest.TestCase):
         )
         self.assertFalse(scout.possible_miss_signal(detection_tracker))
 
-        audit: list[dict[str, Any]] = []
+        audit: list[RejectionRecord] = []
         with patch.object(scout, "STRATEGIC_AUDIT_LIMIT", 2):
             scout.add_audit(audit, strong, "one")
             scout.add_audit(audit, strong, "two")
