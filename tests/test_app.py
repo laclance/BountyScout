@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import bountyscout.app as scout
 from bountyscout import github
+from bountyscout import state
 import scout_bounties as bounty
 from bountyscout.strategic import competition as competition_policy
 from bountyscout.types import (
@@ -2924,7 +2925,7 @@ class FormattingAndMainTests(unittest.TestCase):
         env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/repo"}
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "prefetch_discovery_searches", side_effect=prefetch),
             patch.object(scout, "discover_paid", side_effect=paid) as paid_discovery,
             patch.object(scout, "discover_strategic", side_effect=strategic_discovery) as strategic,
@@ -2935,10 +2936,25 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertIs(paid_discovery.call_args.args[4], paid_prefetch)
         self.assertIs(strategic.call_args.args[5], strategic_prefetch)
 
+    def test_main_state_load_error_stops_before_discovery(self) -> None:
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(
+                state,
+                "load_seen_state",
+                side_effect=state.SeenStateLoadError("corrupt state"),
+            ),
+            patch.object(scout, "discover_paid") as discover_paid,
+        ):
+            with self.assertRaises(state.SeenStateLoadError):
+                scout.main()
+
+        discover_paid.assert_not_called()
+
     def test_main_no_queue(self) -> None:
         with (
             patch.dict(os.environ, {}, clear=True),
-            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "discover_paid", return_value=([], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             io.StringIO() as buf,
@@ -2974,7 +2990,7 @@ class FormattingAndMainTests(unittest.TestCase):
         }
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(state, "load_seen_state", return_value=state.SeenState.from_urls(["old"])),
             patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([low, high], {"r1": 1}, [reject])),
             patch.object(
@@ -2996,7 +3012,7 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(bounty, "send_telegram_notification", return_value=True) as tg,
             patch.object(bounty, "send_discord_notification", return_value=False) as dc,
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
-            patch.object(bounty, "save_seen_bounties", return_value=True) as save,
+            patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
         tg.assert_called_once()
@@ -3035,7 +3051,7 @@ class FormattingAndMainTests(unittest.TestCase):
         buf = io.StringIO()
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(state, "load_seen_state", return_value=state.SeenState.from_urls(["old"])),
             patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([], {}, [])),
             patch.object(
@@ -3053,7 +3069,7 @@ class FormattingAndMainTests(unittest.TestCase):
                 ),
             ),
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
-            patch.object(bounty, "save_seen_bounties") as save,
+            patch.object(state, "save_seen_state") as save,
             redirect_stdout(buf),
         ):
             scout.main()
@@ -3071,7 +3087,7 @@ class FormattingAndMainTests(unittest.TestCase):
         strategic = candidate(paid=False)
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(state, "load_seen_state", return_value=state.SeenState.from_urls(["old"])),
             patch.object(
                 scout,
                 "prefetch_discovery_searches",
@@ -3084,7 +3100,7 @@ class FormattingAndMainTests(unittest.TestCase):
                 return_value=([strategic], {}, [], []),
             ),
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
-            patch.object(bounty, "save_seen_bounties") as save,
+            patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
 
@@ -3114,7 +3130,7 @@ class FormattingAndMainTests(unittest.TestCase):
         strategic = candidate(paid=False)
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(bounty, "load_seen_bounties", return_value={"old"}),
+            patch.object(state, "load_seen_state", return_value=state.SeenState.from_urls(["old"])),
             patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([], {}, [])),
             patch.object(
@@ -3123,7 +3139,7 @@ class FormattingAndMainTests(unittest.TestCase):
                 return_value=([strategic], {}, [], audit),
             ),
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
-            patch.object(bounty, "save_seen_bounties") as save,
+            patch.object(state, "save_seen_state") as save,
             redirect_stdout(buf),
         ):
             scout.main()
@@ -3136,16 +3152,53 @@ class FormattingAndMainTests(unittest.TestCase):
         save.assert_not_called()
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
 
+    def test_main_github_delivery_failure_does_not_advance_state(self) -> None:
+        paid = candidate()
+        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/BountyScout"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
+            patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
+            patch.object(bounty, "create_github_issue", return_value=False),
+            patch.object(state, "save_seen_state") as save,
+        ):
+            scout.main()
+
+        save.assert_not_called()
+
+    def test_main_state_save_failure_is_reported(self) -> None:
+        paid = candidate()
+        env = {"TELEGRAM_BOT_TOKEN": "tb", "TELEGRAM_CHAT_ID": "chat"}
+        buf = io.StringIO()
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
+            patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
+            patch.object(bounty, "send_telegram_notification", return_value=True),
+            patch.object(
+                state,
+                "save_seen_state",
+                side_effect=state.SeenStateSaveError("save failed"),
+            ),
+            redirect_stdout(buf),
+        ):
+            scout.main()
+
+        self.assertIn("Error saving state file: save failed", buf.getvalue())
+
     def test_main_no_delivery_does_not_save(self) -> None:
         paid = candidate()
         env = {"TELEGRAM_BOT_TOKEN": "tb", "TELEGRAM_CHAT_ID": "chat"}
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "discover_paid", return_value=([paid], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             patch.object(bounty, "send_telegram_notification", return_value=False),
-            patch.object(bounty, "save_seen_bounties") as save,
+            patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
             save.assert_not_called()
@@ -3339,12 +3392,12 @@ class CoverageGapTests(unittest.TestCase):
         env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/repo"}
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "prefetch_discovery_searches", return_value=([], [])),
             patch.object(scout, "discover_paid", return_value=([high, low], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             patch.object(bounty, "create_github_issue", return_value=True) as gh,
-            patch.object(bounty, "save_seen_bounties", return_value=True),
+            patch.object(state, "save_seen_state"),
         ):
             scout.main()
         body = gh.call_args.args[3]
@@ -3355,12 +3408,12 @@ class CoverageGapTests(unittest.TestCase):
         env = {"TELEGRAM_BOT_TOKEN": "tb", "GITHUB_TOKEN": "tok"}
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(bounty, "load_seen_bounties", return_value=set()),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "discover_paid", return_value=([item_], {}, [])),
             patch.object(scout, "discover_strategic", return_value=([], {}, [], [])),
             patch.object(bounty, "send_telegram_notification") as tg,
             patch.object(bounty, "create_github_issue") as gh,
-            patch.object(bounty, "save_seen_bounties") as save,
+            patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
         tg.assert_not_called()

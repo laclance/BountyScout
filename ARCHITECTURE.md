@@ -47,13 +47,14 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `bountyscout/app.py` | Combined application orchestration plus strategic discovery, verification, and delivery | Canonical fork-owned application implementation |
 | `bountyscout/github.py` | Fork-owned GitHub JSON transport, generic issue/timestamp parsing, and keyed per-scan cache-fill primitives | No scanner policy; source refreshes stay uncached while stable repo/guide lookups may be cached |
 | `bountyscout/types.py` | Canonical static domain literals and mapping records shared across package-owned scanner code | Dependency-light typing vocabulary only; raw external JSON remains dynamic until validated |
+| `bountyscout/state.py` | Canonical typed, versioned seen-state parsing, legacy migration, logical membership/mutation, and deterministic atomic persistence | Local-file state only; branch-agnostic and fail-closed for malformed or unsupported existing state |
 | `bountyscout/reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
 | `bountyscout/scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration, including trusted maintainer-history signals |
 | `bountyscout/sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
 | `bountyscout/strategic/claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
 | `bountyscout/strategic/competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses local evidence before timeline I/O; never imports `opportunity_scout.py` |
 | `bountyscout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
-| `seen_bounties.json` | Notification state | Only mark items seen after a notification path succeeds |
+| `seen_bounties.json` | Local runtime seen-state file | Version 2 is canonical; legacy URL lists load losslessly and rewrite as version 2 on the next successful save |
 | `.github/workflows/bounty-scout.yml` | Scheduled scanner execution | Runtime workflow, not the quality gate |
 | `.github/workflows/python-quality.yml` | Formatting, lint, map, typing, tests, coverage | Must stay fast enough for normal PR iteration |
 
@@ -64,6 +65,7 @@ opportunity_scout.py --> bountyscout.app
 
 bountyscout.app
     |-- bountyscout.github
+    |-- bountyscout.state
     |-- scout_bounties.py
     |-- bountyscout.reporting
     |-- bountyscout.scoring
@@ -85,6 +87,7 @@ bountyscout.strategic.readiness --> bountyscout.strategic.claims
 
 package/domain modules -X-> opportunity_scout.py
 package/domain modules -X-> bountyscout.app
+scout_bounties.py --> bountyscout.state
 scout_bounties.py       -X-> opportunity_scout.py
 ```
 
@@ -103,6 +106,9 @@ Phase 3B makes generic GitHub issue parsing and timestamp parsing fork-owned in 
 - Repository/network failures should degrade coverage explicitly rather than silently turning into positive verification.
 - Strategic deep verification is rate-budgeted: inspect broadly, verify in rank order, and stop only when remaining candidates cannot displace the kept set under the known verification-score uplift bound. Final strategic effort may use the already-fetched trusted maintainer discussion to recognize implementation-history complexity; preview scoring stays source-only and this calibration must not add network fan-out.
 - Comment-fetch failure must remain distinguishable from a real empty discussion thread; strategic verification fetches each issue comment thread once through the checked path and reuses that evidence for payment detection, readiness, competition, and final scoring. Failed implementation-PR timeline checks are also verification failures rather than evidence of no competition. Strategic verification does not use per-issue GitHub Search queries, preserving Search quota for discovery. Incomplete verification runs warn prominently and do not advance seen-state.
+- Seen-state loading fails closed for malformed JSON, malformed schema, unsupported versions, or unreadable existing files; only a genuinely absent file means empty first-run state. Legacy list entries remain logically seen and migrate with unknown lifecycle timestamps represented as `null`.
+- `bountyscout.state` knows only the local state file. Scheduled production persistence remains the workflow's `scout-state` responsibility, and Python state code contains no Git branch/worktree logic.
+- Seen-state advances only after a configured delivery succeeds, and combined runs with incomplete discovery/verification coverage still do not advance it. A GitHub report whose auto-close step fails remains a failed delivery for this transaction.
 - Tests must cover scanner policy without live network access.
 - Ruff, strict mypy, and 100% statement + branch coverage are repository-wide quality gates.
 

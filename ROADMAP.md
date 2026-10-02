@@ -33,19 +33,25 @@ Broad result-object conversion is intentionally deferred.
 
 ## Phase 4B — state lifecycle
 
-Evolve seen-state deliberately rather than treating it as an unbounded permanent list:
+### Phase 4B.1 — canonical versioned state — complete
 
-- introduce a versioned seen-state schema
-- migrate backward-compatibly from the current JSON list
-- keep `scout-state` as authoritative scheduled-workflow persistence
+- `bountyscout.state` owns typed seen-state parsing, logical access, mutation, and persistence
+- schema version 2 stores per-URL lifecycle fields without inventing legacy timestamps
+- the historical JSON URL list remains loadable and migrates on the next successful save
+- malformed, unreadable, or unsupported existing state fails closed instead of becoming empty
+- `scout-state` remains authoritative scheduled-workflow persistence
+- Python remains branch-agnostic and local execution still uses ordinary `seen_bounties.json`
+
+### Phase 4B.2 — bounded retention and compaction
+
 - add bounded revalidation and compaction
 - avoid blind TTL expiration
 - prune only with safe lifecycle evidence
 - allow reopened opportunities to become eligible again where appropriate
-- clean up legacy generated scan reports from before the current auto-close lifecycle
 
-The package/domain model should remain unaware of Git branches. Local execution should
-continue to treat the state file as ordinary local data.
+### Phase 4B.3 — legacy generated-report cleanup
+
+- clean up legacy generated scan reports from before the current auto-close lifecycle
 
 ## Phase 4C — app decomposition
 

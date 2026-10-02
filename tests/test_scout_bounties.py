@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import io
-import json
 import os
 import urllib.request
 from pathlib import Path
@@ -10,9 +9,10 @@ import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
-from unittest.mock import mock_open, patch
+from unittest.mock import patch
 
 import scout_bounties as scout
+from bountyscout import state
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
@@ -42,41 +42,6 @@ class FakeResponse:
 
     def read(self) -> bytes:
         return self.body
-
-
-class StateTests(unittest.TestCase):
-    def test_load_missing_returns_empty(self) -> None:
-        with patch.object(os.path, "exists", return_value=False):
-            self.assertEqual(scout.load_seen_bounties(), set())
-
-    def test_load_list_returns_set(self) -> None:
-        with (
-            patch.object(os.path, "exists", return_value=True),
-            patch("builtins.open", mock_open(read_data='["b", "a"]')),
-        ):
-            self.assertEqual(scout.load_seen_bounties(), {"a", "b"})
-
-    def test_load_non_list_and_bad_json_return_empty(self) -> None:
-        with (
-            patch.object(os.path, "exists", return_value=True),
-            patch("builtins.open", mock_open(read_data='{"x": 1}')),
-        ):
-            self.assertEqual(scout.load_seen_bounties(), set())
-        with (
-            patch.object(os.path, "exists", return_value=True),
-            patch("builtins.open", mock_open(read_data="{")),
-        ):
-            self.assertEqual(scout.load_seen_bounties(), set())
-
-    def test_save_success_sorts_and_failure_returns_false(self) -> None:
-        handle = mock_open()
-        with patch("builtins.open", handle):
-            self.assertTrue(scout.save_seen_bounties({"b", "a"}))
-        written = "".join(call.args[0] for call in handle().write.call_args_list)
-        self.assertEqual(json.loads(written), ["a", "b"])
-
-        with patch("builtins.open", side_effect=OSError("nope")):
-            self.assertFalse(scout.save_seen_bounties({"a"}))
 
 
 class HttpTests(unittest.TestCase):
@@ -442,7 +407,7 @@ class MainTests(unittest.TestCase):
     def test_main_no_candidates(self) -> None:
         with (
             patch.dict(os.environ, {}, clear=True),
-            patch.object(scout, "load_seen_bounties", return_value=set()),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "search_github", return_value={"items": []}),
             io.StringIO() as buf,
             redirect_stdout(buf),
@@ -462,7 +427,7 @@ class MainTests(unittest.TestCase):
         search_results = {"items": [item, item]}
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(scout, "load_seen_bounties", return_value=set()),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "search_github", return_value=search_results),
             patch.object(
                 scout,
@@ -473,13 +438,15 @@ class MainTests(unittest.TestCase):
             patch.object(scout, "send_telegram_notification", return_value=True) as tg,
             patch.object(scout, "send_discord_notification", return_value=True) as dc,
             patch.object(scout, "create_github_issue", return_value=True) as gh,
-            patch.object(scout, "save_seen_bounties", return_value=True) as save,
+            patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
             tg.assert_called_once()
             dc.assert_called_once()
             gh.assert_called_once()
-            save.assert_called_once_with({item["html_url"]})
+            save.assert_called_once()
+            saved_state = save.call_args.args[0]
+            self.assertTrue(saved_state.contains(item["html_url"]))
 
     def test_main_rejected_seen_and_failed_delivery_do_not_save(self) -> None:
         seen_item = issue(html_url="https://github.com/acme/widget/issues/1")
@@ -495,15 +462,54 @@ class MainTests(unittest.TestCase):
 
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(scout, "load_seen_bounties", return_value={seen_item["html_url"]}),
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([seen_item["html_url"]]),
+            ),
             patch.object(scout, "search_github", return_value=results),
             patch.object(scout, "candidate_rejection_reason", side_effect=rejection),
             patch.object(scout, "fetch_repo_metadata", return_value={}),
             patch.object(scout, "send_telegram_notification", return_value=False),
-            patch.object(scout, "save_seen_bounties") as save,
+            patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
             save.assert_not_called()
+
+    def test_main_state_load_error_stops_before_discovery(self) -> None:
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(
+                state,
+                "load_seen_state",
+                side_effect=state.SeenStateLoadError("corrupt state"),
+            ),
+            patch.object(scout, "search_github") as search,
+        ):
+            with self.assertRaises(state.SeenStateLoadError):
+                scout.main()
+
+        search.assert_not_called()
+
+    def test_main_github_delivery_failure_does_not_advance_state(self) -> None:
+        item = issue(comments=0)
+        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/BountyScout"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(scout, "search_github", return_value={"items": [item]}),
+            patch.object(
+                scout,
+                "candidate_rejection_reason",
+                return_value=(None, "payment term + amount: $100"),
+            ),
+            patch.object(scout, "fetch_repo_metadata", return_value={}),
+            patch.object(scout, "create_github_issue", return_value=False),
+            patch.object(state, "save_seen_state") as save,
+        ):
+            scout.main()
+
+        save.assert_not_called()
 
 
 class CoverageGapTests(unittest.TestCase):
@@ -535,7 +541,7 @@ class CoverageGapTests(unittest.TestCase):
         env = {"DISCORD_WEBHOOK_URL": "https://hook"}
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(scout, "load_seen_bounties", return_value=set()),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "search_github", return_value={"items": [dirty, first, second]}),
             patch.object(
                 scout,
@@ -544,7 +550,11 @@ class CoverageGapTests(unittest.TestCase):
             ),
             patch.object(scout, "fetch_repo_metadata", return_value={}) as meta,
             patch.object(scout, "send_discord_notification", return_value=True),
-            patch.object(scout, "save_seen_bounties", return_value=False) as save,
+            patch.object(
+                state,
+                "save_seen_state",
+                side_effect=state.SeenStateSaveError("save failed"),
+            ) as save,
         ):
             scout.main()
         meta.assert_called_once_with("acme/widget", None)
@@ -555,7 +565,7 @@ class CoverageGapTests(unittest.TestCase):
         env = {"TELEGRAM_BOT_TOKEN": "tb", "DISCORD_WEBHOOK_URL": "https://hook"}
         with (
             patch.dict(os.environ, env, clear=True),
-            patch.object(scout, "load_seen_bounties", return_value=set()),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(scout, "search_github", return_value={"items": [item_]}),
             patch.object(
                 scout,
@@ -565,7 +575,7 @@ class CoverageGapTests(unittest.TestCase):
             patch.object(scout, "fetch_repo_metadata", return_value={}),
             patch.object(scout, "send_telegram_notification") as tg,
             patch.object(scout, "send_discord_notification", return_value=False),
-            patch.object(scout, "save_seen_bounties") as save,
+            patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
         tg.assert_not_called()

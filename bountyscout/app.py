@@ -8,6 +8,7 @@ from time import monotonic, sleep
 from typing import Any, cast
 
 from bountyscout import github
+from bountyscout import state
 import scout_bounties as bounty
 from bountyscout import reporting
 from bountyscout import scoring
@@ -1274,7 +1275,8 @@ def discover_strategic(
 def main() -> None:
     token = os.environ.get("GITHUB_TOKEN")
     repo_fullname = os.environ.get("GITHUB_REPOSITORY")
-    seen = bounty.load_seen_bounties()
+    seen_state = state.load_seen_state()
+    seen = seen_state.urls()
     repo_cache: dict[str, RepositoryMetadata] = {}
     guide_cache: dict[str, str | None] = {}
 
@@ -1362,7 +1364,8 @@ def main() -> None:
         print("No new verified OSS opportunities found.")
         return
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    scan_time = datetime.now(timezone.utc)
+    now = scan_time.strftime("%Y-%m-%d %H:%M UTC")
     message = reporting.notification_message(queue, now, warning=coverage_warning)
 
     attempted = False
@@ -1410,8 +1413,14 @@ def main() -> None:
         )
 
     if attempted and delivered and coverage_warning is None:
-        seen.update(x["url"] for x in queue)
-        bounty.save_seen_bounties(seen)
+        seen_state.mark_reported_many(
+            (x["url"] for x in queue),
+            reported_at=scan_time.isoformat().replace("+00:00", "Z"),
+        )
+        try:
+            state.save_seen_state(seen_state)
+        except state.SeenStateSaveError as exc:
+            print(f"Error saving state file: {exc}")
     elif attempted and delivered:
         print("Verification coverage incomplete; state was not updated.")
     else:
