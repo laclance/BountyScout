@@ -12,7 +12,7 @@ from typing import Any, Literal
 from unittest.mock import patch
 
 import scout_bounties as scout
-from bountyscout import state
+from bountyscout import github, state
 
 
 def issue(**overrides: Any) -> dict[str, Any]:
@@ -522,9 +522,9 @@ class MainTests(unittest.TestCase):
             ),
             patch.object(scout, "search_github", return_value={"items": []}),
             patch.object(
-                scout.shared_github,
+                github,
                 "issue_lifecycle",
-                return_value=scout.shared_github.IssueLifecycleResult("open"),
+                return_value=github.IssueLifecycleResult("open"),
             ) as lifecycle,
             patch.object(state, "save_seen_state") as save,
         ):
@@ -550,9 +550,9 @@ class MainTests(unittest.TestCase):
             ),
             patch.object(scout, "search_github", return_value={"items": []}),
             patch.object(
-                scout.shared_github,
+                github,
                 "issue_lifecycle",
-                return_value=scout.shared_github.IssueLifecycleResult("failed"),
+                return_value=github.IssueLifecycleResult("failed"),
             ),
             patch.object(
                 state,
@@ -585,9 +585,9 @@ class MainTests(unittest.TestCase):
             patch.object(scout, "fetch_repo_metadata", return_value={}),
             patch.object(scout, "send_discord_notification", return_value=True),
             patch.object(
-                scout.shared_github,
+                github,
                 "issue_lifecycle",
-                return_value=scout.shared_github.IssueLifecycleResult("closed"),
+                return_value=github.IssueLifecycleResult("closed"),
             ),
             patch.object(state, "save_seen_state") as save,
         ):
@@ -616,7 +616,7 @@ class MainTests(unittest.TestCase):
             ),
             patch.object(scout, "fetch_repo_metadata", return_value={}),
             patch.object(scout, "send_discord_notification", return_value=False),
-            patch.object(scout.shared_github, "issue_lifecycle") as lifecycle,
+            patch.object(github, "issue_lifecycle") as lifecycle,
             patch.object(state, "save_seen_state") as save,
         ):
             scout.main()
