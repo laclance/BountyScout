@@ -61,85 +61,77 @@
       "reported_at": null,
       "last_checked_at": "2026-10-02T09:07:41.324263Z"
     },
-    "https://github.com/1Hive/gardens-v2/issues/928": {
-      "reported_at": null,
-      "last_checked_at": null
-    },
     "https://github.com/1btc-news/news-client/issues/29": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/1f916-ai/1f916/issues/126": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/12": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/151": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/18": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/37": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/38": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/39": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/40": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/41": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/42": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/5": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/55": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/56": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2510034127qq-wq/BountyScout/issues/6": {
       "reported_at": null,
-      "last_checked_at": null
-    },
-    "https://github.com/26zl/cybersec-toolkit/issues/50": {
-      "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/2lll5/TentOfTrials/issues/1": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/317787106/java-tron/issues/85": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/3a7i3/crypto-ia-terminal/issues/283": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T16:00:02.700545Z"
     },
     "https://github.com/3a7i3/crypto-ia-terminal/issues/284": {
       "reported_at": null,
@@ -21225,6 +21217,10 @@
       "reported_at": null,
       "last_checked_at": null
     },
+    "https://github.com/argoproj/argo-cd/issues/29969": {
+      "reported_at": "2026-10-02T16:00:02.700545Z",
+      "last_checked_at": null
+    },
     "https://github.com/argotorg/fe/issues/1538": {
       "reported_at": null,
       "last_checked_at": null
@@ -25939,6 +25935,10 @@
     },
     "https://github.com/cilium/cilium/issues/47713": {
       "reported_at": null,
+      "last_checked_at": null
+    },
+    "https://github.com/cilium/cilium/issues/48420": {
+      "reported_at": "2026-10-02T16:00:02.700545Z",
       "last_checked_at": null
     },
     "https://github.com/cilium/cilium/issues/48706": {
@@ -31909,6 +31909,14 @@
       "reported_at": null,
       "last_checked_at": null
     },
+    "https://github.com/hashicorp/terraform/issues/39317": {
+      "reported_at": "2026-10-02T16:00:02.700545Z",
+      "last_checked_at": null
+    },
+    "https://github.com/hashicorp/terraform/issues/39320": {
+      "reported_at": "2026-10-02T16:00:02.700545Z",
+      "last_checked_at": null
+    },
     "https://github.com/hassanebry/serverless-full-stack-apps-azure-sql/issues/19": {
       "reported_at": null,
       "last_checked_at": null
@@ -37589,6 +37597,10 @@
       "reported_at": null,
       "last_checked_at": null
     },
+    "https://github.com/open-telemetry/opentelemetry-js/issues/7146": {
+      "reported_at": "2026-10-02T16:00:02.700545Z",
+      "last_checked_at": null
+    },
     "https://github.com/open-wallet-standard/core/issues/123": {
       "reported_at": null,
       "last_checked_at": null
@@ -42497,12 +42509,24 @@
       "reported_at": null,
       "last_checked_at": null
     },
+    "https://github.com/tailscale/tailscale/issues/16035": {
+      "reported_at": "2026-10-02T16:00:02.700545Z",
+      "last_checked_at": null
+    },
+    "https://github.com/tailscale/tailscale/issues/16047": {
+      "reported_at": "2026-10-02T16:00:02.700545Z",
+      "last_checked_at": null
+    },
     "https://github.com/tailscale/tailscale/issues/19229": {
       "reported_at": null,
       "last_checked_at": null
     },
     "https://github.com/tailscale/tailscale/issues/19694": {
       "reported_at": null,
+      "last_checked_at": null
+    },
+    "https://github.com/tailscale/tailscale/issues/20820": {
+      "reported_at": "2026-10-02T16:00:02.700545Z",
       "last_checked_at": null
     },
     "https://github.com/tailscale/tailscale/issues/20958": {
