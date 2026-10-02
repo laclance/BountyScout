@@ -6,6 +6,7 @@ from typing import Any
 
 from bountyscout import reporting
 from bountyscout import scoring
+from bountyscout.types import Candidate
 import bountyscout.app as scout
 
 
@@ -1137,7 +1138,7 @@ class ScoringRegressionTests(unittest.TestCase):
 
         def build(
             updated_days: int, comments: list[dict[str, Any]] | None = None
-        ) -> dict[str, Any]:
+        ) -> Candidate:
             return scoring.build_candidate(
                 issue(
                     title="Network bug",
