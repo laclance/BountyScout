@@ -13,11 +13,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Mapping, Sequence, cast
 
 from bountyscout import github
-from bountyscout.types import Candidate
+from bountyscout.types import Candidate, GitHubIssue
 
-IssueRow = tuple[int, int, int, dict[str, Any]]
+IssueRow = tuple[int, int, int, GitHubIssue]
 FetchText = Callable[[str], str]
-IssuePredicate = Callable[[Mapping[str, Any]], bool]
+IssuePredicate = Callable[[GitHubIssue], bool]
 
 
 def target_repo_issue_pool(
@@ -27,9 +27,9 @@ def target_repo_issue_pool(
     fetch_per_page: int,
     fetch_pages: int,
     result_limit: int,
-) -> tuple[list[dict[str, Any]], str | None]:
+) -> tuple[list[GitHubIssue], str | None]:
     """Fetch a bounded pool of real issues even though GitHub mixes PRs into /issues."""
-    issues: list[dict[str, Any]] = []
+    issues: list[GitHubIssue] = []
 
     for page in range(1, fetch_pages + 1):
         params = urllib.parse.urlencode(
@@ -52,7 +52,7 @@ def target_repo_issue_pool(
         for item in data:
             if not isinstance(item, dict) or "pull_request" in item:
                 continue
-            issues.append(item)
+            issues.append(cast(GitHubIssue, item))
             if len(issues) >= result_limit:
                 return issues[:result_limit], None
 
@@ -79,7 +79,7 @@ def fetch_text(url: str, timeout: int = 12) -> str:
         return ""
 
 
-def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
+def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     """Fetch a GitHub source issue from a platform-discovered URL."""
     return github.issue_from_github_url(url, token)
 
@@ -268,7 +268,7 @@ def strategic_inspection_items(
     base_per_repo: int,
     adaptive_budget: int,
     should_expand: IssuePredicate,
-) -> dict[str, list[dict[str, Any]]]:
+) -> dict[str, list[GitHubIssue]]:
     """Select base per-repo rows plus a globally bounded set of strong overflow rows.
 
     The adaptive budget prevents busy repositories from permanently hiding good
