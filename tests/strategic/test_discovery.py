@@ -41,9 +41,7 @@ class StrategicDiscoveryTests(unittest.TestCase):
 
         self.assertTrue(discovery.possible_miss_signal(strong))
         self.assertFalse(discovery.possible_miss_signal(stale))
-        self.assertIsNone(
-            discovery.basic_rejection_audit_reason(issue(pull_request={"url": "x"}))
-        )
+        self.assertIsNone(discovery.basic_rejection_audit_reason(issue(pull_request={"url": "x"})))
         self.assertIn(
             "unrecognized basic eligibility",
             discovery.basic_rejection_audit_reason(strong) or "",
@@ -185,9 +183,7 @@ class StrategicDiscoveryTests(unittest.TestCase):
                 for item in selection.audit
             )
         )
-        self.assertTrue(
-            any("repository metadata" in item["reason"] for item in selection.audit)
-        )
+        self.assertTrue(any("repository metadata" in item["reason"] for item in selection.audit))
 
 
 if __name__ == "__main__":
