@@ -135,83 +135,79 @@
     },
     "https://github.com/3a7i3/crypto-ia-terminal/issues/284": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3a7i3/crypto-ia-terminal/issues/285": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3a7i3/crypto-ia-terminal/issues/286": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3a7i3/crypto-ia-terminal/issues/288": {
       "reported_at": null,
-      "last_checked_at": null
-    },
-    "https://github.com/3a7i3/crypto-ia-terminal/issues/310": {
-      "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/103": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/112": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/113": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/115": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/132": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/133": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/137": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/138": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/156": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/167": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/170": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/171": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/19": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/21": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/22": {
       "reported_at": null,
-      "last_checked_at": null
+      "last_checked_at": "2026-10-02T21:08:24.443730Z"
     },
     "https://github.com/3ni8ma/aarushkarak-website/issues/23": {
       "reported_at": null,
@@ -21861,6 +21857,10 @@
       "reported_at": null,
       "last_checked_at": null
     },
+    "https://github.com/aws/amazon-vpc-cni-k8s/issues/3906": {
+      "reported_at": "2026-10-02T21:08:24.443730Z",
+      "last_checked_at": null
+    },
     "https://github.com/azerothcore/azerothcore-wotlk/issues/10997": {
       "reported_at": null,
       "last_checked_at": null
@@ -26061,6 +26061,10 @@
       "reported_at": null,
       "last_checked_at": null
     },
+    "https://github.com/cloudflare/cloudflared/issues/1750": {
+      "reported_at": "2026-10-02T21:08:24.443730Z",
+      "last_checked_at": null
+    },
     "https://github.com/clowlove/Harmes-House/issues/327": {
       "reported_at": null,
       "last_checked_at": null
@@ -28095,6 +28099,10 @@
     },
     "https://github.com/fluxcd/flux2/issues/1420": {
       "reported_at": null,
+      "last_checked_at": null
+    },
+    "https://github.com/fluxcd/flux2/issues/4514": {
+      "reported_at": "2026-10-02T21:08:24.443730Z",
       "last_checked_at": null
     },
     "https://github.com/fluxcd/flux2/issues/5889": {
@@ -31917,6 +31925,10 @@
       "reported_at": "2026-10-02T16:00:02.700545Z",
       "last_checked_at": null
     },
+    "https://github.com/hashicorp/terraform/issues/39323": {
+      "reported_at": "2026-10-02T21:08:24.443730Z",
+      "last_checked_at": null
+    },
     "https://github.com/hassanebry/serverless-full-stack-apps-azure-sql/issues/19": {
       "reported_at": null,
       "last_checked_at": null
@@ -31983,6 +31995,10 @@
     },
     "https://github.com/himmelblau-idm/himmelblau/issues/981": {
       "reported_at": null,
+      "last_checked_at": null
+    },
+    "https://github.com/hivecommons/hive/issues/10124": {
+      "reported_at": "2026-10-02T21:08:24.443730Z",
       "last_checked_at": null
     },
     "https://github.com/hivecommons/promptargs/issues/97": {
@@ -33867,6 +33883,10 @@
     },
     "https://github.com/kubernetes-sigs/controller-runtime/issues/3607": {
       "reported_at": null,
+      "last_checked_at": null
+    },
+    "https://github.com/kubernetes-sigs/controller-runtime/issues/3614": {
+      "reported_at": "2026-10-02T21:08:24.443730Z",
       "last_checked_at": null
     },
     "https://github.com/kubernetes-sigs/controller-runtime/issues/810": {
@@ -38909,6 +38929,10 @@
       "reported_at": null,
       "last_checked_at": null
     },
+    "https://github.com/prometheus/client_golang/issues/2147": {
+      "reported_at": "2026-10-02T21:08:24.443730Z",
+      "last_checked_at": null
+    },
     "https://github.com/prometheus/client_golang/issues/977": {
       "reported_at": null,
       "last_checked_at": null
@@ -42567,6 +42591,10 @@
     },
     "https://github.com/tailscale/tailscale/issues/21625": {
       "reported_at": "2026-10-02T09:07:41.324263Z",
+      "last_checked_at": null
+    },
+    "https://github.com/tailscale/tailscale/issues/21628": {
+      "reported_at": "2026-10-02T21:08:24.443730Z",
       "last_checked_at": null
     },
     "https://github.com/tailscale/tailscale/issues/7951": {
