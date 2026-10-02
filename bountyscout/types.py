@@ -8,7 +8,7 @@ representation.
 
 from __future__ import annotations
 
-from typing import Literal, TypeAlias, TypedDict
+from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 EffortBucket: TypeAlias = Literal["<1h", "1–3h", "3–6h", "6–12h", "1d+"]
 CompetitionLevel: TypeAlias = Literal["none", "low", "medium", "high"]
@@ -95,11 +95,11 @@ class Candidate(TypedDict):
 
 
 class RejectionRecord(TypedDict):
-    """Stable linked rejection/audit example rendered in reports."""
+    """Stable rejection/audit example rendered in reports."""
 
-    url: str | None
-    title: str | None
     reason: str
+    url: NotRequired[str | None]
+    title: NotRequired[str | None]
 
 
 AuditRecord: TypeAlias = RejectionRecord
