@@ -118,8 +118,7 @@ def verify_strategic_selection(
             elif career_upper_bound < min_career_score:
                 candidate = None
                 reason = (
-                    f"career score {row[1]}/100 below strategic threshold "
-                    f"{min_career_score}/100"
+                    f"career score {row[1]}/100 below strategic threshold {min_career_score}/100"
                 )
                 network_checked = False
             else:
