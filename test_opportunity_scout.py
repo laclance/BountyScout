@@ -2017,10 +2017,7 @@ class VerificationTests(unittest.TestCase):
             "timeline_open_pr_reason",
             return_value="timeline reason",
         ):
-            self.assertEqual(
-                scout.timeline_open_pr_reason(issue(), "t"),
-                "timeline reason",
-            )
+            self.assertEqual(scout.timeline_open_pr_reason(issue(), "t"), "timeline reason")
 
         diagnostic = issue(
             title="macOS M1 black screen after network change",
