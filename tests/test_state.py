@@ -113,7 +113,9 @@ class SeenStateParsingTests(unittest.TestCase):
             parse_seen_state([42])
 
         with self.assertRaisesRegex(SeenStateLoadError, "URL keys"):
-            parse_seen_state(\n                current_document(seen={" ": {"reported_at": None, "last_checked_at": None}})\n            )
+            parse_seen_state(
+                current_document(seen={" ": {"reported_at": None, "last_checked_at": None}})
+            )
 
         with self.assertRaisesRegex(SeenStateLoadError, "URL keys"):
             parse_seen_state(
