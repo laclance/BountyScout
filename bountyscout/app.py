@@ -183,7 +183,7 @@ def extended_competition_reason(
     token: str | None,
     comments: list[GitHubComment] | None = None,
 ) -> str | None:
-    """Apply paid-compatible competition checks through the extracted policy module."""
+    """Apply paid-lane competition checks through the extracted policy module."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
     return competition_policy.extended_competition_reason(
         item,

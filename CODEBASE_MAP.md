@@ -185,14 +185,14 @@
 
 ## `bountyscout/strategic/discovery.py`
 
-- **class** `StrategicDiscoverySelection` — line 84
-- **function** `target_repo_issue_pool()` — line 91
-- **function** `possible_miss_signal()` — line 109
-- **function** `basic_rejection_audit_reason()` — line 141
-- **function** `add_audit()` — line 181
-- **function** `strategic_inspection_items()` — line 200
-- **function** `strategic_global_search_results()` — line 215
-- **function** `select_strategic_candidates()` — line 226
+- **class** `StrategicDiscoverySelection` — line 83
+- **function** `target_repo_issue_pool()` — line 90
+- **function** `possible_miss_signal()` — line 108
+- **function** `basic_rejection_audit_reason()` — line 140
+- **function** `add_audit()` — line 180
+- **function** `strategic_inspection_items()` — line 199
+- **function** `strategic_global_search_results()` — line 214
+- **function** `select_strategic_candidates()` — line 225
 
 ## `bountyscout/strategic/readiness.py`
 

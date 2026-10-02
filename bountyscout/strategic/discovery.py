@@ -1,9 +1,8 @@
 """Strategic discovery selection and audit orchestration.
 
 This module owns bounded source-pool collection, cheap candidate selection, adaptive
-inspection, and discovery audit diagnostics. It intentionally does not import the root
-paid scanner; app-level adapters supply the few paid-compatible predicates/signals that
-remain transitional until Phase 4E.
+inspection, and discovery audit diagnostics. Application-layer adapters supply the
+paid-lane predicates and signals used by strategic discovery.
 """
 
 from __future__ import annotations

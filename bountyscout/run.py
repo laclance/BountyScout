@@ -78,7 +78,7 @@ class RunConfig:
 
 @dataclass(frozen=True)
 class RunDependencies:
-    """Narrow callbacks supplied by the application compatibility edge."""
+    """Narrow callbacks supplied by the application assembly layer."""
 
     discover_paid: PaidDiscovery
     discover_strategic: StrategicDiscovery
