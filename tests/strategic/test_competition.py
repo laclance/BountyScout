@@ -574,7 +574,7 @@ class CompetitionOrchestrationTests(unittest.TestCase):
             )
 
     def test_competition_rejects_unidentifiable_issue_without_network_calls(self) -> None:
-        bad = {"html_url": "bad", "comments": 1}
+        bad = issue(html_url="bad", comments=1)
         with patch.object(bounty, "has_existing_implementation_pr") as existing:
             self.assertEqual(
                 competition.strategic_competition_reason(bad, "t", []),
