@@ -79,11 +79,6 @@ def fetch_text(url: str, timeout: int = 12) -> str:
         return ""
 
 
-def issue_comments(item: Mapping[str, Any], token: str | None) -> list[dict[str, Any]]:
-    """Fetch issue comments used by activity, payment, and competition checks."""
-    return github.issue_comments(item, token)
-
-
 def issue_from_github_url(url: str, token: str | None) -> dict[str, Any] | None:
     """Fetch a GitHub source issue from a platform-discovered URL."""
     return github.issue_from_github_url(url, token)

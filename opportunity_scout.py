@@ -83,11 +83,6 @@ DISCOVERY_SEARCH_INTERVAL_SECONDS = 2.1
 CACHE_LOCKS = github.KeyedLockPool()
 
 
-def cache_lock_for(key: str) -> Any:
-    """Compatibility wrapper for shared keyed cache-fill locking."""
-    return CACHE_LOCKS.lock_for(key)
-
-
 PAID_DISCOVERY_QUERIES = [
     "is:issue is:open bounty in:title,body sort:updated-desc",
     'is:issue is:open "/reward" in:comments sort:updated-desc',
@@ -230,20 +225,6 @@ def linked_open_pr_reason(
     """Compatibility wrapper for explicitly linked implementation PR detection."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
     return competition_policy.linked_open_pr_reason(item, token, loaded_comments)
-
-
-def search_open_implementation_pr_reason(
-    item: Mapping[str, Any],
-    token: str | None,
-    comments: list[dict[str, Any]] | None = None,
-) -> str | None:
-    """Compatibility wrapper for search-based implementation PR detection."""
-    loaded_comments = issue_comments(item, token) if comments is None else comments
-    return competition_policy.search_open_implementation_pr_reason(
-        item,
-        token,
-        loaded_comments,
-    )
 
 
 def timeline_open_pr_reason(item: Mapping[str, Any], token: str | None) -> str | None:

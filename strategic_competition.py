@@ -8,7 +8,6 @@ orchestrator, so it can be tested directly with mocked GitHub responses.
 from __future__ import annotations
 
 import re
-import urllib.parse
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
@@ -145,57 +144,6 @@ def linked_open_pr_reason(
         )
         if isinstance(pr, dict) and pr.get("state") == "open":
             url = pr.get("html_url") or f"https://github.com/{repo}/pull/{pr_number}"
-            return f"existing open implementation PR: {url}"
-
-    return None
-
-
-def search_open_implementation_pr_reason(
-    item: Mapping[str, Any],
-    token: str | None,
-    comments: list[dict[str, Any]],
-) -> str | None:
-    """Search for an open PR only when the thread hints that implementation exists."""
-    repo, number = bounty.issue_repo_and_number(item)
-    if not repo or not number:
-        return None
-
-    context = "\n".join(
-        [str(item.get("body", ""))] + [str(comment.get("body", "")) for comment in comments]
-    )
-    if not re.search(
-        r"\b(?:pr|pull request|draft fix|draft patch|"
-        r"implementation (?:pr|pull request|fix|patch))\b",
-        context,
-        re.IGNORECASE,
-    ):
-        return None
-
-    params = urllib.parse.urlencode(
-        {
-            "q": f"repo:{repo} is:pr is:open {number}",
-            "per_page": 10,
-        }
-    )
-    data = github.github_get(f"https://api.github.com/search/issues?{params}", token)
-    if not isinstance(data, dict):
-        return "could not verify open implementation PR search"
-
-    repo_pattern = re.escape(repo)
-    issue_ref = rf"(?:#{number}\b|https://github\.com/{repo_pattern}/issues/{number}\b)"
-    closes_issue = re.compile(
-        rf"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)"
-        rf"\s*:?\s*(?:issue\s+)?{issue_ref}",
-        re.IGNORECASE,
-    )
-    for candidate in data.get("items") or []:
-        if not isinstance(candidate, dict) or not candidate.get("pull_request"):
-            continue
-        text = f"{candidate.get('title', '')}\n{candidate.get('body', '')}"
-        if not closes_issue.search(text):
-            continue
-        url = candidate.get("html_url")
-        if url:
             return f"existing open implementation PR: {url}"
 
     return None
