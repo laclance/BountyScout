@@ -33,6 +33,7 @@ from bountyscout.strategic.readiness import (
     release_tracking_reason as release_tracking_reason,
     triage_pending_signal as triage_pending_signal,
 )
+from bountyscout.types import Candidate, CandidateLane, RejectionRecord
 
 TARGET_REPOS = [
     "aws/amazon-vpc-cni-k8s",
@@ -374,12 +375,12 @@ def fetch_repo_metadata(repo: str, token: str | None) -> dict[str, Any]:
 
 def build_candidate(
     item: Mapping[str, Any],
-    lane: str,
+    lane: CandidateLane,
     signal: str | None,
     repo_meta: Mapping[str, Any],
     guide: str | None,
     activity_comments: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
+) -> Candidate:
     """Build ranked candidate output through the extracted scoring module."""
     return scoring.build_candidate(
         item,
@@ -591,7 +592,7 @@ def verify(
     require_paid: bool = False,
     payment_signal_override: str | None = None,
     activity_comments: list[dict[str, Any]] | None = None,
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[Candidate | None, str | None]:
     fresh, reason = refresh_issue(item, token)
     if reason:
         return None, reason
@@ -631,6 +632,7 @@ def verify(
             comment_signal = comment_payment_signal(fresh, token, comments)
     signal = issue_signal or comment_signal or payment_signal_override
 
+    lane: CandidateLane
     if require_paid or signal:
         issue_author_claim = strategic_claim_reason(fresh, [])
         if issue_author_claim:
@@ -703,7 +705,7 @@ def verify(
 
 
 def add_reject(
-    counts: dict[str, int], examples: list[dict[str, Any]], item: Mapping[str, Any], reason: str
+    counts: dict[str, int], examples: list[RejectionRecord], item: Mapping[str, Any], reason: str
 ) -> None:
     counts[reason] = counts.get(reason, 0) + 1
     if len(examples) < 12:
@@ -716,11 +718,11 @@ def discover_paid(
     repo_cache: dict[str, dict[str, Any]],
     guide_cache: dict[str, str | None],
     search_results: list[tuple[str, dict[str, Any]]] | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
-    found: list[dict[str, Any]] = []
+) -> tuple[list[Candidate], dict[str, int], list[RejectionRecord]]:
+    found: list[Candidate] = []
     touched: set[str] = set()
     rejected: dict[str, int] = {}
-    examples: list[dict[str, Any]] = []
+    examples: list[RejectionRecord] = []
     pending: list[tuple[dict[str, Any], str | None, bool]] = []
 
     if search_results is None:
@@ -768,7 +770,7 @@ def discover_paid(
         row: tuple[dict[str, Any], str | None, bool],
     ) -> tuple[
         tuple[dict[str, Any], str | None, bool],
-        tuple[dict[str, Any] | None, str | None],
+        tuple[Candidate | None, str | None],
     ]:
         item, platform_signal, _ = row
         return (
@@ -882,7 +884,7 @@ def basic_rejection_audit_reason(item: Mapping[str, Any]) -> str | None:
 
 
 def add_audit(
-    audit: list[dict[str, Any]],
+    audit: list[RejectionRecord],
     item: Mapping[str, Any],
     reason: str,
 ) -> None:
@@ -951,16 +953,16 @@ def discover_strategic(
     guide_cache: dict[str, str | None],
     global_search_results: list[tuple[str, dict[str, Any]]] | None = None,
 ) -> tuple[
-    list[dict[str, Any]],
+    list[Candidate],
     dict[str, int],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
+    list[RejectionRecord],
+    list[RejectionRecord],
 ]:
     provisional: list[tuple[int, int, int, dict[str, Any]]] = []
     touched: set[str] = set()
     rejected: dict[str, int] = {}
-    examples: list[dict[str, Any]] = []
-    audit: list[dict[str, Any]] = []
+    examples: list[RejectionRecord] = []
+    audit: list[RejectionRecord] = []
 
     source_batches: list[list[dict[str, Any]]] = []
     with ThreadPoolExecutor(
@@ -1036,7 +1038,7 @@ def discover_strategic(
                     )
                 continue
             signal = bounty.payment_signal(item)
-            lane = "paid" if signal else "strategic"
+            lane: CandidateLane = "paid" if signal else "strategic"
             preview = build_candidate(item, lane, signal, meta, None)
             provisional.append(
                 (
@@ -1100,7 +1102,7 @@ def discover_strategic(
         list[
             tuple[
                 sources.IssueRow,
-                dict[str, Any] | None,
+                Candidate | None,
                 str | None,
                 bool,
             ]
@@ -1111,17 +1113,17 @@ def discover_strategic(
         outcomes: list[
             tuple[
                 sources.IssueRow,
-                dict[str, Any] | None,
+                Candidate | None,
                 str | None,
                 bool,
             ]
         ] = []
-        accepted: list[dict[str, Any]] = []
+        accepted: list[Candidate] = []
         consecutive_source_failures = 0
 
         for index, row in enumerate(ranked):
             item = row[3]
-            candidate: dict[str, Any] | None
+            candidate: Candidate | None
             reason: str | None
             network_checked: bool
             preflight_reason = strategic_preflight_rejection(item)
@@ -1182,7 +1184,7 @@ def discover_strategic(
     ) as executor:
         repo_verification_results = list(executor.map(verify_repo, verification_inputs))
 
-    verified_by_repo: dict[str, list[dict[str, Any]]] = {repo: [] for repo in inspected}
+    verified_by_repo: dict[str, list[Candidate]] = {repo: [] for repo in inspected}
     verified_rows = 0
     selected_rows = sum(len(rows) for rows in ranked_by_repo.values())
     for repo, outcomes, coverage_incomplete in repo_verification_results:
@@ -1232,7 +1234,7 @@ def discover_strategic(
         f"{verified_rows}/{selected_rows} inspected rows required network checks"
     )
 
-    found: list[dict[str, Any]] = []
+    found: list[Candidate] = []
     for repo in inspected:
         verified_repo = verified_by_repo[repo]
         verified_repo.sort(
@@ -1295,7 +1297,7 @@ def main() -> None:
         f"total={monotonic() - started:.1f}s"
     )
 
-    by_url: dict[str, dict[str, Any]] = {}
+    by_url: dict[str, Candidate] = {}
     for candidate in paid + strategic:
         old = by_url.get(candidate["url"])
         if not old or candidate["priority_score"] > old["priority_score"]:

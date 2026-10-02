@@ -9,12 +9,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Collection, Mapping
+from typing import Any, Collection, Mapping, cast
 
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic.readiness import TRUSTED_ASSOCIATIONS
-from bountyscout.types import CompetitionLevel, EffortBucket
+from bountyscout.types import Candidate, CandidateLane, CompetitionLevel, EffortBucket
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
@@ -850,7 +850,7 @@ def _strategic_activity_adjustment(
 
 def build_candidate(
     item: Mapping[str, Any],
-    lane: str,
+    lane: CandidateLane,
     signal: str | None,
     repo_meta: Mapping[str, Any],
     guide: str | None,
@@ -858,7 +858,7 @@ def build_candidate(
     *,
     target_repos: Collection[str],
     amount_pattern: str,
-) -> dict[str, Any]:
+) -> Candidate:
     repo, number = github.issue_repo_and_number(item)
     effort_estimate = estimate_effort_details(
         item,
@@ -928,10 +928,10 @@ def build_candidate(
         for x in (item.get("labels") or [])
     ]
     return {
-        "repo": repo,
-        "issue_number": number,
+        "repo": cast(str, repo),
+        "issue_number": cast(int, number),
         "title": item.get("title"),
-        "url": item.get("html_url"),
+        "url": cast(str, item.get("html_url")),
         "paid": lane == "paid",
         "reward": reward_text(signal, amount_pattern),
         "payment_confidence": payment_confidence(signal),

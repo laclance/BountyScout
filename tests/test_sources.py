@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from bountyscout import sources
 from bountyscout import github
-from tests.helpers import FakeResponse
+from tests.helpers import FakeResponse, candidate
 
 
 def issue(number: int, **overrides: Any) -> dict[str, Any]:
@@ -295,12 +295,12 @@ class VerificationSettlementTests(unittest.TestCase):
     def test_candidate_rank_key_matches_queue_order(self) -> None:
         self.assertEqual(
             sources.candidate_rank_key(
-                {
-                    "priority_score": 80,
-                    "career_score": 70,
-                    "cash_score": 0,
-                    "comments": 2,
-                }
+                candidate(
+                    priority_score=80,
+                    career_score=70,
+                    cash_score=0,
+                    comments=2,
+                )
             ),
             (80, 70, 0, -2),
         )
@@ -325,24 +325,9 @@ class VerificationSettlementTests(unittest.TestCase):
 
     def test_repo_slots_settle_only_when_remaining_cannot_displace_cutoff(self) -> None:
         verified = [
-            {
-                "priority_score": 90,
-                "career_score": 90,
-                "cash_score": 0,
-                "comments": 0,
-            },
-            {
-                "priority_score": 85,
-                "career_score": 85,
-                "cash_score": 0,
-                "comments": 1,
-            },
-            {
-                "priority_score": 80,
-                "career_score": 80,
-                "cash_score": 0,
-                "comments": 2,
-            },
+            candidate(priority_score=90, career_score=90, cash_score=0, comments=0),
+            candidate(priority_score=85, career_score=85, cash_score=0, comments=1),
+            candidate(priority_score=80, career_score=80, cash_score=0, comments=2),
         ]
         self.assertFalse(
             sources.strategic_repo_slots_settled(

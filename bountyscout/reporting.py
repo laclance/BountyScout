@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Any, Mapping, Sequence
+from typing import Mapping, Sequence
+
+from bountyscout.types import Candidate, RejectionRecord
 
 
-def github_report_ref(text: Any) -> str:
+def github_report_ref(text: object | None) -> str:
     """Make GitHub issue/PR URLs clickable without creating backlinks."""
     value = str(text or "")
     return re.sub(
@@ -25,18 +27,18 @@ def github_report_ref(text: Any) -> str:
     )
 
 
-def markdown_label(text: Any) -> str:
+def markdown_label(text: object | None) -> str:
     """Escape text used inside a Markdown link label."""
     value = github_report_ref(text)
     return value.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
 
 
-def strategic_priority_delta(candidate: Mapping[str, Any]) -> int:
+def strategic_priority_delta(candidate: Candidate) -> int:
     """Return the execution adjustment applied on top of career score."""
     return int(candidate["priority_score"]) - int(candidate["career_score"])
 
 
-def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
+def markdown_candidate(candidate: Candidate, idx: int) -> str:
     """Render one paid or strategic candidate for the GitHub queue issue."""
     hourly = (
         "$" + f"{candidate['expected_hourly']:.0f}/h"
@@ -107,7 +109,7 @@ def markdown_candidate(candidate: Mapping[str, Any], idx: int) -> str:
     return "\n".join(lines) + "\n\n"
 
 
-def notification_candidate(candidate: Mapping[str, Any], idx: int) -> list[str]:
+def notification_candidate(candidate: Candidate, idx: int) -> list[str]:
     """Render one concise notification entry."""
     title = str(candidate["title"] or "")
     if len(title) > 100:
@@ -133,7 +135,7 @@ def notification_candidate(candidate: Mapping[str, Any], idx: int) -> list[str]:
 
 
 def notification_message(
-    queue: Sequence[Mapping[str, Any]],
+    queue: Sequence[Candidate],
     now: str,
     *,
     warning: str | None = None,
@@ -182,7 +184,7 @@ def rejection_summary(
 
 def markdown_examples(
     heading: str,
-    examples: Sequence[Mapping[str, Any]],
+    examples: Sequence[RejectionRecord],
     *,
     limit: int = 12,
 ) -> str:
@@ -198,7 +200,7 @@ def markdown_examples(
     return "\n".join(lines) + "\n"
 
 
-def audit_summary(audit: Sequence[Mapping[str, Any]]) -> str:
+def audit_summary(audit: Sequence[RejectionRecord]) -> str:
     """Summarize recurring tuning signals before listing concrete examples."""
     if not audit:
         return ""
@@ -207,11 +209,11 @@ def audit_summary(audit: Sequence[Mapping[str, Any]]) -> str:
 
 
 def github_report_body(
-    queue: Sequence[Mapping[str, Any]],
+    queue: Sequence[Candidate],
     now: str,
     *,
-    verification_examples: Sequence[Mapping[str, Any]] = (),
-    strategic_audit: Sequence[Mapping[str, Any]] = (),
+    verification_examples: Sequence[RejectionRecord] = (),
+    strategic_audit: Sequence[RejectionRecord] = (),
     reject_counts: Mapping[str, int] | None = None,
     coverage_warning: str | None = None,
 ) -> str:
