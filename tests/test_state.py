@@ -338,9 +338,15 @@ class SeenStateRetentionTests(unittest.TestCase):
         state_module.apply_revalidation_result(seen, URL_C, "failed", self.now)
         state_module.apply_revalidation_result(seen, URL_D, "closed", self.now)
 
-        self.assertEqual(seen.record(URL_A).last_checked_at, expected_checked)
-        self.assertEqual(seen.record(URL_B).last_checked_at, expected_checked)
-        self.assertEqual(seen.record(URL_C).last_checked_at, expected_checked)
+        record_a = seen.record(URL_A)
+        record_b = seen.record(URL_B)
+        record_c = seen.record(URL_C)
+        assert record_a is not None
+        assert record_b is not None
+        assert record_c is not None
+        self.assertEqual(record_a.last_checked_at, expected_checked)
+        self.assertEqual(record_b.last_checked_at, expected_checked)
+        self.assertEqual(record_c.last_checked_at, expected_checked)
         self.assertFalse(seen.contains(URL_D))
         state_module.apply_revalidation_result(seen, URL_D, "failed", self.now)
         self.assertFalse(seen.contains(URL_D))
@@ -361,11 +367,13 @@ class SeenStateRetentionTests(unittest.TestCase):
 
         self.assertEqual(first.checked_urls, (URL_A,))
         self.assertEqual(second_batch, [URL_B])
-        self.assertIsNone(seen.record(URL_A).last_checked_at)
+        original_record = seen.record(URL_A)
+        assert original_record is not None
+        self.assertIsNone(original_record.last_checked_at)
 
     def test_maintenance_prunes_closed_retains_failures_and_catches_checker_exceptions(self) -> None:
         seen = SeenState.from_urls([URL_A, URL_B, URL_C, URL_D])
-        statuses = {
+        statuses: dict[str, state_module.IssueLifecycleStatus] = {
             URL_A: "open",
             URL_B: "closed",
             URL_C: "not_found",
@@ -389,7 +397,9 @@ class SeenStateRetentionTests(unittest.TestCase):
         self.assertFalse(result.state.contains(URL_B))
         self.assertTrue(result.state.contains(URL_C))
         self.assertTrue(result.state.contains(URL_D))
-        self.assertIsNotNone(result.state.record(URL_D).last_checked_at)
+        failed_record = result.state.record(URL_D)
+        assert failed_record is not None
+        self.assertIsNotNone(failed_record.last_checked_at)
         self.assertTrue(seen.contains(URL_B))
 
     def test_empty_or_non_github_state_produces_no_maintenance_changes(self) -> None:
