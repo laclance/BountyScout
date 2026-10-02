@@ -9,46 +9,46 @@
 
 ## `bountyscout/app.py`
 
-- **function** `target_repo_issue_pool()` — line 127
-- **function** `maintainer_ready_signal()` — line 142
-- **function** `issue_text()` — line 147
-- **function** `code_reference_count()` — line 152
-- **function** `strategic_basic_candidate()` — line 157
-- **function** `github_get_optional()` — line 169
-- **function** `fetch_text()` — line 174
-- **function** `issue_comments()` — line 179
-- **function** `strategic_claim_reason()` — line 189
-- **function** `linked_open_pr_reason()` — line 200
-- **function** `timeline_open_pr_reason()` — line 214
-- **function** `supplemental_claim_reason()` — line 219
-- **function** `extended_competition_reason()` — line 232
-- **function** `strategic_competition_reason()` — line 252
-- **function** `supplemental_payment_signal()` — line 269
-- **function** `comment_payment_signal()` — line 297
-- **function** `issue_from_github_url()` — line 360
-- **function** `issuehunt_platform_refs()` — line 365
-- **function** `opire_platform_refs()` — line 370
-- **function** `bountyhub_platform_refs()` — line 379
-- **function** `platform_paid_refs()` — line 389
-- **function** `contribution_guide()` — line 401
-- **function** `fetch_repo_metadata()` — line 406
-- **function** `build_candidate()` — line 411
-- **function** `refresh_issue()` — line 432
-- **function** `upstream_wrapper_issue_url()` — line 448
-- **function** `non_actionable_diagnostic_reason()` — line 466
-- **function** `strategic_preflight_rejection()` — line 544
-- **function** `strategic_rejection()` — line 576
-- **function** `verify()` — line 630
-- **function** `add_reject()` — line 752
-- **function** `discover_paid()` — line 760
-- **function** `possible_miss_signal()` — line 859
-- **function** `basic_rejection_audit_reason()` — line 892
-- **function** `add_audit()` — line 932
-- **function** `strategic_inspection_items()` — line 948
-- **function** `strategic_global_search_results()` — line 961
-- **function** `prefetch_discovery_searches()` — line 974
-- **function** `discover_strategic()` — line 995
-- **function** `main()` — line 1305
+- **function** `target_repo_issue_pool()` — line 112
+- **function** `maintainer_ready_signal()` — line 126
+- **function** `issue_text()` — line 131
+- **function** `code_reference_count()` — line 136
+- **function** `strategic_basic_candidate()` — line 141
+- **function** `github_get_optional()` — line 153
+- **function** `fetch_text()` — line 158
+- **function** `issue_comments()` — line 163
+- **function** `strategic_claim_reason()` — line 173
+- **function** `linked_open_pr_reason()` — line 181
+- **function** `timeline_open_pr_reason()` — line 191
+- **function** `supplemental_claim_reason()` — line 196
+- **function** `extended_competition_reason()` — line 206
+- **function** `strategic_competition_reason()` — line 226
+- **function** `supplemental_payment_signal()` — line 243
+- **function** `comment_payment_signal()` — line 271
+- **function** `issue_from_github_url()` — line 334
+- **function** `issuehunt_platform_refs()` — line 339
+- **function** `opire_platform_refs()` — line 344
+- **function** `bountyhub_platform_refs()` — line 353
+- **function** `platform_paid_refs()` — line 363
+- **function** `contribution_guide()` — line 375
+- **function** `fetch_repo_metadata()` — line 380
+- **function** `build_candidate()` — line 385
+- **function** `refresh_issue()` — line 406
+- **function** `upstream_wrapper_issue_url()` — line 420
+- **function** `non_actionable_diagnostic_reason()` — line 438
+- **function** `strategic_preflight_rejection()` — line 514
+- **function** `strategic_rejection()` — line 545
+- **function** `verify()` — line 594
+- **function** `add_reject()` — line 714
+- **function** `discover_paid()` — line 722
+- **function** `possible_miss_signal()` — line 826
+- **function** `basic_rejection_audit_reason()` — line 859
+- **function** `add_audit()` — line 899
+- **function** `strategic_inspection_items()` — line 915
+- **function** `strategic_global_search_results()` — line 927
+- **function** `prefetch_discovery_searches()` — line 943
+- **function** `discover_strategic()` — line 964
+- **function** `main()` — line 1274
 
 ## `bountyscout/github.py`
 
@@ -160,8 +160,9 @@
 - **class** `GitHubComment` — line 30
 - **class** `GitHubIssue` — line 40
 - **class** `RepositoryMetadata` — line 59
-- **class** `Candidate` — line 71
-- **class** `RejectionRecord` — line 101
+- **class** `GitHubSearchResult` — line 68
+- **class** `Candidate` — line 78
+- **class** `RejectionRecord` — line 108
 
 ## `opportunity_scout.py`
 

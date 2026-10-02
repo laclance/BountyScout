@@ -65,7 +65,14 @@ class RepositoryMetadata(TypedDict, total=False):
     language: str | None
 
 
+class GitHubSearchResult(TypedDict, total=False):
+    """GitHub Search payload fields consumed by discovery orchestration."""
+
+    items: list[GitHubIssue]
+
+
 IssueRow: TypeAlias = tuple[int, int, int, GitHubIssue]
+SearchBatch: TypeAlias = tuple[str, GitHubSearchResult]
 
 
 class Candidate(TypedDict):
