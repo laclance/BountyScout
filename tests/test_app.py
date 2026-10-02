@@ -7,19 +7,19 @@ import unittest
 import urllib.request
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 from unittest.mock import patch
 
 import bountyscout.app as scout
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic import competition as competition_policy
-from bountyscout.types import RejectionRecord
+from bountyscout.types import GitHubIssue, RejectionRecord
 from tests.helpers import FakeResponse
 
 
-def issue(**overrides: Any) -> dict[str, Any]:
-    base = {
+def issue(**overrides: Any) -> GitHubIssue:
+    base: dict[str, Any] = {
         "html_url": "https://github.com/example/project/issues/42",
         "state": "open",
         "comments": 1,
@@ -30,7 +30,7 @@ def issue(**overrides: Any) -> dict[str, Any]:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     base.update(overrides)
-    return base
+    return cast(GitHubIssue, base)
 
 
 def repo_meta(**overrides: Any) -> dict[str, Any]:
