@@ -217,6 +217,11 @@ def github_report_body(
 ) -> str:
     """Render the full GitHub queue report."""
     body = (
+        "<!-- bountyscout-report: automated; actionable: false -->\n"
+        "> [!IMPORTANT]\n"
+        "> **Automated BountyScout scan report — not a development task.**\n"
+        "> Do not claim this report or open a pull request to resolve it. "
+        "The linked source issues are the actual contributor opportunities.\n\n"
         f"### Ranked OSS Opportunity Queue\n\n**Scan Time:** {now}\n\n"
         "Paid candidates reuse BountyScout's existing payment/competition filters unchanged. "
         "Strategic candidates are pre-ranked, then source-refreshed and checked for assignees, "
@@ -253,4 +258,4 @@ def github_report_body(
 def github_report_title(queue_size: int) -> str:
     """Return the GitHub issue title for a queue run."""
     suffix = "s" if queue_size != 1 else ""
-    return f"🎯 OSS Opportunity Queue: {queue_size} new verified candidate{suffix}"
+    return f"📊 SCAN REPORT — OSS Opportunity Queue: {queue_size} new verified candidate{suffix}"
