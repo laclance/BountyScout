@@ -8,20 +8,21 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 from unittest.mock import patch
 
 from bountyscout import github
+from bountyscout.types import GitHubIssue
 from tests.helpers import FakeResponse
 
 
-def issue(**overrides: Any) -> dict[str, Any]:
+def issue(**overrides: Any) -> GitHubIssue:
     item: dict[str, Any] = {
         "html_url": "https://github.com/example/project/issues/42",
         "comments": 1,
     }
     item.update(overrides)
-    return item
+    return cast(GitHubIssue, item)
 
 
 class GitHubParsingTests(unittest.TestCase):
@@ -30,10 +31,10 @@ class GitHubParsingTests(unittest.TestCase):
         self.assertEqual((repo, number), ("example/project", 42))
         self.assertIsInstance(number, int)
         self.assertEqual(
-            github.issue_repo_and_number({"html_url": "https://example.com/no"}),
+            github.issue_repo_and_number(GitHubIssue(html_url="https://example.com/no")),
             (None, None),
         )
-        self.assertEqual(github.issue_repo_and_number({}), (None, None))
+        self.assertEqual(github.issue_repo_and_number(GitHubIssue()), (None, None))
 
     def test_parse_github_datetime_preserves_github_timestamp_semantics(self) -> None:
         self.assertEqual(
@@ -151,9 +152,10 @@ class GitHubResourceTests(unittest.TestCase):
             self.assertEqual(github.repo_metadata("a/b", "t"), {})
 
     def test_issue_comments_short_circuit_and_shape(self) -> None:
-        self.assertEqual(github.issue_comments({"html_url": "bad", "comments": 1}, "t"), [])
+        bad = GitHubIssue(html_url="bad", comments=1)
+        self.assertEqual(github.issue_comments(bad, "t"), [])
         self.assertEqual(
-            github.issue_comments_checked({"html_url": "bad", "comments": 1}, "t"),
+            github.issue_comments_checked(bad, "t"),
             ([], "could not identify repository/issue number"),
         )
         self.assertEqual(github.issue_comments_checked(issue(comments=0), "t"), ([], None))
