@@ -60,12 +60,19 @@ Broad result-object conversion is intentionally deferred.
 ## Phase 4C — app decomposition
 
 Further split cohesive orchestration boundaries out of `bountyscout.app` where that
-improves readability and testability. Likely extraction areas include:
+improves readability and testability.
 
-- strategic discovery orchestration
+### Phase 4C.1 — strategic discovery orchestration — complete
+
+- `bountyscout.strategic.discovery` owns strategic source-pool collection, near-miss auditing, adaptive inspection selection, and deterministic pre-verification ranking
+- `bountyscout.app` retains compatibility wrappers and passes narrow paid-compatible callbacks rather than spreading the root `scout_bounties.py` dependency
+- discovery queries, request budgets, ordering, and cache lifetime remain unchanged
+
+Remaining Phase 4C extraction areas include:
+
 - strategic verification orchestration
-- report delivery
-- state commit/maintenance orchestration
+- report delivery / run lifecycle where a cohesive boundary emerges
+- state commit/maintenance orchestration where it can remain independent of root paid-scanner ownership
 
 Prefer concrete cohesive boundaries. Do not introduce generic service layers or a
 dependency-injection framework merely to reduce file size.
