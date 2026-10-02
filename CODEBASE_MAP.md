@@ -92,21 +92,22 @@
 
 ## `bountyscout/scoring.py`
 
-- **function** `maintainer_ready_signal()` — line 28
-- **function** `issue_text()` — line 42
-- **function** `code_reference_count()` — line 58
-- **function** `documentation_microfix()` — line 62
-- **class** `EffortEstimate` — line 235
-- **function** `estimate_effort_details()` — line 470
-- **function** `estimate_effort()` — line 503
-- **function** `effort_hours()` — line 508
-- **function** `comment_contributes_to_competition()` — line 527
-- **function** `competition()` — line 562
-- **function** `payment_confidence()` — line 580
-- **function** `reward_text()` — line 598
-- **function** `repo_activity()` — line 605
-- **function** `strategic_priority_score()` — line 621
-- **function** `build_candidate()` — line 965
+- **function** `maintainer_ready_signal()` — line 27
+- **function** `issue_text()` — line 41
+- **function** `code_reference_count()` — line 57
+- **function** `documentation_microfix()` — line 61
+- **class** `EffortEstimate` — line 234
+- **function** `estimate_effort_details()` — line 469
+- **function** `estimate_effort()` — line 502
+- **function** `effort_hours()` — line 507
+- **function** `comment_contributes_to_competition()` — line 526
+- **function** `competition()` — line 561
+- **function** `payment_confidence()` — line 579
+- **function** `usd_like_amount_from_signal()` — line 597
+- **function** `reward_text()` — line 617
+- **function** `repo_activity()` — line 624
+- **function** `strategic_priority_score()` — line 640
+- **function** `build_candidate()` — line 984
 
 ## `bountyscout/sources.py`
 
@@ -227,12 +228,12 @@
 - **function** `candidate_rejection_reason()` — line 255
 - **function** `parse_github_datetime()` — line 299
 - **function** `usd_like_amount_from_signal()` — line 309
-- **function** `fetch_repo_metadata()` — line 329
-- **function** `score_candidate()` — line 335
-- **function** `send_telegram_notification()` — line 461
-- **function** `send_discord_notification()` — line 485
-- **function** `create_github_issue()` — line 503
-- **function** `main()` — line 554
+- **function** `fetch_repo_metadata()` — line 314
+- **function** `score_candidate()` — line 320
+- **function** `send_telegram_notification()` — line 446
+- **function** `send_discord_notification()` — line 470
+- **function** `create_github_issue()` — line 488
+- **function** `main()` — line 539
 
 ## `scripts/__init__.py`
 

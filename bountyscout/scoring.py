@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from typing import Collection, cast
 
 from bountyscout import github
-import scout_bounties as bounty
 from bountyscout.strategic.readiness import TRUSTED_ASSOCIATIONS
 from bountyscout.types import (
     Candidate,
@@ -595,6 +594,26 @@ def payment_confidence(signal: str | None) -> int:
     return 85
 
 
+def usd_like_amount_from_signal(signal: str | None) -> float | None:
+    """Extract a USD-like amount from a payment signal when comparable."""
+    if not signal:
+        return None
+
+    dollar = re.search(r"\$\s*(\d[\d,]*(?:\.\d+)?)", signal)
+    if dollar:
+        return float(dollar.group(1).replace(",", ""))
+
+    currency = re.search(
+        r"(\d[\d,]*(?:\.\d+)?)\s*(?:usd|usdc|usdt)\b",
+        signal,
+        re.IGNORECASE,
+    )
+    if currency:
+        return float(currency.group(1).replace(",", ""))
+
+    return None
+
+
 def reward_text(signal: str | None, amount_pattern: str) -> str | None:
     if not signal:
         return None
@@ -672,7 +691,7 @@ def _paid_cash_score(
 ) -> tuple[int, float | None, list[str]]:
     cash = 0
     cash_reasons: list[str] = []
-    amount = bounty.usd_like_amount_from_signal(signal)
+    amount = usd_like_amount_from_signal(signal)
     hourly: float | None = None
 
     confidence = payment_confidence(signal)
