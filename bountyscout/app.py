@@ -954,5 +954,6 @@ def main() -> None:
         coverage_warning_threshold=STRATEGIC_COVERAGE_WARNING_THRESHOLD,
     )
 
+
 if __name__ == "__main__":
     main()
