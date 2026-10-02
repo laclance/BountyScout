@@ -4,6 +4,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import opportunity_reporting as reporting
 import opportunity_scoring as scoring
 import opportunity_scout as scout
 
@@ -794,12 +795,12 @@ class CompetitionVolumeTests(unittest.TestCase):
 
 
 class ScoringRegressionTests(unittest.TestCase):
-    def test_opportunity_scout_wrapper_and_report_expose_effort_basis(self) -> None:
+    def test_scoring_and_report_expose_effort_basis(self) -> None:
         item = issue(
             title="TCP mode leaks upstream connection",
             body="Deterministic leak: the upstream connection never closes.",
         )
-        details = scout.estimate_effort_details(item)
+        details = scoring.estimate_effort_details(item)
         self.assertEqual(details.bucket, "1–3h")
 
         result = scoring.build_candidate(
@@ -811,7 +812,7 @@ class ScoringRegressionTests(unittest.TestCase):
             target_repos={"example/project"},
             amount_pattern=AMOUNT_RE,
         )
-        rendered = scout.markdown_candidate(result, 1)
+        rendered = reporting.markdown_candidate(result, 1)
         self.assertIn("**Priority score:**", rendered)
         self.assertIn("**Effort basis:** bounded deterministic bug signal", rendered)
         self.assertIn(
