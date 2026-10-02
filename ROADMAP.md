@@ -132,7 +132,7 @@ scanning no longer depends on a root compatibility module.
 
 ### Phase 4E.6 — remove final package dependency on legacy root scanner — complete
 
-- the historical paid GitHub GET request identity is package-owned by `bountyscout.github.paid_github_get()`
+- the package-owned GitHub GET transport is the final replacement for the legacy root-scanner request path
 - the combined app consumes package transport directly
 - production package code has zero legacy root-scanner dependencies
 

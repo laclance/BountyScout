@@ -43,11 +43,11 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | Module | Responsibility | Boundary |
 | --- | --- | --- |
 | `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
-| `bountyscout/app.py` | Package-only executable/application assembly, environment wiring, and mixed paid/strategic verification adapter | Uses package-owned paid-compatible transport and delivery callbacks |
+| `bountyscout/app.py` | Package-only executable/application assembly, environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
 | `bountyscout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `bountyscout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks |
-| `bountyscout/github.py` | Fork-owned GitHub JSON and Issues Search transport, including normal package and historical paid-compatible request identities, plus generic issue/timestamp parsing and keyed per-scan cache-fill primitives | No scanner policy; `github_get()` defaults to `OSSOpportunityScout`, while `paid_github_get()` preserves `MyPersonalBountyScout` |
+| `bountyscout/github.py` | Fork-owned GitHub JSON and Issues Search transport with one canonical request identity, plus generic issue/timestamp parsing and keyed per-scan cache-fill primitives | No scanner policy; all normal GitHub API traffic uses `github_get()` with `OSSOpportunityScout`; injectable fetchers remain deterministic test seams |
 | `bountyscout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
-| `bountyscout/paid_verification.py` | Paid proposal/meta rejection, paid-compatible active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
+| `bountyscout/paid_verification.py` | Paid proposal/meta rejection, active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
 | `bountyscout/types.py` | Canonical static domain literals and mapping records shared across package-owned scanner code | Dependency-light typing vocabulary only; raw external JSON remains dynamic until validated |
 | `bountyscout/state.py` | Canonical typed, versioned seen-state parsing, legacy migration, logical membership/mutation, and deterministic atomic persistence | Local-file state only; branch-agnostic and fail-closed for malformed or unsupported existing state |
 | `bountyscout/reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
@@ -55,8 +55,8 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `bountyscout/scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration, including trusted maintainer-history signals |
 | `bountyscout/sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
 | `bountyscout/strategic/claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
-| `bountyscout/strategic/competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses package-owned paid-compatible verification plus strategic-only evidence |
-| `bountyscout/strategic/discovery.py` | Strategic source-pool collection, near-miss audit diagnostics, adaptive inspection selection, and deterministic pre-verification ranking | Accepts narrow app adapters for paid-compatible predicates/signals; never imports `bountyscout.app` |
+| `bountyscout/strategic/competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses package-owned paid verification plus strategic-only evidence |
+| `bountyscout/strategic/discovery.py` | Strategic source-pool collection, near-miss audit diagnostics, adaptive inspection selection, and deterministic pre-verification ranking | Accepts narrow app adapters for paid predicates/signals; never imports `bountyscout.app` |
 | `bountyscout/strategic/verification.py` | Ranked strategic deep-verification orchestration, bounded per-repo settlement, source-failure handling, and final strategic selection | Accepts typed app callbacks for mixed verification/preflight behavior; never imports `bountyscout.app` |
 | `bountyscout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` | Local runtime seen-state file | Version 2 is canonical; legacy URL lists load losslessly and rewrite as version 2 on the next successful save |
@@ -117,7 +117,7 @@ Phases 3B through 4E moved reusable parsing, paid policy, verification, delivery
 
 Historical generated queue reports from before the current auto-close lifecycle were cleaned once with `scripts/close_legacy_scan_reports.py` after explicit report-identity verification. Current generated reports are auto-closed during normal delivery, and there is no recurring cleanup service.
 
-Phase 4C established package-owned strategic discovery, verification, and combined-run orchestration. Phase 4E completed package ownership of paid parsing, policy, verification, delivery, GitHub Search, and the paid-compatible GitHub GET transport. Production runtime now follows `opportunity_scout.py → bountyscout.app / bountyscout.run → package modules`.
+Phase 4C established package-owned strategic discovery, verification, and combined-run orchestration. Phase 4E completed package ownership of paid parsing, policy, verification, delivery, GitHub Search, and GitHub GET transport. OSS Cleanup 4 unifies all GitHub JSON traffic under the canonical `OSSOpportunityScout` request identity while retaining injectable transport seams for deterministic tests. Production runtime now follows `opportunity_scout.py → bountyscout.app / bountyscout.run → package modules`.
 
 ## Invariants
 
