@@ -214,6 +214,24 @@ def _trusted_history_complexity(
 
 
 @dataclass(frozen=True)
+class _EffortContext:
+    """Normalized source evidence used by ordered effort rules."""
+
+    title: str
+    body: str
+    labels: str
+    text: str
+    prose: str
+    file_refs: int
+    feature: bool
+    normalized_labels: str
+    docs_signal: bool
+    feature_request_scope: bool
+    docs_feature_implementation_scope: bool
+    bounded_docs_feature_request: bool
+
+
+@dataclass(frozen=True)
 class EffortEstimate:
     """Bucketed implementation estimate plus concise calibration reasons."""
 
@@ -221,11 +239,8 @@ class EffortEstimate:
     reasons: tuple[str, ...]
 
 
-def estimate_effort_details(
-    item: GitHubIssue,
-    activity_comments: Collection[GitHubComment] | None = None,
-) -> EffortEstimate:
-    """Estimate implementation effort from source text and already-fetched discussion."""
+def _effort_context(item: GitHubIssue) -> _EffortContext:
+    """Normalize source-derived evidence once for ordered effort rules."""
     title, body, labels, text = issue_text(item)
     prose = _prose_body(body)
     file_refs = code_reference_count(body)
@@ -255,58 +270,88 @@ def estimate_effort_details(
     bounded_docs_feature_request = bool(
         feature_request_scope and docs_signal and not docs_feature_implementation_scope
     )
+    return _EffortContext(
+        title=title,
+        body=body,
+        labels=labels,
+        text=text,
+        prose=prose,
+        file_refs=file_refs,
+        feature=feature,
+        normalized_labels=normalized_labels,
+        docs_signal=docs_signal,
+        feature_request_scope=feature_request_scope,
+        docs_feature_implementation_scope=docs_feature_implementation_scope,
+        bounded_docs_feature_request=bounded_docs_feature_request,
+    )
 
-    if documentation_microfix(item):
-        return EffortEstimate("<1h", ("documentation-only micro-fix",))
 
+def _large_scope_effort(ctx: _EffortContext) -> EffortEstimate | None:
+    """Apply the ordered 1d+ scope and investigation rules."""
     explicit_large_scope = bool(
         re.search(
             r"\b(?:epic|roadmap|redesign|rewrite|multi-phase|"
             r"architecture (?:redesign|rewrite|overhaul|refactor|change)|"
             r"architectural (?:redesign|rewrite|overhaul|refactor|change)|"
             r"large refactor|rfc|connection pool|explore publishing)\b",
-            text,
+            ctx.text,
         )
-        or (feature_request_scope and not bounded_docs_feature_request)
+        or (ctx.feature_request_scope and not ctx.bounded_docs_feature_request)
     )
     compatibility_risk = bool(
         re.search(
             r"\b(?:backward[- ]incompatible|backwards? compatibility|"
             r"compatibility (?:risk|break|constraint)|persisted (?:state|data)|"
             r"existing deployments?|wire format|on-disk format)\b",
-            text,
+            ctx.text,
         )
         or (
-            re.search(r"\b(?:wal|snapshot|handshake)\b", text)
-            and re.search(r"\b(?:persist|compatib|existing cluster|rejoin|recover)\w*\b", text)
+            re.search(r"\b(?:wal|snapshot|handshake)\b", ctx.text)
+            and re.search(
+                r"\b(?:persist|compatib|existing cluster|rejoin|recover)\w*\b",
+                ctx.text,
+            )
         )
     )
     environment_heavy = bool(
         re.search(
             r"\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\b",
-            text,
+            ctx.text,
         )
         or re.search(
             r"\b(?:unable to reproduce|cannot reproduce|can't reproduce|"
             r"haven't been able to reproduce|have not been able to reproduce|"
             r"low-probability race|non[- ]deterministic repro)\b",
-            text,
+            ctx.text,
         )
     )
 
     if explicit_large_scope:
         return EffortEstimate("1d+", ("explicit broad feature/design scope",))
     if compatibility_risk:
-        return EffortEstimate("1d+", ("backward-compatibility or persisted-state risk",))
+        return EffortEstimate(
+            "1d+",
+            ("backward-compatibility or persisted-state risk",),
+        )
     if environment_heavy:
-        return EffortEstimate("1d+", ("environment/reproduction-heavy investigation",))
-    if feature and _cross_component_feature(text, file_refs):
-        return EffortEstimate("1d+", ("feature spans multiple runtime/configuration components",))
-    if len(prose) > 12000:
+        return EffortEstimate(
+            "1d+",
+            ("environment/reproduction-heavy investigation",),
+        )
+    if ctx.feature and _cross_component_feature(ctx.text, ctx.file_refs):
+        return EffortEstimate(
+            "1d+",
+            ("feature spans multiple runtime/configuration components",),
+        )
+    if len(ctx.prose) > 12000:
         return EffortEstimate("1d+", ("large narrative implementation scope",))
+    return None
 
+
+def _documentation_effort(ctx: _EffortContext) -> EffortEstimate | None:
+    """Apply ordered documentation-specific effort rules."""
     broad_docs = bool(
-        docs_signal
+        ctx.docs_signal
         and (
             re.search(
                 r"\b(?:all|every|each)\s+(?:the\s+)?(?:grpc\s+)?services?\b|"
@@ -314,82 +359,143 @@ def estimate_effort_details(
                 r"\bdocs?\s+(?:generated|generation)\b|"
                 r"\bhost(?:ed|ing)?\s+(?:them\s+)?on\s+(?:the\s+)?website\b|"
                 r"\ball\s+in\s+one\s+place\b",
-                text,
+                ctx.text,
             )
         )
     )
     if broad_docs:
-        return EffortEstimate("6–12h", ("cross-service documentation/generation scope",))
-    if docs_signal and file_refs == 0 and len(prose) < 4500:
-        return EffortEstimate("1–3h", ("bounded documentation change",))
-
-    concurrency_risk = bool(
-        re.search(r"\b(?:data race|race condition|deadlock|concurren\w*)\b", text)
-    )
-    upstream_dependency = bool(
-        re.search(
-            r"\b(?:may be related to|upstream (?:issue|dependency)|"
-            r"vendor(?:ed)? dependency|third[- ]party dependency)\b",
-            text,
+        return EffortEstimate(
+            "6–12h",
+            ("cross-service documentation/generation scope",),
         )
-    )
-    suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", body))
+    if ctx.docs_signal and ctx.file_refs == 0 and len(ctx.prose) < 4500:
+        return EffortEstimate("1–3h", ("bounded documentation change",))
+    return None
+
+
+def _broader_implementation_effort(
+    ctx: _EffortContext,
+) -> EffortEstimate | None:
+    """Apply the general broader-implementation rule and ordered reasons."""
+    suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", ctx.body))
     mobile_or_desktop = any(
-        marker in labels.lower() for marker in ("os-android", "os-ios", "os-macos", "os-windows")
+        marker in ctx.labels.lower()
+        for marker in ("os-android", "os-ios", "os-macos", "os-windows")
     )
-    missing_reproduction = "_no response_" in text or "no response" in text
+    missing_reproduction = "_no response_" in ctx.text or "no response" in ctx.text
 
-    if (
-        file_refs >= 4
-        or feature
-        or len(prose) > 6500
+    if not (
+        ctx.file_refs >= 4
+        or ctx.feature
+        or len(ctx.prose) > 6500
         or (mobile_or_desktop and missing_reproduction)
-        or (re.search(r"\bsuggested fix(?:es)?\b", text) and suggested_fix_bullets >= 3)
+        or (re.search(r"\bsuggested fix(?:es)?\b", ctx.text) and suggested_fix_bullets >= 3)
     ):
-        reasons: list[str] = []
-        if feature:
-            reasons.append("feature/enhancement scope")
-        if file_refs >= 4:
-            reasons.append("multiple referenced files")
-        if len(prose) > 6500:
-            reasons.append("large narrative scope")
-        if suggested_fix_bullets >= 3:
-            reasons.append("multi-step suggested implementation")
-        if mobile_or_desktop and missing_reproduction:
-            reasons.append("platform-specific reproduction is missing")
-        return EffortEstimate("6–12h", tuple(reasons[:3]) or ("broader implementation scope",))
+        return None
 
+    reasons: list[str] = []
+    if ctx.feature:
+        reasons.append("feature/enhancement scope")
+    if ctx.file_refs >= 4:
+        reasons.append("multiple referenced files")
+    if len(ctx.prose) > 6500:
+        reasons.append("large narrative scope")
+    if suggested_fix_bullets >= 3:
+        reasons.append("multi-step suggested implementation")
+    if mobile_or_desktop and missing_reproduction:
+        reasons.append("platform-specific reproduction is missing")
+    return EffortEstimate(
+        "6–12h",
+        tuple(reasons[:3]) or ("broader implementation scope",),
+    )
+
+
+def _history_or_investigation_effort(
+    ctx: _EffortContext,
+    activity_comments: Collection[GitHubComment] | None,
+) -> EffortEstimate | None:
+    """Apply trusted-history, concurrency, and upstream investigation rules."""
     if _trusted_history_complexity(activity_comments):
         return EffortEstimate(
             "6–12h",
             ("maintainer-confirmed implementation-history complexity",),
         )
 
+    concurrency_risk = bool(
+        re.search(r"\b(?:data race|race condition|deadlock|concurren\w*)\b", ctx.text)
+    )
     if concurrency_risk:
         return EffortEstimate("3–6h", ("concurrency/lifecycle debugging risk",))
+
+    upstream_dependency = bool(
+        re.search(
+            r"\b(?:may be related to|upstream (?:issue|dependency)|"
+            r"vendor(?:ed)? dependency|third[- ]party dependency)\b",
+            ctx.text,
+        )
+    )
     if upstream_dependency:
         return EffortEstimate("3–6h", ("upstream/dependency investigation",))
+    return None
 
+
+def _bounded_effort(ctx: _EffortContext) -> EffortEstimate | None:
+    """Apply localized TODO and bounded deterministic rules."""
     localized_todo = bool(
-        file_refs <= 2
-        and re.search(r"\btodo\b", text)
-        and re.search(r"\b(?:method|function|handler|header|path|codebase)\b", text)
+        ctx.file_refs <= 2
+        and re.search(r"\btodo\b", ctx.text)
+        and re.search(
+            r"\b(?:method|function|handler|header|path|codebase)\b",
+            ctx.text,
+        )
     )
     bounded = bool(
         re.search(
             r"\b(?:regression|deterministic|panics?|segfault|nil pointer|"
             r"leaks?|incorrect|failing tests?|unit tests?|single|small|narrow|"
             r"no-op|stale)\b|\bnever closes\b|\bevery sync\b",
-            f"{title.lower()} {labels} {text[:4500]}",
+            f"{ctx.title.lower()} {ctx.labels} {ctx.text[:4500]}",
         )
     )
-    if (bounded or localized_todo) and len(prose) < 4500 and file_refs <= 2:
+    if (bounded or localized_todo) and len(ctx.prose) < 4500 and ctx.file_refs <= 2:
         reason = (
             "localized TODO/code-path change"
             if localized_todo
             else "bounded deterministic bug signal"
         )
         return EffortEstimate("1–3h", (reason,))
+    return None
+
+
+def estimate_effort_details(
+    item: GitHubIssue,
+    activity_comments: Collection[GitHubComment] | None = None,
+) -> EffortEstimate:
+    """Estimate implementation effort from source text and already-fetched discussion."""
+    ctx = _effort_context(item)
+
+    if documentation_microfix(item):
+        return EffortEstimate("<1h", ("documentation-only micro-fix",))
+
+    estimate = _large_scope_effort(ctx)
+    if estimate is not None:
+        return estimate
+
+    estimate = _documentation_effort(ctx)
+    if estimate is not None:
+        return estimate
+
+    estimate = _broader_implementation_effort(ctx)
+    if estimate is not None:
+        return estimate
+
+    estimate = _history_or_investigation_effort(ctx, activity_comments)
+    if estimate is not None:
+        return estimate
+
+    estimate = _bounded_effort(ctx)
+    if estimate is not None:
+        return estimate
 
     return EffortEstimate("3–6h", ("moderate implementation scope",))
 

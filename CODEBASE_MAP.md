@@ -96,17 +96,17 @@
 - **function** `issue_text()` — line 42
 - **function** `code_reference_count()` — line 58
 - **function** `documentation_microfix()` — line 62
-- **class** `EffortEstimate` — line 217
-- **function** `estimate_effort_details()` — line 224
-- **function** `estimate_effort()` — line 397
-- **function** `effort_hours()` — line 402
-- **function** `comment_contributes_to_competition()` — line 421
-- **function** `competition()` — line 456
-- **function** `payment_confidence()` — line 474
-- **function** `reward_text()` — line 492
-- **function** `repo_activity()` — line 499
-- **function** `strategic_priority_score()` — line 515
-- **function** `build_candidate()` — line 859
+- **class** `EffortEstimate` — line 235
+- **function** `estimate_effort_details()` — line 470
+- **function** `estimate_effort()` — line 503
+- **function** `effort_hours()` — line 508
+- **function** `comment_contributes_to_competition()` — line 527
+- **function** `competition()` — line 562
+- **function** `payment_confidence()` — line 580
+- **function** `reward_text()` — line 598
+- **function** `repo_activity()` — line 605
+- **function** `strategic_priority_score()` — line 621
+- **function** `build_candidate()` — line 965
 
 ## `bountyscout/sources.py`
 
