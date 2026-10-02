@@ -710,7 +710,10 @@ def discover_paid(
 
     if search_results is None:
         search_results = [
-            (query, cast(GitHubSearchResult, bounty.search_github(query, token)))
+            (
+                query,
+                github.search_github(query, token, fetch_json=bounty.github_get),
+            )
             for query in PAID_DISCOVERY_QUERIES
         ]
 
@@ -840,9 +843,11 @@ def strategic_global_search_results(
     """Compatibility wrapper for strategic global Search orchestration."""
 
     def search_github(query: str, search_token: str | None, per_page: int) -> GitHubSearchResult:
-        return cast(
-            GitHubSearchResult,
-            bounty.search_github(query, search_token, per_page=per_page),
+        return github.search_github(
+            query,
+            search_token,
+            per_page=per_page,
+            fetch_json=bounty.github_get,
         )
 
     return strategic_discovery.strategic_global_search_results(
@@ -863,9 +868,11 @@ def prefetch_discovery_searches(
     paid_results: list[SearchBatch] = []
     strategic_results: list[SearchBatch] = []
     for index, (lane, query, per_page) in enumerate(requests):
-        result = cast(
-            GitHubSearchResult,
-            bounty.search_github(query, token, per_page=per_page),
+        result = github.search_github(
+            query,
+            token,
+            per_page=per_page,
+            fetch_json=bounty.github_get,
         )
         target = paid_results if lane == "paid" else strategic_results
         target.append((query, result))

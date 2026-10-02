@@ -20,6 +20,7 @@ from typing import Any, TypeVar, cast
 from bountyscout.types import (
     GitHubComment,
     GitHubIssue,
+    GitHubSearchResult,
     IssueLifecycleStatus,
     RepositoryMetadata,
 )
@@ -90,6 +91,22 @@ def github_get(
         if log_errors:
             print(f"GitHub API Error for {url}: {exc}")
         return None
+
+
+def search_github(
+    query: str,
+    token: str | None = None,
+    per_page: int = 15,
+    *,
+    fetch_json: Callable[[str, str | None], Any] | None = None,
+) -> GitHubSearchResult:
+    """Fetch one GitHub Issues Search page with canonical request normalization."""
+    url = (
+        "https://api.github.com/search/issues?"
+        + urllib.parse.urlencode({"q": query, "per_page": per_page})
+    )
+    data = github_get(url, token) if fetch_json is None else fetch_json(url, token)
+    return cast(GitHubSearchResult, data) if isinstance(data, dict) else {}
 
 
 def _issue_repo_and_number_from_url(url: str) -> tuple[str | None, int | None]:

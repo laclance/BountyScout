@@ -54,6 +54,7 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(scout.github_get("https://example", "tok", 3), {"ok": True})
             req = opened.call_args.args[0]
             self.assertEqual(req.headers["Authorization"], "Bearer tok")
+            self.assertEqual(req.headers["User-agent"], "MyPersonalBountyScout")
             self.assertEqual(opened.call_args.kwargs["timeout"], 3)
 
         with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
