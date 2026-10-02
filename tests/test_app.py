@@ -3203,7 +3203,6 @@ class FormattingAndMainTests(unittest.TestCase):
             scout.main()
             save.assert_not_called()
 
-
     def test_main_quiet_complete_run_performs_bounded_maintenance(self) -> None:
         old_url = "https://github.com/example/project/issues/99"
         seen = state.SeenState.from_urls([old_url])
