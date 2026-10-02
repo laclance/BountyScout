@@ -48,7 +48,7 @@
 - **function** `strategic_global_search_results()` — line 961
 - **function** `prefetch_discovery_searches()` — line 974
 - **function** `discover_strategic()` — line 995
-- **function** `main()` — line 1301
+- **function** `main()` — line 1305
 
 ## `bountyscout/github.py`
 
