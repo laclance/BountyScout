@@ -303,10 +303,11 @@ def select_strategic_candidates(
             repo, _ = github.issue_repo_and_number(item)
             if not repo:
                 continue
+            repo_key = repo
             meta = github.cached_value(
                 repo_cache,
-                repo,
-                lambda: fetch_repo_metadata(repo, token),
+                repo_key,
+                lambda: fetch_repo_metadata(repo_key, token),
                 cache_locks,
                 namespace="repo",
             )
