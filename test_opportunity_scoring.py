@@ -1209,5 +1209,96 @@ class ScoringRegressionTests(unittest.TestCase):
         self.assertIn("older inactive backlog penalty", inactive["career_reasons"])
 
 
+    def test_owner_module_covers_remaining_branch_edges(self) -> None:
+        now = datetime.now(timezone.utc)
+        inactive = (now - timedelta(days=120)).isoformat()
+
+        paid_low_star = scoring.build_candidate(
+            issue(title="Feature", body="plain", comments=0),
+            "paid",
+            "payment term + amount: $25",
+            repo_meta(stargazers_count=50, pushed_at=inactive, language="Rust"),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertEqual(paid_low_star["stars"], 50)
+
+        zero_star = scoring.build_candidate(
+            issue(title="Feature", body="plain", comments=0),
+            "strategic",
+            None,
+            repo_meta(stargazers_count=0, pushed_at=inactive, language="Rust"),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertEqual(zero_star["stars"], 0)
+
+        older_second_comment = scoring.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=2,
+                created_at=(now - timedelta(days=500)).isoformat(),
+                updated_at=(now - timedelta(days=120)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            [
+                {
+                    "created_at": (now - timedelta(days=5)).isoformat(),
+                    "author_association": "MEMBER",
+                    "user": {"login": "maintainer"},
+                },
+                {
+                    "created_at": (now - timedelta(days=20)).isoformat(),
+                    "author_association": "MEMBER",
+                    "user": {"login": "maintainer"},
+                },
+            ],
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertIn("recent maintainer activity", older_second_comment["career_reasons"])
+
+        missing_updated = scoring.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=1,
+                created_at=None,
+                updated_at=None,
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            [{"body": "old", "created_at": "not-a-date"}],
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertNotIn("issue active in last", " ".join(missing_updated["career_reasons"]))
+
+        young_inactive = scoring.build_candidate(
+            issue(
+                title="Network bug",
+                body="network regression",
+                comments=0,
+                created_at=(now - timedelta(days=300)).isoformat(),
+                updated_at=(now - timedelta(days=300)).isoformat(),
+            ),
+            "strategic",
+            None,
+            repo_meta(),
+            None,
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertNotIn("inactive backlog penalty", " ".join(young_inactive["career_reasons"]))
+
+
 if __name__ == "__main__":
     unittest.main()
