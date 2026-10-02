@@ -18,6 +18,9 @@ This file is the canonical working agreement for coding agents and human contrib
 - `scout_bounties.py` stays close to the upstream paid-bounty scanner so upstream merges remain low-conflict.
 - Fork-owned implementation lives under `bountyscout/`; strategic policy lives under `bountyscout/strategic/`. Root `opportunity_scout.py` is only the stable executable shim.
 - Never weaken paid-bounty verification while changing strategic discovery.
+- Treat existing seen-state corruption conservatively: malformed, unreadable, or unsupported state must fail the run rather than silently becoming empty.
+- Advance seen-state only after successful complete delivery; incomplete combined verification and failed GitHub report auto-close must leave state unchanged.
+- Keep `bountyscout.state` branch-agnostic. Git/worktree/`scout-state` transport belongs to the workflow, not Python state code.
 
 ## Design rules
 
