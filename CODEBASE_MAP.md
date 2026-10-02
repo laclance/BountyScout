@@ -41,29 +41,30 @@
 - **function** `verify()` — line 570
 - **function** `add_reject()` — line 690
 - **function** `discover_paid()` — line 698
-- **function** `possible_miss_signal()` — line 802
-- **function** `basic_rejection_audit_reason()` — line 807
-- **function** `add_audit()` — line 812
-- **function** `strategic_inspection_items()` — line 826
-- **function** `strategic_global_search_results()` — line 837
-- **function** `prefetch_discovery_searches()` — line 856
-- **function** `discover_strategic()` — line 877
-- **function** `main()` — line 929
+- **function** `possible_miss_signal()` — line 805
+- **function** `basic_rejection_audit_reason()` — line 810
+- **function** `add_audit()` — line 815
+- **function** `strategic_inspection_items()` — line 829
+- **function** `strategic_global_search_results()` — line 840
+- **function** `prefetch_discovery_searches()` — line 861
+- **function** `discover_strategic()` — line 884
+- **function** `main()` — line 936
 
 ## `bountyscout/github.py`
 
-- **class** `IssueLifecycleResult` — line 31
-- **class** `KeyedLockPool` — line 35
-- **function** `cached_value()` — line 48
-- **function** `github_get()` — line 77
-- **function** `issue_repo_and_number()` — line 102
-- **function** `parse_github_datetime()` — line 109
-- **function** `issue_lifecycle()` — line 119
-- **function** `repo_metadata()` — line 151
-- **function** `issue_comments_checked()` — line 157
-- **function** `issue_comments()` — line 177
-- **function** `contribution_guide()` — line 186
-- **function** `issue_from_github_url()` — line 203
+- **class** `IssueLifecycleResult` — line 32
+- **class** `KeyedLockPool` — line 36
+- **function** `cached_value()` — line 49
+- **function** `github_get()` — line 78
+- **function** `search_github()` — line 96
+- **function** `issue_repo_and_number()` — line 118
+- **function** `parse_github_datetime()` — line 125
+- **function** `issue_lifecycle()` — line 135
+- **function** `repo_metadata()` — line 167
+- **function** `issue_comments_checked()` — line 173
+- **function** `issue_comments()` — line 193
+- **function** `contribution_guide()` — line 202
+- **function** `issue_from_github_url()` — line 219
 
 ## `bountyscout/paid.py`
 
@@ -223,8 +224,8 @@
 
 ## `scout_bounties.py`
 
-- **function** `github_get()` — line 63
-- **function** `search_github()` — line 82
+- **function** `github_get()` — line 62
+- **function** `search_github()` — line 81
 - **function** `payment_signal()` — line 89
 - **function** `issue_repo_and_number()` — line 94
 - **function** `has_existing_implementation_pr()` — line 103

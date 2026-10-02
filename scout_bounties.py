@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
-import urllib.parse
 import re
 from datetime import datetime, timezone
 from typing import Any, Mapping, cast
@@ -80,10 +79,11 @@ def github_get(url: str, token: str | None = None, timeout: int = 20) -> Any:
 
 
 def search_github(query: str, token: str | None = None, per_page: int = 15) -> dict[str, Any]:
-    """Fetch search results from GitHub Issues API."""
-    url = f"https://api.github.com/search/issues?{urllib.parse.urlencode({'q': query, 'per_page': per_page})}"
-    data = github_get(url, token)
-    return data if isinstance(data, dict) else {}
+    """Compatibility wrapper for canonical GitHub Issues Search transport."""
+    return cast(
+        dict[str, Any],
+        shared_github.search_github(query, token, per_page, fetch_json=github_get),
+    )
 
 
 def payment_signal(item: Mapping[str, Any]) -> str | None:

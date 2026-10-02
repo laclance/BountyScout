@@ -125,6 +125,13 @@ not make the paid-only entry point depend on combined application orchestration.
 - combined scanning consumes the package policy directly
 - request behavior and standalone paid-scanner behavior are unchanged
 
+### Phase 4E.3 — package-owned GitHub Search transport — complete
+
+- canonical GitHub Issues Search request construction and normalization now live in `bountyscout.github`
+- combined paid and strategic discovery consume package Search directly
+- root `search_github()` remains a compatibility wrapper over the package helper
+- queries, ordering, pacing, request budgets, and standalone paid behavior are unchanged
+
 Broader Phase 4E remains open.
 
 ## Deferred result-object work

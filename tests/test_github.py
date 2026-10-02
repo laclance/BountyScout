@@ -90,6 +90,35 @@ class GitHubHttpTests(unittest.TestCase):
             )
             self.assertEqual(output.getvalue(), "")
 
+    def test_search_github_encodes_forwards_and_fetches_once(self) -> None:
+        calls: list[tuple[str, str | None]] = []
+
+        def fetch_json(url: str, token: str | None) -> Any:
+            calls.append((url, token))
+            return {"items": [issue()]}
+
+        result = github.search_github(
+            "a b",
+            "tok",
+            per_page=7,
+            fetch_json=fetch_json,
+        )
+
+        self.assertEqual(result, {"items": [issue()]})
+        self.assertEqual(len(calls), 1)
+        self.assertIn("q=a+b", calls[0][0])
+        self.assertIn("per_page=7", calls[0][0])
+        self.assertEqual(calls[0][1], "tok")
+
+    def test_search_github_normalizes_non_dict_and_transport_failure(self) -> None:
+        with patch.object(github, "github_get", return_value=[]) as getter:
+            self.assertEqual(github.search_github("x"), {})
+            getter.assert_called_once()
+
+        with patch.object(github, "github_get", return_value=None) as getter:
+            self.assertEqual(github.search_github("x"), {})
+            getter.assert_called_once()
+
     def test_issue_lifecycle_returns_open_and_closed_from_direct_issue_endpoint(self) -> None:
         with patch.object(
             urllib.request,

@@ -2384,7 +2384,7 @@ class DiscoveryTests(unittest.TestCase):
                 "target_repo_issue_pool",
                 return_value=([], "target repo discovery failed for a/a; scan coverage incomplete"),
             ),
-            patch.object(bounty, "search_github", return_value={"items": []}),
+            patch.object(github, "search_github", return_value={"items": []}),
         ):
             found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
         self.assertEqual(found, [])
@@ -2410,7 +2410,7 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(scout, "PAID_DISCOVERY_QUERIES", ["p1", "p2"]),
             patch.object(scout, "STRATEGIC_GLOBAL_QUERIES", ["s1", "s2"]),
             patch.object(
-                bounty,
+                github,
                 "search_github",
                 side_effect=[
                     {"items": [{"id": 1}]},
@@ -2426,6 +2426,10 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual([query for query, _ in paid], ["p1", "p2"])
         self.assertEqual([query for query, _ in strategic], ["s1", "s2"])
         self.assertEqual([call.args[0] for call in search.call_args_list], ["p1", "p2", "s1", "s2"])
+        self.assertEqual(search.call_args_list[0].kwargs["per_page"], 15)
+        self.assertTrue(
+            all(call.kwargs["fetch_json"] is bounty.github_get for call in search.call_args_list)
+        )
         self.assertEqual(sleeper.call_count, 3)
         sleeper.assert_called_with(scout.DISCOVERY_SEARCH_INTERVAL_SECONDS)
         self.assertEqual(
@@ -2435,7 +2439,7 @@ class DiscoveryTests(unittest.TestCase):
     def test_discover_strategic_audits_global_search_failure(self) -> None:
         with (
             patch.object(scout, "TARGET_REPOS", []),
-            patch.object(bounty, "search_github") as search,
+            patch.object(github, "search_github") as search,
         ):
             found, rejected, examples, audit = scout.discover_strategic(
                 "t", set(), set(), {}, {}, [("global-q", {})]
@@ -2452,7 +2456,7 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_discover_paid_prefetched_failure_skips_without_duplicate_search(self) -> None:
         with (
-            patch.object(bounty, "search_github") as search,
+            patch.object(github, "search_github") as search,
             patch.object(scout, "platform_paid_refs", return_value={}),
         ):
             found, rejected, examples = scout.discover_paid("t", set(), {}, {}, [("paid-q", {})])
@@ -2471,7 +2475,7 @@ class DiscoveryTests(unittest.TestCase):
         platform_bad = "https://github.com/p/p/issues/5"
 
         with (
-            patch.object(bounty, "search_github", return_value={"items": [a, duplicate, dirty]}),
+            patch.object(github, "search_github", return_value={"items": [a, duplicate, dirty]}),
             patch.object(
                 paid_policy,
                 "is_clean_candidate",
@@ -2520,7 +2524,7 @@ class DiscoveryTests(unittest.TestCase):
         low_platform = candidate(url=platform["html_url"], cash_score=42, priority_score=42)
 
         with (
-            patch.object(bounty, "search_github", return_value={"items": [direct]}),
+            patch.object(github, "search_github", return_value={"items": [direct]}),
             patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(
                 scout,
@@ -2549,7 +2553,7 @@ class DiscoveryTests(unittest.TestCase):
         seen = issue(html_url="https://github.com/a/a/issues/1")
         bad = issue(html_url="https://github.com/a/a/issues/2")
         with (
-            patch.object(bounty, "search_github", return_value={"items": [seen, bad]}),
+            patch.object(github, "search_github", return_value={"items": [seen, bad]}),
             patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(scout, "verify", return_value=(None, "claimed")),
             patch.object(scout, "platform_paid_refs", return_value={}),
@@ -3170,7 +3174,7 @@ class CoverageGapTests(unittest.TestCase):
         source_reject = "https://github.com/a/a/issues/2"
         item_reject = issue(html_url=source_reject)
         with (
-            patch.object(bounty, "search_github", return_value={"items": []}),
+            patch.object(github, "search_github", return_value={"items": []}),
             patch.object(
                 scout,
                 "platform_paid_refs",
