@@ -36,7 +36,9 @@ class ClaimCompetitionTests(unittest.TestCase):
                 )
             )
         )
-        self.assertTrue(competition.claim_source_is_recent(comment(created_at=None, updated_at=None)))
+        self.assertTrue(
+            competition.claim_source_is_recent(comment(created_at=None, updated_at=None))
+        )
 
     def test_strategic_claim_reason_ignores_stale_and_third_person_work(self) -> None:
         recent = datetime.now(timezone.utc).isoformat()
