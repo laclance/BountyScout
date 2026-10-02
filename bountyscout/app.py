@@ -1092,7 +1092,7 @@ def discover_strategic(
                     preview["priority_score"],
                     preview["career_score"],
                     preview["cash_score"],
-                    item,
+                    _github_issue(item),
                 )
             )
 
@@ -1237,12 +1237,16 @@ def discover_strategic(
     for repo, outcomes, coverage_incomplete in repo_verification_results:
         verified_rows += sum(1 for _, _, _, network_checked in outcomes if network_checked)
         for row, candidate, reason, _ in outcomes:
-            item = row[3]
+            verified_item = row[3]
             if reason:
-                add_reject(rejected, examples, item, reason)
-                if reason.startswith("career score ") and possible_miss_signal(item):
-                    add_audit(audit, item, f"strong-looking near miss: {reason}")
-                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+                add_reject(rejected, examples, verified_item, reason)
+                if reason.startswith("career score ") and possible_miss_signal(verified_item):
+                    add_audit(
+                        audit,
+                        verified_item,
+                        f"strong-looking near miss: {reason}",
+                    )
+                print(f"Skipping strategic candidate {verified_item.get('html_url')}: {reason}")
                 continue
 
             assert candidate is not None
@@ -1251,14 +1255,14 @@ def discover_strategic(
                     f"career score {candidate['career_score']}/100 below strategic threshold "
                     f"{STRATEGIC_MIN_CAREER_SCORE}/100"
                 )
-                add_reject(rejected, examples, item, reason)
-                if possible_miss_signal(item):
+                add_reject(rejected, examples, verified_item, reason)
+                if possible_miss_signal(verified_item):
                     add_audit(
                         audit,
-                        item,
+                        verified_item,
                         f"strong-looking near miss: {reason}",
                     )
-                print(f"Skipping strategic candidate {item.get('html_url')}: {reason}")
+                print(f"Skipping strategic candidate {verified_item.get('html_url')}: {reason}")
                 continue
 
             verified_by_repo[repo].append(candidate)
