@@ -44,7 +44,7 @@ class ReportIdentificationTests(unittest.TestCase):
         self.assertTrue(
             cleanup.is_confirmed_generated_report(report_issue(), "laclance/BountyScout")
         )
-        rejected = [
+        rejected: list[dict[str, object]] = [
             {"repository_url": "https://api.github.com/repos/acme/Other"},
             {"state": "closed"},
             {"pull_request": {}},
@@ -95,7 +95,7 @@ class ReportIdentificationTests(unittest.TestCase):
         )
 
     def test_malformed_payloads_fail_closed(self) -> None:
-        for payload in (
+        payloads: tuple[object, ...] = (
             None,
             [],
             raw_issue(repository_url=None),
@@ -109,7 +109,8 @@ class ReportIdentificationTests(unittest.TestCase):
             raw_issue(labels=[{}]),
             raw_issue(user=None),
             raw_issue(user={}),
-        ):
+        )
+        for payload in payloads:
             with self.subTest(payload=payload):
                 self.assertIsNone(cleanup.normalize_issue(payload))
 
