@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import os
-import urllib.request
 import re
 from datetime import datetime, timezone
 from typing import Any, Mapping, cast
@@ -39,22 +37,8 @@ META_ALERT_MARKERS = paid_verification.META_ALERT_MARKERS
 
 
 def github_get(url: str, token: str | None = None, timeout: int = 20) -> Any:
-    """Fetch JSON from the GitHub API."""
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "MyPersonalBountyScout",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-
-    req = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except Exception as e:
-        print(f"GitHub API Error for {url}: {e}")
-        return None
+    """Compatibility wrapper for the historical paid GitHub transport."""
+    return shared_github.paid_github_get(url, token, timeout)
 
 
 def search_github(query: str, token: str | None = None, per_page: int = 15) -> dict[str, Any]:

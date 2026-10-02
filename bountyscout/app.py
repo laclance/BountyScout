@@ -8,7 +8,6 @@ from time import sleep
 from typing import Any, cast
 
 from bountyscout import delivery, github, paid, paid_verification
-import scout_bounties as bounty
 from bountyscout import reporting as reporting
 from bountyscout import run
 from bountyscout import scoring
@@ -195,7 +194,7 @@ def extended_competition_reason(
                 repo,
                 number,
                 auth,
-                fetch_json=bounty.github_get,
+                fetch_json=github.paid_github_get,
             )
         ),
         linked_pr_checker=linked_open_pr_reason,
@@ -632,7 +631,7 @@ def verify(
         reason, verified_issue_signal = paid_verification.candidate_rejection_reason(
             fresh,
             token,
-            fetch_json=bounty.github_get,
+            fetch_json=github.paid_github_get,
         )
         if reason and reason != "no explicit payment signal":
             return None, reason
@@ -721,7 +720,7 @@ def discover_paid(
         search_results = [
             (
                 query,
-                github.search_github(query, token, fetch_json=bounty.github_get),
+                github.search_github(query, token, fetch_json=github.paid_github_get),
             )
             for query in PAID_DISCOVERY_QUERIES
         ]
@@ -856,7 +855,7 @@ def strategic_global_search_results(
             query,
             search_token,
             per_page=per_page,
-            fetch_json=bounty.github_get,
+            fetch_json=github.paid_github_get,
         )
 
     return strategic_discovery.strategic_global_search_results(
@@ -881,7 +880,7 @@ def prefetch_discovery_searches(
             query,
             token,
             per_page=per_page,
-            fetch_json=bounty.github_get,
+            fetch_json=github.paid_github_get,
         )
         target = paid_results if lane == "paid" else strategic_results
         target.append((query, result))

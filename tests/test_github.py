@@ -67,6 +67,36 @@ class GitHubHttpTests(unittest.TestCase):
         self.assertEqual(request.headers["User-agent"], "OSSOpportunityScout")
         self.assertEqual(request.headers["X-github-api-version"], "2022-11-28")
 
+    def test_paid_github_get_preserves_historical_request_identity(self) -> None:
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            return_value=FakeResponse(b'["ok", 1]'),
+        ) as opened:
+            self.assertEqual(
+                github.paid_github_get("https://api.github.com/paid", "tok", 7),
+                ["ok", 1],
+            )
+
+        request = opened.call_args.args[0]
+        self.assertEqual(request.headers["Authorization"], "Bearer tok")
+        self.assertEqual(request.headers["Accept"], "application/vnd.github+json")
+        self.assertEqual(request.headers["User-agent"], "MyPersonalBountyScout")
+        self.assertEqual(request.headers["X-github-api-version"], "2022-11-28")
+        self.assertNotIn("Content-type", request.headers)
+        self.assertEqual(opened.call_args.kwargs["timeout"], 7)
+
+        with (
+            patch.object(urllib.request, "urlopen", side_effect=OSError("boom")),
+            io.StringIO() as output,
+            redirect_stdout(output),
+        ):
+            self.assertIsNone(github.paid_github_get("https://api.github.com/paid-failed"))
+            self.assertIn(
+                "GitHub API Error for https://api.github.com/paid-failed: boom",
+                output.getvalue(),
+            )
+
     def test_github_get_error_logging_can_be_suppressed(self) -> None:
         with (
             patch.object(urllib.request, "urlopen", side_effect=OSError("boom")),

@@ -147,7 +147,17 @@ not make the paid-only entry point depend on combined application orchestration.
 - combined app consumes package delivery directly
 - HTTP payloads, timeouts, request identity, auto-close behavior, and state semantics remain unchanged
 
-Broader Phase 4E remains open.
+### Phase 4E.6 — remove final package dependency on root scanner — complete
+
+- the historical paid GitHub GET identity is now package-owned by `bountyscout.github.paid_github_get()`
+- root `github_get()` remains a thin compatibility wrapper and the root monkeypatch seam remains intact
+- the combined app no longer imports `scout_bounties`
+- production package code has zero root-scanner dependencies
+- standalone `python scout_bounties.py` remains supported with unchanged ranking/orchestration behavior
+
+**Phase 4E is complete.** All reusable behavior needed by package scanning is package-owned,
+`bountyscout/*` does not depend on `scout_bounties.py`, and the standalone paid command
+remains supported. Root-only legacy ranking/orchestration may remain standalone-owned.
 
 ## Deferred result-object work
 
