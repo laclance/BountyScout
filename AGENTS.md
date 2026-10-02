@@ -6,8 +6,9 @@ This file is the canonical working agreement for coding agents and human contrib
 
 1. `README.md` — what the scout does and how to run it.
 2. `ARCHITECTURE.md` — data flow, module boundaries, and invariants.
-3. `CODEBASE_MAP.md` — generated structural index of production Python.
-4. Relevant tests under `tests/` — executable behavior and regression cases.
+3. `ROADMAP.md` — deliberate future improvements and sequencing.
+4. `CODEBASE_MAP.md` — generated structural index of production Python.
+5. Relevant tests under `tests/` — executable behavior and regression cases.
 
 ## Project constraints
 
@@ -24,6 +25,7 @@ This file is the canonical working agreement for coding agents and human contrib
 - Keep network and filesystem side effects at the edges. Put matching, scoring, normalization, and policy decisions in pure functions when practical.
 - New domain logic belongs in the smallest cohesive module that owns that concept. Leaf/domain modules must not import root `opportunity_scout.py` or reach back into `bountyscout.app`.
 - Use explicit type hints on function signatures and meaningful domain names. Prefer `Mapping` for read-only mapping inputs.
+- Put broadly shared stable mapping records and literals in `bountyscout/types.py`. Keep raw external JSON dynamic until validated, then prefer canonical domain types over repeated `dict[str, Any]` / `Mapping[str, Any]` interfaces.
 - Avoid new mutable global state. Static configuration constants are fine; shared runtime state needs an explicit reason and synchronization where applicable.
 - Docstrings should explain intent, invariants, or surprising behavior. Do not add ceremonial `Args`/`Returns` sections that only repeat obvious type hints.
 - Preserve behavior during refactors. Move code first; change behavior in a separate, test-backed step when possible.

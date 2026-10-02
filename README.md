@@ -15,6 +15,7 @@ The paid scanner remains intentionally close to upstream, while fork-owned imple
 - `opportunity_scout.py` — stable root executable shim; `python opportunity_scout.py` remains the runtime command.
 - `bountyscout/app.py` — combined application orchestration and strategic scanner composition.
 - `bountyscout/github.py` — shared fork-owned GitHub JSON access and keyed per-scan cache fills.
+- `bountyscout/types.py` — canonical internal domain literals and mapping contracts.
 - `bountyscout/reporting.py` — GitHub queue reports, reject/audit summaries, and length-safe notification formatting.
 - `bountyscout/scoring.py` — effort estimation and cash/career ranking over verified evidence.
 - `bountyscout/sources.py` — GitHub/platform source adapters and bounded adaptive inspection selection.
@@ -26,7 +27,7 @@ The paid scanner remains intentionally close to upstream, while fork-owned imple
 
 `scout_bounties.py` remains separate for upstream compatibility. Generic GitHub issue/timestamp parsing is fork-owned in `bountyscout.github`; the root scanner keeps behavior-equivalent copies so it remains standalone.
 
-See `ARCHITECTURE.md` for data flow and module boundaries, `AGENTS.md` for AI/human implementation rules, and `CODEBASE_MAP.md` for the generated structural index.
+See `ARCHITECTURE.md` for data flow and module boundaries, `ROADMAP.md` for planned improvements, `AGENTS.md` for AI/human implementation rules, and `CODEBASE_MAP.md` for the generated structural index.
 
 ## Paid lane
 

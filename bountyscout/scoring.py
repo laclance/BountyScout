@@ -14,6 +14,7 @@ from typing import Any, Collection, Mapping
 from bountyscout import github
 import scout_bounties as bounty
 from bountyscout.strategic.readiness import TRUSTED_ASSOCIATIONS
+from bountyscout.types import CompetitionLevel, EffortBucket
 
 
 def maintainer_ready_signal(labels_text: str) -> bool:
@@ -208,7 +209,7 @@ def _trusted_history_complexity(
 class EffortEstimate:
     """Bucketed implementation estimate plus concise calibration reasons."""
 
-    bucket: str
+    bucket: EffortBucket
     reasons: tuple[str, ...]
 
 
@@ -385,12 +386,12 @@ def estimate_effort_details(
     return EffortEstimate("3–6h", ("moderate implementation scope",))
 
 
-def estimate_effort(item: Mapping[str, Any]) -> str:
+def estimate_effort(item: Mapping[str, Any]) -> EffortBucket:
     """Return the public effort bucket for an issue."""
     return estimate_effort_details(item).bucket
 
 
-def effort_hours(effort: str) -> float:
+def effort_hours(effort: EffortBucket) -> float:
     return {
         "<1h": 0.75,
         "1–3h": 2.0,
@@ -447,7 +448,7 @@ def comment_contributes_to_competition(comment: Mapping[str, Any]) -> bool:
 def competition(
     item: Mapping[str, Any],
     activity_comments: Collection[Mapping[str, Any]] | None = None,
-) -> str:
+) -> CompetitionLevel:
     comments = (
         sum(comment_contributes_to_competition(comment) for comment in activity_comments)
         if activity_comments is not None
@@ -505,8 +506,8 @@ def repo_activity(repo_meta: Mapping[str, Any]) -> str:
 
 def strategic_priority_score(
     career_score: int,
-    effort: str,
-    competition_level: str,
+    effort: EffortBucket,
+    competition_level: CompetitionLevel,
 ) -> tuple[int, list[str]]:
     """Turn career value into actionable priority using execution friction.
 
@@ -550,8 +551,8 @@ def strategic_priority_score(
 
 def _paid_cash_score(
     signal: str | None,
-    effort: str,
-    competition_level: str,
+    effort: EffortBucket,
+    competition_level: CompetitionLevel,
     stars: int,
     active_30d: bool,
 ) -> tuple[int, float | None, list[str]]:
@@ -608,8 +609,8 @@ def _base_career_score(
     repo: str | None,
     repo_meta: Mapping[str, Any],
     guide: str | None,
-    effort: str,
-    competition_level: str,
+    effort: EffortBucket,
+    competition_level: CompetitionLevel,
     stars: int,
     active_30d: bool,
     labels_text: str,
