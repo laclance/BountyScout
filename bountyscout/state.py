@@ -17,9 +17,7 @@ STATE_VERSION: Final[StateVersion] = 2
 DEFAULT_STATE_FILE: Final = Path("seen_bounties.json")
 SEEN_STATE_REVALIDATION_LIMIT: Final = 20
 SEEN_STATE_RECHECK_INTERVAL: Final = timedelta(days=30)
-_GITHUB_ISSUE_URL_RE: Final = re.compile(
-    r"^https://github\.com/[^/]+/[^/]+/issues/\d+$"
-)
+_GITHUB_ISSUE_URL_RE: Final = re.compile(r"^https://github\.com/[^/]+/[^/]+/issues/\d+$")
 
 
 class SeenEntryDocument(TypedDict):
