@@ -7,14 +7,13 @@ network I/O and do not depend on the application orchestrator.
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping
-
 from bountyscout.strategic.claims import normalized_claim_text
+from bountyscout.types import GitHubComment, GitHubIssue
 
 TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
-def _labels_text(item: Mapping[str, Any]) -> str:
+def _labels_text(item: GitHubIssue) -> str:
     """Return issue labels as normalized lowercase text."""
     return " ".join(
         str(label.get("name", "")) if isinstance(label, dict) else str(label)
@@ -37,7 +36,7 @@ def triage_pending_signal(labels_text: str) -> bool:
     )
 
 
-def issue_label_set(item: Mapping[str, Any]) -> set[str]:
+def issue_label_set(item: GitHubIssue) -> set[str]:
     """Return normalized raw label names without flattening their separators."""
     return {
         (str(label.get("name", "")) if isinstance(label, dict) else str(label)).strip().lower()
@@ -46,7 +45,7 @@ def issue_label_set(item: Mapping[str, Any]) -> set[str]:
     }
 
 
-def proposal_stage_signal(item: Mapping[str, Any]) -> bool:
+def proposal_stage_signal(item: GitHubIssue) -> bool:
     """Recognize explicit proposal/RFC/discussion-stage metadata."""
     title = str(item.get("title", ""))
     normalized_labels = re.sub(r"[-_/:]+", " ", _labels_text(item))
@@ -66,7 +65,7 @@ def proposal_stage_signal(item: Mapping[str, Any]) -> bool:
     )
 
 
-def maintainer_comment_authority(comment: Mapping[str, Any]) -> bool:
+def maintainer_comment_authority(comment: GitHubComment) -> bool:
     """Trust maintainer associations plus explicit project-action comments."""
     association = str(comment.get("author_association", "")).upper()
     if association in TRUSTED_ASSOCIATIONS:
@@ -323,8 +322,8 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
 
 
 def maintainer_readiness_comment_state(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]] | None,
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
 ) -> tuple[bool | None, str | None]:
     """Return the latest explicit trusted-maintainer readiness stance."""
     proposal_stage = proposal_stage_signal(item)
@@ -359,7 +358,7 @@ def maintainer_readiness_comment_state(
 
 
 def readiness_pending_label_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     ready_override: bool = False,
 ) -> str | None:
     """Reject explicit not-ready label states unless readiness is overridden."""
@@ -383,7 +382,7 @@ def readiness_pending_label_reason(
 
 
 def abandoned_lifecycle_reason(
-    item: Mapping[str, Any],
+    item: GitHubIssue,
     ready_override: bool = False,
 ) -> str | None:
     """Reject unambiguously abandoned lifecycle states unless explicitly revived."""
@@ -394,7 +393,7 @@ def abandoned_lifecycle_reason(
     return None
 
 
-def maintainer_issue_decision_reason(item: Mapping[str, Any]) -> str | None:
+def maintainer_issue_decision_reason(item: GitHubIssue) -> str | None:
     """Reject trusted maintainer-authored issues that explicitly remain in decision stage."""
     association = str(item.get("author_association", "")).upper()
     if association not in TRUSTED_ASSOCIATIONS:
@@ -411,7 +410,7 @@ def maintainer_issue_decision_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
-def maintainer_submission_hold_reason(item: Mapping[str, Any]) -> str | None:
+def maintainer_submission_hold_reason(item: GitHubIssue) -> str | None:
     """Reject trusted maintainer-authored issues that explicitly tell contributors not to PR."""
     association = str(item.get("author_association", "")).upper()
     if association not in TRUSTED_ASSOCIATIONS:
@@ -438,8 +437,8 @@ def maintainer_submission_hold_reason(item: Mapping[str, Any]) -> str | None:
 
 
 def reporter_resolution_reason(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]] | None,
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
 ) -> str | None:
     """Use the issue reporter's latest explicit status to reject already-resolved reports."""
     reporter = str((item.get("user") or {}).get("login", "")).lower()
@@ -491,7 +490,7 @@ def reporter_resolution_reason(
     return None
 
 
-def security_disclosure_reason(item: Mapping[str, Any]) -> str | None:
+def security_disclosure_reason(item: GitHubIssue) -> str | None:
     """Reject public vulnerability disclosures as normal contributor work."""
     title = str(item.get("title", "")).lower()
     body = str(item.get("body", "")).lower()
@@ -510,7 +509,7 @@ def security_disclosure_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
-def reward_history_reason(item: Mapping[str, Any]) -> str | None:
+def reward_history_reason(item: GitHubIssue) -> str | None:
     """Reject payout summaries/leaderboards that are not open paid work."""
     title = str(item.get("title", "")).lower()
     body = str(item.get("body", "")).lower()
@@ -531,7 +530,7 @@ def reward_history_reason(item: Mapping[str, Any]) -> str | None:
     return None
 
 
-def reporter_support_triage_reason(item: Mapping[str, Any]) -> str | None:
+def reporter_support_triage_reason(item: GitHubIssue) -> str | None:
     """Reject reporter-authored diagnostic/support requests without defined implementation."""
     body = str(item.get("body", ""))
     normalized = normalized_claim_text(body).lower()
@@ -553,8 +552,8 @@ def reporter_support_triage_reason(item: Mapping[str, Any]) -> str | None:
 
 
 def manual_tracking_issue_reason(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]] | None = None,
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Reject explicit umbrella issues that track multiple child implementation tasks."""
     author_association = str(item.get("author_association", "")).upper()
@@ -604,7 +603,7 @@ def manual_tracking_issue_reason(
     return None
 
 
-def automated_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
+def automated_tracking_issue_reason(item: GitHubIssue) -> str | None:
     """Reject bot-maintained dashboards/trackers that are not contributor tasks."""
     title = str(item.get("title", ""))
     body = str(item.get("body", ""))
@@ -671,8 +670,8 @@ def automated_tracking_issue_reason(item: Mapping[str, Any]) -> str | None:
 
 
 def release_tracking_reason(
-    item: Mapping[str, Any],
-    comments: list[dict[str, Any]] | None = None,
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None = None,
 ) -> str | None:
     """Reject release bookkeeping and work that is already implemented."""
     title = str(item.get("title", ""))
