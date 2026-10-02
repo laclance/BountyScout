@@ -467,6 +467,47 @@ class TimelinePullRequestTests(unittest.TestCase):
         )
 
 
+    def test_timeline_handles_invalid_failure_and_no_match_paths(self) -> None:
+        self.assertEqual(
+            competition.timeline_open_pr_reason({"html_url": "bad"}, "t"),
+            "could not identify repository/issue number",
+        )
+
+        with patch.object(github, "github_get", return_value={}):
+            self.assertEqual(
+                competition.timeline_open_pr_reason(issue(), "t"),
+                "could not verify open implementation PR timeline",
+            )
+
+        no_match_timeline = [
+            {"event": "commented"},
+            {"event": "cross-referenced", "source": "invalid"},
+            {"event": "cross-referenced", "source": {"issue": "invalid"}},
+            {"event": "cross-referenced", "source": {"issue": {"state": "open"}}},
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {"url": "x"},
+                        "state": "closed",
+                        "html_url": "https://github.com/example/project/pull/11",
+                    }
+                },
+            },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {"url": "y"},
+                        "state": "open",
+                    }
+                },
+            },
+        ]
+        with patch.object(github, "github_get", return_value=no_match_timeline):
+            self.assertIsNone(competition.timeline_open_pr_reason(issue(), "t"))
+
+
 class CompetitionOrchestrationTests(unittest.TestCase):
     def test_strategic_competition_short_circuits_claim_then_link_then_timeline(self) -> None:
         self.assertEqual(
